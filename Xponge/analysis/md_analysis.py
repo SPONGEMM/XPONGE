@@ -17,6 +17,17 @@ except ModuleNotFoundError as exc:
         "'MDAnalysis' package needed. Maybe you need 'pip install MDAnalysis'") from exc
 
 
+class SpongeNoneReader(base.ReaderBase):
+    def __init__(self, _, n_atoms, **kwargs):
+        self._n_atoms = n_atoms
+    @property
+    def n_atoms(self):
+        return self._n_atoms
+
+    @property
+    def n_frames(self):
+        return 0
+
 class SpongeInputReader(TopologyReaderBase):
     """
     This **class** is used to read the SPONGE input to mdanalysis
@@ -29,6 +40,8 @@ class SpongeInputReader(TopologyReaderBase):
 
     Guesses the following attributes:
         Atomnames
+        Atomtypes
+        Elements
     """
     #pylint: disable=unused-argument
     def parse(self, **kwargs):
@@ -71,8 +84,135 @@ class SpongeInputReader(TopologyReaderBase):
                 fm.readline()
                 bonds = [[int(words) for words in line.split()[:2]] for line in fm]
                 attrs.append(topologyattrs.Bonds(bonds))
+        self._n_atoms = natoms
         return Topology(natoms, nres, 1, attrs, resid, None)
 
+
+class XpongeResidueReader(base.ReaderBase):
+    """
+    This **class** is used to read the Xponge Residue or ResidueType to mdanalysis
+
+    Create the following attributes:
+        Atomnames
+        Atomtypes
+        Masses
+        Charges
+        Bonds
+
+    Guesses the following attributes:
+        Elements
+    """
+    def __init__(self, filename, **kwargs):
+        super().__init__(filename, **kwargs)
+        self.ts = self._Timestep(self.n_atoms, **self._ts_kwargs)
+        self.ts.positions = [[getattr(atom, i) for i in "xyz"] for atom in self.filename.atoms]
+
+    @property
+    def n_atoms(self):
+        return len(self.filename.atoms)
+
+    @property
+    def n_frames(self):
+        return 1
+
+    #pylint: disable=unused-argument
+    def parse(self, **kwargs):
+        """
+        This **function** reads the file and returns the structure
+
+        :param kwargs: keyword arguments
+        :return: MDAnalysis Topology object
+        """
+        attrs = [topologyattrs.Segids(np.array(['SYSTEM'], dtype=object))]
+        residue = self.filename
+        natoms = len(residue.atoms)
+        nres = 1
+        masses = [atom.mass for atom in residue.atoms]
+        elements = [guess_element_from_mass(mass) for mass in masses]
+        attrs.append(topologyattrs.Masses(masses))
+        attrs.append(topologyattrs.Elements(elements, guessed=True))
+        attrs.append(topologyattrs.Atomnames([atom.name for atom in residue.atoms]))
+        attrs.append(topologyattrs.Atomtypes([atom.type.name for atom in residue.atoms]))
+        attrs.append(topologyattrs.Charges([atom.charge for atom in residue.atoms]))
+        attrs.append(topologyattrs.Resids(np.arange(nres) + 1))
+        attrs.append(topologyattrs.Atomids(np.arange(natoms) + 1))
+        attrs.append(topologyattrs.Resnums(np.arange(nres) + 1))
+        attrs.append(topologyattrs.Resnames([residue.name]))
+        resid = np.zeros(natoms, dtype=np.int32)
+        if isinstance(residue, Xponge.ResidueType):
+            bonds = [[residue.atom2index(ai), residue.atom2index(aj)] for ai, bondi in residue.connectivity.items() for aj in bondi]
+        else:
+            bonds = [[residue.name2index(residue.type.atom2name(ai)), residue.name2index(residue.type.atom2name(aj))] for ai, bondi in residue.type.connectivity.items() for aj in bondi]
+        attrs.append(topologyattrs.Bonds(bonds))
+        return Topology(natoms, nres, 1, attrs, resid, None)
+
+
+class XpongeMoleculeReader(base.ReaderBase):
+    """
+    This **class** is used to read the Xponge Residue or ResidueType to mdanalysis
+
+    Create the following attributes:
+        Atomnames
+        Atomtypes
+        Masses
+        Charges
+        Bonds
+
+    Guesses the following attributes:
+        Elements
+    """
+    def __init__(self, filename, **kwargs):
+        filename.atoms = [atom for residue in filename.residues for atom in residue.atoms]
+        filename.atom2index = {atom: i for i, atom in enumerate(filename.atoms)}
+        super().__init__(filename, **kwargs)
+        self.ts = self._Timestep(self.n_atoms, **self._ts_kwargs)
+        self.ts.positions = [[getattr(atom, i) for i in "xyz"] for atom in self.filename.atoms]
+
+    @property
+    def n_atoms(self):
+        return len(self.filename.atoms)
+
+    @property
+    def n_frames(self):
+        return 1
+
+    #pylint: disable=unused-argument
+    def parse(self, **kwargs):
+        """
+        This **function** reads the file and returns the structure
+
+        :param kwargs: keyword arguments
+        :return: MDAnalysis Topology object
+        """
+        attrs = [topologyattrs.Segids(np.array(['SYSTEM'], dtype=object))]
+        molecule = self.filename
+        natoms = len(molecule.atoms)
+        nres = len(molecule.residues)
+        masses = [atom.mass for atom in molecule.atoms]
+        elements = [guess_element_from_mass(mass) for mass in masses]
+        attrs.append(topologyattrs.Masses(masses))
+        attrs.append(topologyattrs.Elements(elements, guessed=True))
+        attrs.append(topologyattrs.Atomnames([atom.name for atom in molecule.atoms]))
+        attrs.append(topologyattrs.Atomtypes([atom.type.name for atom in molecule.atoms]))
+        attrs.append(topologyattrs.Charges([atom.charge for atom in molecule.atoms]))
+        attrs.append(topologyattrs.Resids(np.arange(nres) + 1))
+        attrs.append(topologyattrs.Atomids(np.arange(natoms) + 1))
+        attrs.append(topologyattrs.Resnums(np.arange(nres) + 1))
+        attrs.append(topologyattrs.Resnames([residue.name for residue in molecule.residues]))
+        resid = np.zeros(natoms, dtype=np.int32)
+        count = 0
+        for i, res in enumerate(molecule.residues):
+            resid[count:count + len(res.atoms)] = i
+            count += len(res.atoms)
+        bonds = [[molecule.atom2index[self._t2a(residue, ai)], molecule.atom2index[self._t2a(residue, aj)]] for residue in molecule.residues for ai, bondi in residue.type.connectivity.items() for aj in bondi]
+        bonds.extend([[molecule.atom2index[rl.atom1], molecule.atom2index[rl.atom2]] for rl in molecule.residue_links])
+        
+        attrs.append(topologyattrs.Bonds(bonds))
+        return Topology(natoms, nres, 1, attrs, resid, None)
+
+    @staticmethod
+    def _t2a(residue, atom):
+        return residue.name2atom(residue.type.atom2name(atom))
 
 class SpongeTrajectoryReader(base.ReaderBase):
     """

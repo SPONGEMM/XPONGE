@@ -667,6 +667,15 @@ class ResidueType(Type):
         """
         return self._atom2index[atom]
 
+    def atom2name(self, atom):
+        """
+        This **function** convert an Atom instance to its name
+
+        :param atom: the Atom instance
+        :return: the name
+        """
+        return self._atom2name[atom]
+
     def name2index(self, name):
         """
         This **function** convert an atom name to its index

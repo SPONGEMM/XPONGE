@@ -1,12 +1,10 @@
 Metadata-Version: 2.1
 Name: Xponge
-Version: 1.2.6.12.1
+Version: 1.2.6.12.2
 Summary: A Python package to perform pre- and post-processing of molecular simulations
 Home-page: https://gitee.com/gao_hyp_xyj_admin/xponge
 Author: Yijie Xia
 Author-email: yijiexia@pku.edu.cn
-License: UNKNOWN
-Platform: UNKNOWN
 Classifier: Programming Language :: Python :: 3 :: Only
 Classifier: Development Status :: 5 - Production/Stable
 Classifier: Operating System :: OS Independent
@@ -182,5 +180,3 @@ Here is the list of all packages which may be uesd:
 [8] N. Michaud-Agrawal, et al. *J. Comput. Chem.* (2011) DOI: [10.1002/jcc.21787](https://10.1002/jcc.21787)
 
 [9] MindSpore: An Open AI Framwork. https://www.mindspore.cn/
-
-
