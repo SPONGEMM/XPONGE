@@ -4,6 +4,7 @@ This **module** gives functions and classes to use MDAnalysis to analyze the tra
 import os.path
 
 import numpy as np
+from .. import Residue, ResidueType
 from ..helper import Xopen, guess_element_from_mass, set_global_alternative_names, set_attribute_alternative_name
 try:
     import MDAnalysis as mda
@@ -139,7 +140,7 @@ class XpongeResidueReader(base.ReaderBase):
         attrs.append(topologyattrs.Resnums(np.arange(nres) + 1))
         attrs.append(topologyattrs.Resnames([residue.name]))
         resid = np.zeros(natoms, dtype=np.int32)
-        if isinstance(residue, Xponge.ResidueType):
+        if isinstance(residue, ResidueType):
             bonds = [[residue.atom2index(ai), residue.atom2index(aj)] for ai, bondi in residue.connectivity.items() for aj in bondi]
         else:
             bonds = [[residue.name2index(residue.type.atom2name(ai)), residue.name2index(residue.type.atom2name(aj))] for ai, bondi in residue.type.connectivity.items() for aj in bondi]
@@ -149,7 +150,7 @@ class XpongeResidueReader(base.ReaderBase):
 
 class XpongeMoleculeReader(base.ReaderBase):
     """
-    This **class** is used to read the Xponge Residue or ResidueType to mdanalysis
+    This **class** is used to read the Xponge Molecule to mdanalysis
 
     Create the following attributes:
         Atomnames
