@@ -1817,10 +1817,11 @@ If None, the information will be deleted between start and end
                     p1.append(ref_res[atom.name])
                     p2.append(positions[j])
             rotate_matrix, _, res_center = kabsch(p1, p2)
-            fraction = i / len(to_insert)
+            fraction = (i + 0.5) / len(to_insert)
             translate = start_position + (end_position - start_position) * fraction + \
-                        height * np.sin(fraction * np.pi) * loop_direction - res_center
-            positions = np.dot(rotate_matrix, np.array(positions).transpose()).transpose() + translate
+                        height * np.sin(fraction * np.pi) * loop_direction
+            positions = positions - res_center
+            positions = np.dot(np.array(positions), rotate_matrix.transpose()) + translate
             for j, atom in enumerate(res.atoms):
                 atom.x = positions[j][0]
                 atom.y = positions[j][1]
@@ -1977,7 +1978,8 @@ def _add(self, other, deepcopy, link):
         res_b = other_molecule.residues[0]
         new_molecule.residues += other_molecule.residues
         new_molecule.residue_links |= other_molecule.residue_links
-        getattr(new_molecule, "_residue_links_map").update(getattr(other_molecule, "_residue_links_map"))
+        getattr(new_molecule, "_residue_links_map")["atom"].update(getattr(other_molecule, "_residue_links_map")["atom"])
+        getattr(new_molecule, "_residue_links_map")["residue"].update(getattr(other_molecule, "_residue_links_map")["residue"])
         if link and res_a and res_a.type.tail and res_b.type.head:
             atom1 = res_a.name2atom(res_a.type.tail)
             atom2 = res_b.name2atom(res_b.type.head)

@@ -169,7 +169,7 @@ class BondOrderAssignment:
     :param assign: the father Assignment instance
     """
     atomic_valence = Xdict({
-        "X": OrderedDict({0: 64, 1: 0, 2: 64}),
+        "X": OrderedDict({1: 0, 2: 64}),
         "Cn1": OrderedDict({3: 0, 4: 1, 5: 32}),
         "Cx1": OrderedDict({3: 1, 4: 0, 5: 32}),
         "Co2": OrderedDict({4: 32, 5: 0, 6: 32}),
@@ -313,7 +313,7 @@ class BondOrderAssignment:
                             valence[j] -= 1
                         valence[i] = 0
                         no_basic_rule = False
-                    elif len(uc[i]) == 1:
+                    elif len(uc[i]) == 1 and valence[i] != 0:
                         j = uc[i].pop()
                         uc[j].remove(i)
                         bonds[j][i] = valence[i]
