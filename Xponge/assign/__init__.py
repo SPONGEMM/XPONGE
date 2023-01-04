@@ -753,41 +753,6 @@ def get_assignment_from_residuetype(restype):
     return assign
 
 
-def _deal_with_ar_bonds(assign):
-    """
-
-    :param assign:
-    :return:
-    """
-    ar_bonds_atoms = list(assign.ar_bonds.keys())
-    ar_bonds_atoms.sort(key=lambda x: (x, len(assign.ar_bonds[x])))
-    doubled = Xdict()
-    checked = Xdict()
-    for ar_atom in ar_bonds_atoms:
-        assign.ar_bonds[ar_atom].sort(key=lambda x: (x, len(assign.ar_bonds[x])))
-        doubled[ar_atom] = False
-        checked[ar_atom] = False
-
-    working_space = []
-    while ar_bonds_atoms:
-        working_space.append(ar_bonds_atoms.pop())
-        while working_space:
-            work_atom = working_space.pop()
-            if checked[work_atom]:
-                continue
-            checked[work_atom] = True
-            for neighbor in assign.ar_bonds[work_atom]:
-                if not checked[neighbor]:
-                    working_space.append(neighbor)
-            for neighbor in assign.ar_bonds[work_atom][::-1]:
-                if doubled[work_atom]:
-                    break
-                if not doubled[neighbor] and not doubled[work_atom]:
-                    assign.bonds[neighbor][work_atom] = 2
-                    doubled[neighbor] = True
-                    doubled[work_atom] = True
-
-
 def get_assignment_from_mol2(filename, ignore_hydrogen=False):
     """
     This **function** gets an Assign instance from a mol2 file
@@ -831,7 +796,7 @@ def get_assignment_from_mol2(filename, ignore_hydrogen=False):
                 if words[3] in "1234567890":
                     assign.Add_Bond(atom1 , atom2, int(words[3]))
                 elif words[3] == "ar":
-                    assign.Add_Bond(atom1, atom2, 1)
+                    assign.Add_Bond(atom1, atom2, -1)
                     if atom1 not in assign.ar_bonds.keys():
                         assign.ar_bonds[atom1] = [atom2]
                     else:
@@ -841,7 +806,7 @@ def get_assignment_from_mol2(filename, ignore_hydrogen=False):
                     else:
                         assign.ar_bonds[atom2].append(atom1)
                 elif words[3] == "am":
-                    assign.Add_Bond(atom1, atom2, 1)
+                    assign.Add_Bond(atom1, atom2, -1)
                     if atom1 not in assign.am_bonds.keys():
                         assign.am_bonds[atom1] = [atom2]
                     else:
@@ -853,7 +818,9 @@ def get_assignment_from_mol2(filename, ignore_hydrogen=False):
                 else:
                     raise NotImplementedError(f"No implemented method to process bond #{words[0]} type {words[3]}")
 
-    _deal_with_ar_bonds(assign)
+    success = assign.Determine_Bond_Order()
+    if not success:
+        raise ValueError("Failed to determine the bond orders")
     assign.Determine_Ring_And_Bond_Type()
     return assign
 

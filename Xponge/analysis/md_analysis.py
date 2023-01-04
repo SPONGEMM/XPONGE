@@ -20,7 +20,9 @@ except ModuleNotFoundError as exc:
 
 class SpongeNoneReader(base.ReaderBase):
     def __init__(self, _, n_atoms, **kwargs):
+        super().__init__(_, **kwargs)
         self._n_atoms = n_atoms
+
     @property
     def n_atoms(self):
         return self._n_atoms
@@ -28,6 +30,13 @@ class SpongeNoneReader(base.ReaderBase):
     @property
     def n_frames(self):
         return 0
+
+    def close(self):
+        """
+        fake close function for api
+        """
+        return
+
 
 class SpongeInputReader(TopologyReaderBase):
     """
@@ -53,9 +62,10 @@ class SpongeInputReader(TopologyReaderBase):
         :return: MDAnalysis Topology object
         """
         attrs = [topologyattrs.Segids(np.array(['SYSTEM'], dtype=object))]
+        nres = 1
         if os.path.exists(self.filename + "_mass.txt"):
             with util.openany(self.filename + "_mass.txt") as fm:
-                fm.readline()
+                natoms = int(fm.readline())
                 masses = [float(line.strip()) for line in fm]
                 atom_names = [guess_element_from_mass(mass) for mass in masses]
                 attrs.append(topologyattrs.Masses(masses))
@@ -64,9 +74,11 @@ class SpongeInputReader(TopologyReaderBase):
                 attrs.append(topologyattrs.Elements(atom_names, guessed=True))
         if os.path.exists(self.filename + "_charge.txt"):
             with util.openany(self.filename + "_charge.txt") as fm:
-                fm.readline()
+                natoms = int(fm.readline())
                 charges = [float(line.strip()) / 18.2223 for line in fm]
                 attrs.append(topologyattrs.Charges(charges))
+        resid = np.zeros(natoms, dtype=np.int32)
+        nres = 1
         if os.path.exists(self.filename + "_residue.txt"):
             with util.openany(self.filename + "_residue.txt") as fm:
                 natoms, nres = fm.readline().split()
@@ -77,9 +89,9 @@ class SpongeInputReader(TopologyReaderBase):
                     res_length = int(line.strip())
                     resid[count:count + res_length] = i
                     count += res_length
-                attrs.append(topologyattrs.Resids(np.arange(nres) + 1))
-                attrs.append(topologyattrs.Atomids(np.arange(natoms) + 1))
-                attrs.append(topologyattrs.Resnums(np.arange(nres) + 1))
+        attrs.append(topologyattrs.Resids(np.arange(nres) + 1))
+        attrs.append(topologyattrs.Atomids(np.arange(natoms) + 1))
+        attrs.append(topologyattrs.Resnums(np.arange(nres) + 1))
         if os.path.exists(self.filename + "_bond.txt"):
             with util.openany(self.filename + "_bond.txt") as fm:
                 fm.readline()
