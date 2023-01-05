@@ -371,6 +371,20 @@ connected to two other atoms, "N4" means a nitrogen atom connected to four other
             else:
                 self.atom_marker[atom2][marker] = 1
 
+    def delete_bond(self, atom1, atom2):
+        """
+        This **function** deletes the bond between two atoms
+
+        :param atom1: the index of the first atom
+        :param atom2: the index of the the second atom
+        :return: None
+        """
+        self.bonds[atom1].pop(atom2, None)
+        self.bonds[atom2].pop(atom1, None)
+        self.bond_marker[atom1].pop(atom2, None)
+        self.bond_marker[atom2].pop(atom1, None)
+        
+
     def determine_equal_atoms(self):
         """
         This **function** dertermines the chemical equalvalent atoms
@@ -494,12 +508,9 @@ the rule described in the reference (J. Wang et al., J. Am. Chem. Soc, 2001) wil
         :param penalty_scores: the penalty scores for every atom. This should be a list of ordered dicts, and every
 ordered dict stores the valence-penalty pairs for every atom, and it is sorted by the penalty scores. If None(default),
 a set of penalty scores described in the reference (J. Wang et al., J. Mol. Graph. Model., 2006) will be used.
-        :return: True for success, False for failure.
+        :return: ReasonedBool, True for success, False for failure.
         """
         from .bond_order import BondOrderAssignment
-        if penalty_scores is None:
-            penalty_scores = [BondOrderAssignment.atomic_valence[type_]
-                              for type_ in self.determine_atom_type("bo").values()]
         bo_assign = BondOrderAssignment(penalty_scores, max_step, max_stat, self, debug)
         return bo_assign.main()
 

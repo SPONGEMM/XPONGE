@@ -355,6 +355,7 @@ def get_mindsponge_system_energy(cls, use_pbc=False):
     for scls in cls:
         if isinstance(scls, AbstractMolecule):
             mol = Molecule.cast(scls, deepcopy=False)
+            build_bonded_force(mol)
             _get_single_system_energy(mol, sys_kwarg, ene_kwarg, use_pbc)
         else:
             raise TypeError(f"The type should be a Molecule, Residue, ResidueType, but we get {str(type(scls))}")

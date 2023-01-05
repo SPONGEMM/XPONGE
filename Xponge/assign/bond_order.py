@@ -4,7 +4,8 @@ This **module** helps to assign bond orders
 from itertools import product
 # pylint: disable=cyclic-import
 from . import AssignRule, Xdict, OrderedDict, set_attribute_alternative_names, deepcopy, np
-
+from ..helper import ReasonedBool
+ 
 bo = AssignRule("bo", pure_string=True)
 
 @bo.add_rule("X")
@@ -12,7 +13,7 @@ def _(i, assign):
     return assign.atoms[i] in ("H", "F", "Cl", "Br", "I")
 
 
-@bo.add_rule("Ccn")
+@bo.add_rule("Cn1")
 def _(i, assign):
     return assign.Atom_Judge(i, "C1") and [assign.atoms[key] for key in assign.bonds[i].keys()][0] == "N"
 
@@ -200,24 +201,36 @@ class BondOrderAssignment:
         "Sx4": OrderedDict({4: 4, 5: 2, 6:0}),
     })
     def __init__(self, original_penalties, max_step, max_stat, assign, debug=False):
-        self.debug = debug
-        self.max_step = max_step
-        self.max_stat = max_stat
-        self.assign = assign
-        self.original_penalties = original_penalties
-        # pylint: disable=cell-var-from-loop
-        self.uc = [set(filter(lambda aj: self.assign.bonds[ai][aj] == -1, self.assign.bonds[ai]))
-                     for ai in range(self.assign.atom_numbers)]
-        self.connected = [sum(filter(lambda x: x > 0, self.assign.bonds[ai].values()))
-                     for ai in range(self.assign.atom_numbers)]
-        self.valence_best = [next(iter(pi)) - self.connected[i] for i, pi in enumerate(self.original_penalties)]
-        self.valence = deepcopy(self.valence_best)
-        self.penalties = Xdict(not_found_method=lambda x: [])
-        self._get_penalties(original_penalties)
-        self.stat_position = 0
-        self.current_stat = 0
-        self.points = []
-        self.cached = {}
+        self.prepare_success = True
+        if original_penalties is None:
+            try:
+                original_penalties = [self.atomic_valence[type_]
+                                      for type_ in assign.determine_atom_type("bo").values()]
+            except AssertionError as e:
+                if "No atom type found for assignment" in e.args[0]:
+                    n = e.args[0].split("#")[1]
+                    self.prepare_success = ReasonedBool(False, f"the valence of atom #{n} can not be found in the default table")
+                else:
+                    raise e
+        if self.prepare_success:
+            self.debug = debug
+            self.max_step = max_step
+            self.max_stat = max_stat
+            self.assign = assign
+            self.original_penalties = original_penalties
+            # pylint: disable=cell-var-from-loop
+            self.uc = [set(filter(lambda aj: self.assign.bonds[ai][aj] == -1, self.assign.bonds[ai]))
+                         for ai in range(self.assign.atom_numbers)]
+            self.connected = [sum(filter(lambda x: x > 0, self.assign.bonds[ai].values()))
+                         for ai in range(self.assign.atom_numbers)]
+            self.valence_best = [next(iter(pi)) - self.connected[i] for i, pi in enumerate(self.original_penalties)]
+            self.valence = deepcopy(self.valence_best)
+            self.penalties = Xdict(not_found_method=lambda x: [])
+            self._get_penalties(original_penalties)
+            self.stat_position = 0
+            self.current_stat = 0
+            self.points = []
+            self.cached = {}
         set_attribute_alternative_names(self)
 
     def _get_penalties(self, original_penalties):
@@ -290,8 +303,11 @@ class BondOrderAssignment:
 
         :return: True for success, False for failure
         """
+        if not self.prepare_success:
+            return self.prepare_success
         count = 0
-        success = False
+        Failure = ReasonedBool(False, "the calculation can not converge")
+        success = Failure
         while count < self.max_step and self.current_stat < self.max_stat and not success:
             bonds = deepcopy(self.assign.bonds)
             uc = deepcopy(self.uc)
@@ -324,9 +340,9 @@ class BondOrderAssignment:
                 success = True
                 for i in range(self.assign.atom_numbers):
                     if valence[i] != 0 or len(uc[i]) != 0:
-                        success = False
+                        success = Failure
                     if len(uc[i]) == 0 and valence[i] != 0 or valence[i] == 0 and len(uc[i]) != 0:
-                        success = False
+                        success = Failure
                         determined = True
                         break
                 if success:
@@ -345,7 +361,7 @@ class BondOrderAssignment:
                         i, j = guess_bonds
                         if bonds[i][j] == 3:
                             determined = True
-                            success = False
+                            success = Failure
                             break
                         bonds[i][j] += 1
                         bonds[j][i] += 1

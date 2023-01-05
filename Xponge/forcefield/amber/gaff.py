@@ -1,6 +1,7 @@
 """
 This **module** set the basic configuration for gaff
 """
+from tempfile import TemporaryDirectory
 from ...helper import source, Xprint, set_real_global_variable
 
 source("....")
@@ -1282,17 +1283,20 @@ def parmchk2_gaff(ifname, ofname, direct_load=True, keep=True):
     """
     import XpongeLib as xlib
     datapath = os.path.split(xlib.__file__)[0]
+    tempdir = None
     if isinstance(ifname, AbstractMolecule):
-        Save_Mol2(ifname, "temp.mol2")
-        ifname = "temp.mol2"
+        tempdir = TemporaryDirectory()
+        tempfile = os.path.join(tempdir.name, "temp.mol2")
+        Save_Mol2(ifname, tempfile)
+        ifname = tempfile
     parmchk2_func = getattr(xlib, "_parmchk2")
     parmchk2_func(ifname, "mol2", ofname, datapath, 0, 1, 1)
     if direct_load:
         amber.load_parameters_from_frcmod(ofname, prefix=False)
     if not keep:
         os.remove(ofname)
-    if os.path.exists("temp.mol2"):
-        os.remove("temp.mol2")
+    if tempdir:
+        tempdir.cleanup()
 
 
 set_real_global_variable("parmchk2_gaff", parmchk2_gaff)

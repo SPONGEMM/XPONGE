@@ -58,6 +58,20 @@ when the key is not found. **New From 1.2.6.7**
         raise KeyError(f"{key}")
 
 
+class ReasonedBool(int):
+    _repr = ["False", "True"]
+    def __new__(cls, value, reason=None):
+        return int.__new__(cls, bool(value))
+
+    def __init__(self, value, reason=None):
+        self.reason = reason
+
+    def __repr__(self):
+        if self.reason:
+            return self._repr[self] + f" (Reason: {self.reason})"
+        return self._repr[self]
+
+
 def xopen(filename, flag, mode=None):
     """
     This **function** is used to open a file with the proper permissions mode
