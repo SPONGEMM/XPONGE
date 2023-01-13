@@ -22,11 +22,11 @@ def _(i, assign):
 def _(i, assign):
     return assign.Atom_Judge(i, "C1")
 
-
-@bo.add_rule("Co2")
-def _(i, assign):
-    bonded_os = sum(assign.Atom_Judge(key, "O1") or assign.Atom_Judge(key, "S1") for key in assign.bonds[i].keys())
-    return assign.Atom_Judge(i, "C3") and bonded_os == 2
+#The reference defined this type, but I think it is useless
+#@bo.add_rule("Co2")
+#def _(i, assign):
+#    bonded_os = sum(assign.Atom_Judge(key, "O1") or assign.Atom_Judge(key, "S1") for key in assign.bonds[i].keys())
+#    return assign.Atom_Judge(i, "C3") and bonded_os == 2
 
 
 @bo.add_rule("C")
@@ -46,7 +46,7 @@ def _(i, assign):
 
 @bo.add_rule("Nnn2")
 def _(i, assign):
-    return assign.Atom_Judge(i, "N2") and "N" in {assign.atoms[key] for key in assign.bonds[i].keys()}
+    return assign.Atom_Judge(i, "N2") and "N1" in {assign.atoms[key] + str(len(assign.bonds[key])) for key in assign.bonds[i]}
 
 
 @bo.add_rule("Nx2")
@@ -139,7 +139,7 @@ def _(i, assign):
     return assign.Atom_Judge(i, "S2")
 
 
-@bo.add_rule("S3")
+@bo.add_rule("Sx3")
 def _(i, assign):
     return assign.Atom_Judge(i, "S3")
 
@@ -173,9 +173,9 @@ class BondOrderAssignment:
         "X": OrderedDict({1: 0, 2: 64}),
         "Cn1": OrderedDict({3: 0, 4: 1, 5: 32}),
         "Cx1": OrderedDict({3: 1, 4: 0, 5: 32}),
-        "Co2": OrderedDict({4: 32, 5: 0, 6: 32}),
+#        "Co2": OrderedDict({4: 32, 5: 0, 6: 32}),
         "C": OrderedDict({2: 64, 3: 32, 4: 0, 5: 32, 6: 64}),
-        "Nnn1": OrderedDict({2: 0, 3: 0}),
+        "Nnn1": OrderedDict({3: 0, 2: 0}),
         "Nx1": OrderedDict({2: 3, 3: 0, 4: 32}),
         "Nnn2": OrderedDict({3: 1, 4: 0}),
         "Nx2": OrderedDict({2: 4, 3: 0, 4: 32}),
@@ -200,13 +200,25 @@ class BondOrderAssignment:
         "So3": OrderedDict({6: 32, 7: 0}),
         "Sx4": OrderedDict({4: 4, 5: 2, 6:0}),
     })
-    def __init__(self, original_penalties, max_step, max_stat, assign, debug=False):
+    atomic_formal_valence = Xdict({
+        "H": {1: 0},
+        "Cl": {1: 0},
+        "Br": {1: 0},
+        "F": {1: 0},
+        "I": {1: 0},
+        "C": {4: 0, 3: 1, 5: -1},
+        "N": {3: 0, 4: 1, 2: -1, 5: 0},
+        "O": {1: -1, 2: 0, 3: 1},
+        "P": {3: 0, 4: 1, 2: -1, 5: 0, 7: 0},
+        "S": {1: -1, 2: 0, 3: 1, 4: 0, 6: 0},
+    })
+    def __init__(self, original_penalties, max_step, max_stat, assign, debug=False, total_charge=0):
         self.prepare_success = True
         if original_penalties is None:
             try:
                 original_penalties = [self.atomic_valence[type_]
                                       for type_ in assign.determine_atom_type("bo").values()]
-            except AssertionError as e:
+            except KeyError as e:
                 if "No atom type found for assignment" in e.args[0]:
                     n = e.args[0].split("#")[1]
                     self.prepare_success = ReasonedBool(False, f"the valence of atom #{n} can not be found in the default table")
@@ -218,12 +230,11 @@ class BondOrderAssignment:
             self.max_stat = max_stat
             self.assign = assign
             self.original_penalties = original_penalties
-            # pylint: disable=cell-var-from-loop
             self.uc = [set(filter(lambda aj: self.assign.bonds[ai][aj] == -1, self.assign.bonds[ai]))
                          for ai in range(self.assign.atom_numbers)]
             self.connected = [sum(filter(lambda x: x > 0, self.assign.bonds[ai].values()))
                          for ai in range(self.assign.atom_numbers)]
-            self.valence_best = [next(iter(pi)) - self.connected[i] for i, pi in enumerate(self.original_penalties)]
+            self.valence_best = [next(iter(pi)) - self.connected[i] if self.uc[i] else 0 for i, pi in enumerate(self.original_penalties)]
             self.valence = deepcopy(self.valence_best)
             self.penalties = Xdict(not_found_method=lambda x: [])
             self._get_penalties(original_penalties)
@@ -231,6 +242,7 @@ class BondOrderAssignment:
             self.current_stat = 0
             self.points = []
             self.cached = {}
+            self.total_charge = total_charge
         set_attribute_alternative_names(self)
 
     def _get_penalties(self, original_penalties):
@@ -320,7 +332,7 @@ class BondOrderAssignment:
                 for i in index_sort:
                     if self.debug:
                         print(i, valence, uc)
-                    if len(uc[i]) == valence[i] and valence[i] != 0:
+                    if len(uc[i]) == valence[i] and valence[i] > 0:
                         while uc[i]:
                             j = uc[i].pop()
                             bonds[i][j] = 1
@@ -329,7 +341,7 @@ class BondOrderAssignment:
                             valence[j] -= 1
                         valence[i] = 0
                         no_basic_rule = False
-                    elif len(uc[i]) == 1 and valence[i] != 0:
+                    elif len(uc[i]) == 1 and valence[i] > 0:
                         j = uc[i].pop()
                         uc[j].remove(i)
                         bonds[j][i] = valence[i]
@@ -377,6 +389,18 @@ class BondOrderAssignment:
                     print("-"*20, self.points[self.stat_position - 1])
         if success:
             self.assign.bonds = bonds
+            total_charge = 0
+            for atom, bond in bonds.items():
+                valence = sum(bond.values())
+                formal_charge = self.atomic_formal_valence[self.assign.atoms[atom]].get(valence, None)
+                
+                if formal_charge is None:
+                    return ReasonedBool(False, "the final atomic valences are weird")
+                total_charge += formal_charge
+                self.assign.formal_charge[atom] = formal_charge
+        if self.total_charge is not None and total_charge != self.total_charge:
+            print(total_charge, self.total_charge)
+            return ReasonedBool(False, "the final total charge is not right")
         return success
 
 for key, value in BondOrderAssignment.atomic_valence.items():

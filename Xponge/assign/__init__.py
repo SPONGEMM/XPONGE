@@ -2,8 +2,10 @@
 This **package** is used to assign the properties for atoms, residues and molecules
 """
 import heapq
+import warnings
 from copy import deepcopy
 from collections import OrderedDict
+from collections.abc import Iterable
 from itertools import groupby
 import numpy as np
 from ..helper import AtomType, ResidueType, Xopen, Xdict, set_real_global_variable, set_attribute_alternative_names, \
@@ -18,11 +20,13 @@ class AssignRule:
     """
     all = Xdict(not_found_message="AssignRule {} not found. Did you import the proper force field?")
 
-    def __init__(self, name, pure_string=False):
+    def __init__(self, name, pure_string=False, pre_action=None, post_action=None):
         self.name = name
         AssignRule.all[name] = self
         self.rules = OrderedDict()
         self.pure_string = pure_string
+        self.pre_action = pre_action
+        self.post_action = post_action
         set_attribute_alternative_names(self)
 
     def add_rule(self, atomtype):
@@ -43,6 +47,12 @@ and giving True or False as a result)
             self.rules[atomtype] = rule_function
 
         return wrapper
+
+    def set_pre_action(self, function):
+        self.pre_action = function
+
+    def set_post_action(self, function):
+        self.post_action = function
 
 
 class _RING():
@@ -70,6 +80,9 @@ class _RING():
 
     def __eq__(self, other):
         return isinstance(other, _RING) and self.tohash == other.tohash
+
+    def __len__(self):
+        return len(self.atoms)
 
     @staticmethod
     def add_rings_basic_marker(assign, rings):
@@ -224,6 +237,97 @@ class _RING():
                 if assign.atoms[bonded_atom] != "C" and order == 2 and bonded_atom not in self.atoms:
                     self.out_plane_double_bond = True
 
+    def check_aromatic(self, assign):
+        """
+
+        :param assign:
+        :return:
+        """
+        if len(self) < 4:
+            return False
+        pi_electron = 0
+        for atom0, atom1, atom2 in self.get_3_neighbors():
+            degree = len(assign.bonds[atom1])
+            valence = sum(assign.bonds[atom1].values())
+            charge = assign.formal_charge[atom1]
+            if assign.atoms[atom1] == "C":
+                if charge == 0:
+                    if degree == 3:
+                        outside_atom = next(iter(set(assign.bonds[atom1]) - {atom0, atom2}))
+                        if assign.atoms[outside_atom] == "C" or assign.bonds[atom1][outside_atom] != 2:
+                            pi_electron += 1
+                    else:
+                        break
+                elif charge == 1 and valence == 3:
+                    if degree == 2:
+                        pi_electron += 1
+                    elif degree != 3:
+                        break
+                elif charge == -1 and valence == 3:
+                    if degree == 3:
+                        pi_electron += 2
+                    elif degree == 2:
+                        pi_electron += 1
+                    else:
+                        break
+                else:
+                    break
+            elif assign.atoms[atom1] in ("P", "N"):
+                if charge == 0:
+                    if valence == 3:
+                        if degree == 3:
+                            pi_electron += 2
+                        elif degree == 2:
+                            pi_electron += 1
+                    elif valence == 5:
+                        outside_atom = next(iter(set(assign.bonds[atom1]) - {atom0, atom2}))
+                        if assign.atoms[outside_atom] == "O":
+                            pi_electron += 1
+                        else:
+                            pi_electron += 2
+                    else:
+                        break
+                elif charge == 1 and valence == 4 and degree == 3:
+                    pi_electron += 1
+                elif charge == -1 and valence == 2 and degree == 2:
+                    pi_electron += 2
+                else:
+                    break
+            elif assign.atoms[atom1] == "O":
+                if charge == 0 and valence == 2 and degree == 2:
+                    pi_electron += 2
+                elif charge == 1 and valence == 3 and degree == 2:
+                    pi_electron += 1
+                else:
+                    break
+            elif assign.atoms[atom1] == "S":
+                if charge == 0:
+                    if valence == 2 and degree == 2:
+                        pi_electron += 2
+                    else:
+                        outside_atom = next(iter(set(assign.bonds[atom1]) - {atom0, atom2}))
+                        if  degree == 3 and valence == 4 and assign.atoms[outside_atom] == "O":
+                            pi_electron += 2
+                        else:
+                            break
+                elif charge == 1:
+                    if valence == 3 and degree == 2:
+                        pi_electron += 1
+                    else:
+                        outside_atom = next(iter(set(assign.bonds[atom1]) - {atom0, atom2}))
+                        if  degree == 3 and valence == 3 and assign.atoms[outside_atom] == "O":
+                            pi_electron += 2
+                        else:
+                            break
+                else:
+                    break
+        else:
+            if pi_electron % 4 == 2:
+                for atom in self.atoms:
+                    assign.add_atom_marker(atom, "AR0")
+                return True
+        return False
+
 
 class Assign():
     """
@@ -246,14 +350,13 @@ class Assign():
         self.atom_numbers = 0
         self.atoms = []
         self.names = []
+        self.formal_charge = []
         self.element_details = []
         self.coordinate = None
         self.charge = None
         self.atom_types = Xdict()
         self.atom_marker = Xdict()
         self.bonds = Xdict()
-        self.ar_bonds = Xdict()
-        self.am_bonds = Xdict()
         self.bond_marker = Xdict()
         set_attribute_alternative_names(self)
 
@@ -275,7 +378,7 @@ connected to two other atoms, "N4" means a nitrogen atom connected to four other
         :param string: a string mask  of a list of string masks.
         :return:
         """
-        assert isinstance(string, (list, str))
+        assert isinstance(string, (Iterable, str))
         if isinstance(string, str):
             todo = [string]
         else:
@@ -321,6 +424,7 @@ connected to two other atoms, "N4" means a nitrogen atom connected to four other
             self.charge = np.array([charge])
         else:
             self.charge = np.hstack((self.charge, np.array([charge])))
+        self.formal_charge.append(0)
 
     def add_atom_marker(self, atom, marker):
         """
@@ -383,7 +487,6 @@ connected to two other atoms, "N4" means a nitrogen atom connected to four other
         self.bonds[atom2].pop(atom1, None)
         self.bond_marker[atom1].pop(atom2, None)
         self.bond_marker[atom2].pop(atom1, None)
-        
 
     def determine_equal_atoms(self):
         """
@@ -404,9 +507,9 @@ connected to two other atoms, "N4" means a nitrogen atom connected to four other
 
         :return: None
         """
-        have_found_rings = _RING.get_rings(self)
-        _RING.add_rings_basic_marker(self, have_found_rings)
-        _RING.check_rings_type(self, have_found_rings)
+        self.rings = _RING.get_rings(self)
+        _RING.add_rings_basic_marker(self, self.rings)
+        _RING.check_rings_type(self, self.rings)
 
         for atom in range(len(self.atoms)):
             dlo = 0
@@ -453,15 +556,17 @@ None, else return the atom types.
             rule = AssignRule.all[rule]
         if rule.pure_string:
             backup = deepcopy(self.atom_types)
+        if rule.pre_action:
+            rule.pre_action(self)
         for i in range(len(self.atoms)):
-            find_type = False
             for atom_type, type_rule in rule.rules.items():
                 if type_rule(i, self):
                     self.atom_types[i] = atom_type
-                    find_type = True
                     break
-
-            assert find_type, "No atom type found for assignment %s of atom #%d" % (self.name, i)
+            else:
+                raise KeyError("No atom type found for assignment %s of atom #%d" % (self.name, i))
+        if rule.post_action:
+            rule.post_action(self)
         if rule.pure_string:
             backup, self.atom_types = self.atom_types, backup
             return backup
@@ -499,7 +604,7 @@ the rule described in the reference (J. Wang et al., J. Am. Chem. Soc, 2001) wil
                     if dij < simple_cutoff:
                         self.add_bond(i, j, -1)
 
-    def determine_bond_order(self, max_step=200, max_stat=2000, penalty_scores=None, debug=False):
+    def determine_bond_order(self, max_step=200, max_stat=2000, penalty_scores=None, debug=False, total_charge=0):
         """
         This **function** determines the bond order based on connectivities
 
@@ -508,10 +613,11 @@ the rule described in the reference (J. Wang et al., J. Am. Chem. Soc, 2001) wil
         :param penalty_scores: the penalty scores for every atom. This should be a list of ordered dicts, and every
 ordered dict stores the valence-penalty pairs for every atom, and it is sorted by the penalty scores. If None(default),
 a set of penalty scores described in the reference (J. Wang et al., J. Mol. Graph. Model., 2006) will be used.
+        :param total_charge: the total charge of the molecule
         :return: ReasonedBool, True for success, False for failure.
         """
         from .bond_order import BondOrderAssignment
-        bo_assign = BondOrderAssignment(penalty_scores, max_step, max_stat, self, debug)
+        bo_assign = BondOrderAssignment(penalty_scores, max_step, max_stat, self, debug, total_charge)
         return bo_assign.main()
 
     def to_residuetype(self, name, charge=None):
@@ -577,6 +683,18 @@ a set of penalty scores described in the reference (J. Wang et al., J. Mol. Grap
         else:
             raise ValueError("methods should be one of the following: 'RESP', 'GASTEIGER'")
 
+    def kekulize(self):
+        """
+        This **function** kekulizes the structure. 
+        The marker "AR0" will be added to the aromatic atom and the marker "ar" will be added to the aromatic bond
+
+        :return: None
+        """
+        for ring in self.rings:
+            if ring.check_aromatic(self):
+                for atom0, atom1, atom2 in ring.get_3_neighbors():
+                    self.add_bond_marker(atom0, atom1, "ar")
+
     def save_as_pdb(self, filename):
         """
         This **function** saves the instance as a pdb file
@@ -630,14 +748,20 @@ a set of penalty scores described in the reference (J. Wang et al., J. Mol. Grap
         """
         if not isinstance(filename, str):
             raise TypeError("filename needed to save an assignment as a mol2 file")
+        import Xponge.forcefield.sybyl
+        atom_types = self.determine_atom_type("sybyl")
+        for atom, atype in enumerate(atom_types):
+            self.element_details[atom] = "." + atype.split(".")[1] if "." in atype else ""
         bonds = []
         for i in range(self.atom_numbers):
             for j, order in self.bonds[i].items():
                 if i < j:
-                    if i in self.ar_bonds.keys() and j in self.ar_bonds[i]:
+                    if "ar" in self.bond_marker[i][j]:
                         bonds.append("%6d %6d ar\n" % (i + 1, j + 1))
-                    elif i in self.am_bonds.keys() and j in self.am_bonds[i]:
+                    elif "am" in self.bond_marker[i][j]:
                         bonds.append("%6d %6d am\n" % (i + 1, j + 1))
+                    elif order == -1:
+                        bonds.append("%6d %6d un\n" % (i + 1, j + 1))
                     else:
                         bonds.append("%6d %6d %1d\n" % (i + 1, j + 1, order))
         bonds.sort(key=lambda x: list(map(int, x.split()[:2])))
@@ -660,7 +784,11 @@ a set of penalty scores described in the reference (J. Wang et al., J. Mol. Grap
             towrite += "%6d %4s %8.4f %8.4f %8.4f   %-8s %5d %8s %10.6f\n" % (
                 i + 1, self.names[i], self.coordinate[i][0], self.coordinate[i][1], self.coordinate[i][2],
                 atom + self.element_details[i], 1, self.name, self.charge[i])
-
+        charged_atom = list(filter(lambda i: i[1] != 0, enumerate(self.formal_charge)))
+        if charged_atom:
+            towrite += "@<TRIPOS>UNITY_ATOM_ATTR\n"
+        for i, charge in charged_atom:
+            towrite += f"{i + 1} 1\ncharge {charge}\n"
         towrite += "@<TRIPOS>BOND\n"
         for i, bond in enumerate(bonds):
             towrite += "%6d %s" % (i + 1, bond)
@@ -741,7 +869,9 @@ def get_assignment_from_pdb(filename, determine_bond_order=True, only_residue=""
                     if bonded_atom in index_atom_map.keys():
                         assign.Add_Bond(index_atom_map[atom], index_atom_map[int(bonded_atom)])
     if determine_bond_order:
-        raise NotImplementedError
+        success = assign.determine_bond_order()
+        if not success:
+            raise ValueError(f"Failed to determine the bond orders. Reason: {success.reason}")
     return assign
 
 
@@ -764,7 +894,29 @@ def get_assignment_from_residuetype(restype):
     return assign
 
 
-def get_assignment_from_mol2(filename, ignore_hydrogen=False):
+def get_assignment_from_xyz(filename, bond_tolerance=1.0, total_charge=0):
+    """
+    This **function** gets an Assign instance from a xyz file
+
+    :param filename: the name of the input file
+    :param bond_tolerance: the parameter to determine the atomic connections. The larger tolerance, the easier to set a bond between two atoms
+    :param total_charge: the total charge of the molecule
+    :return: the Assign instance
+    """
+    with open(filename) as f:
+        atom_numbers = int(f.readline())
+        assign = Assign()
+        f.readline()
+        for i in range(atom_numbers):
+            atom_name, x, y, z = f.readline().split()
+            assign.Add_Atom(atom_name, float(x), float(y), float(z))
+        assign.determine_connectivity(tolerance=bond_tolerance)
+        assign.determine_bond_order(total_charge=total_charge)
+        assign.Determine_Ring_And_Bond_Type()
+        return assign
+
+
+def get_assignment_from_mol2(filename):
     """
     This **function** gets an Assign instance from a mol2 file
 
@@ -774,7 +926,8 @@ def get_assignment_from_mol2(filename, ignore_hydrogen=False):
     with open(filename) as f:
         flag = None
         subflag = None
-        real_index = Xdict()
+        real_index = Xdict(not_found_message="Atom #{} not found")
+        need_bond_order = False
         for line in f:
             if not line.strip():
                 continue
@@ -788,9 +941,6 @@ def get_assignment_from_mol2(filename, ignore_hydrogen=False):
             elif flag == "ATOM":
                 words = line.split()
                 atom_name = words[1]
-                if ignore_hydrogen and (atom_name.startswith("H") or atom_name.startswith("1H")  or
-                    atom_name.startswith("2H") or atom_name.startswith("3H")):
-                    continue
                 real_index[words[0]] = assign.atom_numbers
                 element = words[5]
                 x = float(words[2])
@@ -798,40 +948,49 @@ def get_assignment_from_mol2(filename, ignore_hydrogen=False):
                 z = float(words[4])
                 charge = float(words[8])
                 assign.Add_Atom(element, x, y, z, atom_name, charge)
+            elif flag == "UNITY_ATOM_ATTR":
+                words = line.split()
+                atom = real_index[words[0]]
+                for _ in range(int(words[1])):
+                    line = f.readline()
+                    words = line.split()
+                    attr = words[0]
+                    if attr == "charge":
+                        assign.formal_charge[atom] = int(words[1])
+                    else:
+                        raise NotImplementedError("Unknown UNITY_ATOM_ATTR flag")
             elif flag == "BOND":
                 words = line.split()
                 if words[1] not in real_index or words[2] not in real_index:
                     continue
                 atom1 = real_index[words[1]]
                 atom2 = real_index[words[2]]
-                if words[3] in "1234567890":
+                if words[3] in "123456789":
                     assign.Add_Bond(atom1 , atom2, int(words[3]))
                 elif words[3] == "ar":
+                    need_bond_order = True
                     assign.Add_Bond(atom1, atom2, -1)
-                    if atom1 not in assign.ar_bonds.keys():
-                        assign.ar_bonds[atom1] = [atom2]
-                    else:
-                        assign.ar_bonds[atom1].append(atom2)
-                    if atom2 not in assign.ar_bonds.keys():
-                        assign.ar_bonds[atom2] = [atom1]
-                    else:
-                        assign.ar_bonds[atom2].append(atom1)
+                    assign.add_bond_marker(atom1, atom2, "mol2_ar")
                 elif words[3] == "am":
+                    need_bond_order = True
                     assign.Add_Bond(atom1, atom2, -1)
-                    if atom1 not in assign.am_bonds.keys():
-                        assign.am_bonds[atom1] = [atom2]
-                    else:
-                        assign.am_bonds[atom1].append(atom2)
-                    if atom2 not in assign.am_bonds.keys():
-                        assign.am_bonds[atom2] = [atom1]
-                    else:
-                        assign.am_bonds[atom2].append(atom1)
+                    assign.add_bond_marker(atom1, atom2, "mol2_am")
+                elif words[3] == "un":
+                    need_bond_order = True
+                    assign.Add_Bond(atom1, atom2, -1)
                 else:
                     raise NotImplementedError(f"No implemented method to process bond #{words[0]} type {words[3]}")
-
-    success = assign.Determine_Bond_Order()
-    if not success:
-        raise ValueError("Failed to determine the bond orders")
+    if need_bond_order:
+        success = assign.Determine_Bond_Order(total_charge=int(round(sum(assign.charge))))
+        if not success:
+            for i, bond in assign.bonds.items():
+                for j in bond:
+                    assign.bonds[i][j] = -1
+            success = assign.Determine_Bond_Order(total_charge=int(round(sum(assign.charge))))
+            if not success:
+                raise ValueError(f"Failed to determine the bond orders. Reason: {success.reason}")
+            warnings.warn(f"The bond orders in {filename} are not reasonable and have been modified")
+            
     assign.Determine_Ring_And_Bond_Type()
     return assign
 

@@ -72,7 +72,7 @@ The atoms in a ``Residue`` or a ``ResidueType`` can be obtained by their names. 
 
 """
 
-__version__ = "1.2.6.12.6"
+__version__ = "1.2.6.12.8"
 
 import os
 import time
@@ -84,7 +84,7 @@ import numpy as np
 
 from . import assign
 from .assign import Assign, get_assignment_from_pdb, get_assignment_from_mol2, get_assignment_from_pubchem, \
-    get_assignment_from_residuetype
+    get_assignment_from_residuetype, get_assignment_from_xyz
 from .helper import GlobalSetting, Type, AbstractMolecule, ResidueType, Entity, Atom, Residue, ResidueLink, Molecule, \
     AtomType, set_global_alternative_names, generate_new_pairwise_force_type, generate_new_bonded_force_type, source, \
     Xprint

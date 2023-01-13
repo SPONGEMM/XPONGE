@@ -1,5 +1,5 @@
 """
-This **module** set the basic configuration for gaff
+This **module** sets the basic configuration for gaff
 """
 from tempfile import TemporaryDirectory
 from ...helper import source, Xprint, set_real_global_variable
