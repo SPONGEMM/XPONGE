@@ -58,15 +58,13 @@ def insert_atom_type_to_rdmol(mol, res, assign, atom_type_dict=None):
     :param atom_type_dict: the dict mapping the atom type to the isotope number
     :return:
     """
-    i = 0
     if atom_type_dict is None:
         atom_type_dict = Xdict()
-    for a in mol.GetAtoms():
+    for i, a in enumerate(mol.GetAtoms()):
         atom_type = res.name2atom(assign.names[i]).type.name
-        if atom_type not in atom_type_dict.keys():
+        if atom_type not in atom_type_dict:
             atom_type_dict[atom_type] = len(atom_type_dict)
         a.SetIsotope(atom_type_dict[atom_type])
-        i += 1
 
 
 def find_equal_atoms(assign):

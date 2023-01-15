@@ -398,9 +398,8 @@ class BondOrderAssignment:
                     return ReasonedBool(False, "the final atomic valences are weird")
                 total_charge += formal_charge
                 self.assign.formal_charge[atom] = formal_charge
-        if self.total_charge is not None and total_charge != self.total_charge:
-            print(total_charge, self.total_charge)
-            return ReasonedBool(False, "the final total charge is not right")
+            if self.total_charge is not None and total_charge != self.total_charge:
+                return ReasonedBool(False, "the final total charge is not right")
         return success
 
 for key, value in BondOrderAssignment.atomic_valence.items():

@@ -633,9 +633,11 @@ the tanimoto coefficient of the max common structure.
 
     atom_type_dict = Xdict()
     insert_atom_type_to_rdmol(rdmol_a, residue_a, assign_a, atom_type_dict)
+    from rdkit import Chem
+    print(atom_type_dict)
     insert_atom_type_to_rdmol(rdmol_b, residue_b, assign_b, atom_type_dict)
+    print(atom_type_dict)
     print("FINDING MAXIMUM COMMON SUBSTRUCTURE\n")
-
     result = MCS.FindMCS([rdmol_a, rdmol_b], atomCompare=MCS.AtomCompare.CompareIsotopes, completeRingsOnly=True,
                          timeout=tmcs)
     rdmol_mcs = result.queryMol
@@ -650,13 +652,13 @@ the tanimoto coefficient of the max common structure.
     if image_path:
         draw_a = assign_to_rdmol(assign_a, True)
         draw_b = assign_to_rdmol(assign_b, True)
-        AllChem.Compute2DCoords(draw_a)
-        AllChem.Compute2DCoords(draw_b)
-        for atom in draw_a.GetAtoms():
-            atom.SetProp("atomLabel", atom.GetSymbol())
-        for atom in draw_b.GetAtoms():
-            atom.SetProp("atomLabel", atom.GetSymbol())
-        img = Draw.MolsToGridImage([draw_a, draw_b],
+        AllChem.Compute2DCoords(rdmol_a)
+        AllChem.Compute2DCoords(rdmol_b)
+        for atom in rdmol_a.GetAtoms():
+            atom.SetProp("atomLabel", str(atom.GetIsotope()) + atom.GetSymbol())
+        for atom in rdmol_b.GetAtoms():
+            atom.SetProp("atomLabel", str(atom.GetIsotope()) + atom.GetSymbol())
+        img = Draw.MolsToGridImage([rdmol_a, rdmol_b],
                                    molsPerRow=1,
                                    subImgSize=(1200, 600),
                                    highlightAtomLists=[match_a, match_b])
