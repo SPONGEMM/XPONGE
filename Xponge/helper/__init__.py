@@ -1651,12 +1651,14 @@ If None, the information will be deleted between start and end
         """
         self._missing_residues.clear()
 
-    def add_missing_residues(self):
+    def add_missing_residues(self, add_head=False, add_tail=False):
         """
         This **function** is used to add the missing residues according to the information of the missing residues.
         The information of the missing residues may be set by `set_missing_residues_info` or `load_pdb`
         **New From 1.2.6.7**
 
+        :param add_head: whether to add the missing residues at the head of the chain
+        :param add_tail: whether to add the missing residues at the tail of the chain
         :return: None
         """
         for (start, end), to_insert in self._missing_residues.items():
@@ -1670,6 +1672,8 @@ If None, the information will be deleted between start and end
                 loop_direction = self.find_spacious_direction(start_position)
                 self.del_residue_link(tail, link_to_tail)
             elif start is not None and end is None:
+                if not add_tail:
+                     continue
                 ref_res = start
                 start.unterminal()
                 tail = start.name2atom(start.type.tail)
@@ -1684,11 +1688,13 @@ If None, the information will be deleted between start and end
                 end_position += start_position
                 loop_direction = np.zeros_like(start_position)
             elif start is None and end is not None:
+                if not add_head:
+                     continue
                 tail = None
                 ref_res = end
                 end.unterminal()
                 link_to_tail = end.name2atom(end.type.head)
-                insert_index = 0
+                insert_index = self.residues.index(end)
                 end_position = np.array([getattr(link_to_tail, i) for i in "xyz"])
                 start_position = self.find_spacious_direction(end_position)
                 norm = np.linalg.norm(start_position)

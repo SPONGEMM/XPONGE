@@ -1,7 +1,7 @@
 """
 This **module** gives the basic functions for fep calculations
 """
-from ...helper import source, set_global_alternative_names, Xdict, Xopen, Xprint
+from ...helper import source, set_global_alternative_names, Xdict, Xopen, Xprint, kabsch
 from ..base import lj_base, exclude_base, bond_base, angle_base, dihedral_base, nb14_extra_base
 
 source("....")
@@ -478,31 +478,26 @@ def _correct_residueb_coordinates(residue_a, residue_b, matchmap):
     :param matchmap:
     :return:
     """
+    t = {residue_b.atoms[i].name for i in matchmap.keys()}
     uncertified = set([])
-    certified = Xdict()
+    certified_positions = []
+    template_positions = []
     for i, atom in enumerate(residue_b.atoms):
         if i in matchmap.keys():
             temp_atom = residue_a.atoms[matchmap[i]]
-            certified[atom] = [temp_atom.x, temp_atom.y, temp_atom.z]
+            template_positions.append([temp_atom.x, temp_atom.y, temp_atom.z])
+            certified_positions.append([atom.x, atom.y, atom.z])
         else:
-            uncertified.add(i)
-    while uncertified:
-        movedlist = []
-        for i in uncertified:
-            atom = residue_b.atoms[i]
-            for connected_atom in residue_b.connectivity[atom]:
-                if connected_atom in certified.keys():
-                    temp_list = [0, 0, 0]
-                    temp_list[0] = atom.x - connected_atom.x + certified[connected_atom][0]
-                    temp_list[1] = atom.y - connected_atom.y + certified[connected_atom][1]
-                    temp_list[2] = atom.z - connected_atom.z + certified[connected_atom][2]
-                    certified[atom] = temp_list
-                    movedlist.append(i)
-                    break
-        for i in movedlist:
-            uncertified.remove(i)
-    for atom, crd in certified.items():
-        atom.x, atom.y, atom.z = crd[0], crd[1], crd[2]
+            uncertified.add(atom)
+
+    rotation, center1, center2 = kabsch(template_positions, certified_positions)
+
+    for atom in residue_b.atoms:
+        temp_position = np.array([getattr(atom, xyz) for xyz in "xyz"])
+        tnew_position = np.dot(rotation, (temp_position - center1)) + center2
+        atom.x = tnew_position[0]
+        atom.y = tnew_position[1]
+        atom.z = tnew_position[2]
 
 
 def _get_extra_atoms_and_rbmap(restype_ab, residue_type_a, residue_type_b, residue_a,
@@ -624,22 +619,15 @@ the tanimoto coefficient of the max common structure.
     build.Build_Bonded_Force(mol)
     build.Build_Bonded_Force(residue_b)
 
-    from ...helper.rdkit import assign_to_rdmol, insert_atom_type_to_rdmol
+    from ...helper.rdkit import assign_to_rdmol
     from rdkit.Chem import rdFMCS as MCS
     from rdkit.Chem import Draw, AllChem
 
     rdmol_a = assign_to_rdmol(assign_a, True)
     rdmol_b = assign_to_rdmol(assign_b, True)
 
-    atom_type_dict = Xdict()
-    insert_atom_type_to_rdmol(rdmol_a, residue_a, assign_a, atom_type_dict)
-    from rdkit import Chem
-    print(atom_type_dict)
-    insert_atom_type_to_rdmol(rdmol_b, residue_b, assign_b, atom_type_dict)
-    print(atom_type_dict)
     print("FINDING MAXIMUM COMMON SUBSTRUCTURE\n")
-    result = MCS.FindMCS([rdmol_a, rdmol_b], atomCompare=MCS.AtomCompare.CompareIsotopes, completeRingsOnly=True,
-                         timeout=tmcs)
+    result = MCS.FindMCS([rdmol_a, rdmol_b], completeRingsOnly=True, timeout=tmcs)
     rdmol_mcs = result.queryMol
 
     match_a = rdmol_a.GetSubstructMatch(rdmol_mcs)
@@ -652,13 +640,13 @@ the tanimoto coefficient of the max common structure.
     if image_path:
         draw_a = assign_to_rdmol(assign_a, True)
         draw_b = assign_to_rdmol(assign_b, True)
-        AllChem.Compute2DCoords(rdmol_a)
-        AllChem.Compute2DCoords(rdmol_b)
-        for atom in rdmol_a.GetAtoms():
-            atom.SetProp("atomLabel", str(atom.GetIsotope()) + atom.GetSymbol())
-        for atom in rdmol_b.GetAtoms():
-            atom.SetProp("atomLabel", str(atom.GetIsotope()) + atom.GetSymbol())
-        img = Draw.MolsToGridImage([rdmol_a, rdmol_b],
+        AllChem.Compute2DCoords(draw_a)
+        AllChem.Compute2DCoords(draw_b)
+        for atom in draw_a.GetAtoms():
+            atom.SetProp("atomLabel", atom.GetSymbol())
+        for atom in draw_b.GetAtoms():
+            atom.SetProp("atomLabel", atom.GetSymbol())
+        img = Draw.MolsToGridImage([draw_a, draw_b],
                                    molsPerRow=1,
                                    subImgSize=(1200, 600),
                                    highlightAtomLists=[match_a, match_b])
