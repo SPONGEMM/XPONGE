@@ -1,6 +1,7 @@
 """
 This **module** helps to assign bond orders
 """
+import warnings
 from itertools import product
 # pylint: disable=cyclic-import
 from . import AssignRule, Xdict, OrderedDict, set_attribute_alternative_names, deepcopy, np
@@ -168,18 +169,20 @@ class BondOrderAssignment:
     :param original_penalties: the original penalties dict
     :param max_stat: the max valence stats to iterate
     :param assign: the father Assignment instance
+    :param debug: whether to print the debug information
+    :param total_charge: the total charge of the molecule
+    :param extra_criteria: a function as the extra convergence criteria. The function will receive the assignment as input, and give True or False as output.
     """
     atomic_valence = Xdict({
-        "X": OrderedDict({1: 0, 2: 64}),
-        "Cn1": OrderedDict({3: 0, 4: 1, 5: 32}),
-        "Cx1": OrderedDict({3: 1, 4: 0, 5: 32}),
-#        "Co2": OrderedDict({4: 32, 5: 0, 6: 32}),
-        "C": OrderedDict({2: 64, 3: 32, 4: 0, 5: 32, 6: 64}),
+        "X": OrderedDict({1: 0}),
+        "Cn1": OrderedDict({3: 0, 4: 1}),
+        "Cx1": OrderedDict({3: 1, 4: 0}),
+        "C": OrderedDict({2: 64, 3: 32, 4: 0}),
         "Nnn1": OrderedDict({3: 0, 2: 0}),
         "Nx1": OrderedDict({2: 3, 3: 0, 4: 32}),
         "Nnn2": OrderedDict({3: 1, 4: 0}),
         "Nx2": OrderedDict({2: 4, 3: 0, 4: 32}),
-        "No2": OrderedDict({3: 64, 4: 32, 5: 0, 6: 32}),
+        "No2": OrderedDict({3: 64, 4: 32, 5: 0}),
         "No1": OrderedDict({3: 1, 4: 0}),
         "Nx3": OrderedDict({2: 32, 3: 0, 4: 1, 5: 2}),
         "Nx4": OrderedDict({3: 64, 4: 0, 5: 64}),
@@ -212,8 +215,9 @@ class BondOrderAssignment:
         "P": {3: 0, 4: 1, 2: -1, 5: 0, 7: 0},
         "S": {1: -1, 2: 0, 3: 1, 4: 0, 6: 0},
     })
-    def __init__(self, original_penalties, max_step, max_stat, assign, debug=False, total_charge=0):
+    def __init__(self, original_penalties, max_step, max_stat, assign, debug=False, total_charge=0, extra_criteria=None):
         self.prepare_success = True
+        self.extra_criteria = extra_criteria
         if original_penalties is None:
             try:
                 original_penalties = [self.atomic_valence[type_]
@@ -379,6 +383,39 @@ class BondOrderAssignment:
                         bonds[j][i] += 1
                         valence[i] -= 1
                         valence[j] -= 1
+
+            if success:
+                total_charge = 0
+                c3_atoms = []
+                for atom, bond in bonds.items():
+                    valence = sum(bond.values())
+                    if self.assign.atoms[atom] == "C" and valence == 3:
+                        c3_atoms.append(atom)
+                    formal_charge = self.atomic_formal_valence[self.assign.atoms[atom]].get(valence, None)
+                    if formal_charge is None:
+                        success = False
+                        break
+                    total_charge += formal_charge
+                    self.assign.formal_charge[atom] = formal_charge
+                if self.total_charge is not None and self.total_charge != total_charge:
+                    need_to_change = (total_charge - self.total_charge) // 2
+                    if need_to_change == len(c3_atoms):
+                        for atom in c3_atoms:
+                            self.assign.formal_charge[atom] = -1
+                    elif 0 < need_to_change < len(c3_atoms):
+                        warnings.warn("The formal charge is not unique")
+                        for i, atom in enumerate(c3_atoms):
+                            if i == need_to_change:
+                                break
+                            self.assign.formal_charge[atom] = -1
+                    else:
+                        success = False
+                    
+            if success and self.extra_criteria is not None:
+                self.assign.bonds, bonds = bonds, self.assign.bonds
+                success = self.extra_criteria(self.assign)
+                self.assign.bonds, bonds = bonds, self.assign.bonds
+
             if self.debug:
                 print(valence, uc)
             if not success:
@@ -389,18 +426,8 @@ class BondOrderAssignment:
                     print("-"*20, self.points[self.stat_position - 1])
         if success:
             self.assign.bonds = bonds
-            total_charge = 0
-            for atom, bond in bonds.items():
-                valence = sum(bond.values())
-                formal_charge = self.atomic_formal_valence[self.assign.atoms[atom]].get(valence, None)
-                
-                if formal_charge is None:
-                    return ReasonedBool(False, "the final atomic valences are weird")
-                total_charge += formal_charge
-                self.assign.formal_charge[atom] = formal_charge
-            if self.total_charge is not None and total_charge != self.total_charge:
-                return ReasonedBool(False, "the final total charge is not right")
         return success
+
 
 for key, value in BondOrderAssignment.atomic_valence.items():
     BondOrderAssignment.atomic_valence[key] = OrderedDict(sorted(value.items(), key=lambda t: t[1]))

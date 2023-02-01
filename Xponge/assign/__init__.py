@@ -24,16 +24,20 @@ class AssignRule:
         self.name = name
         AssignRule.all[name] = self
         self.rules = OrderedDict()
+        self.priority = Xdict()
+        self.built = False
         self.pure_string = pure_string
         self.pre_action = pre_action
         self.post_action = post_action
         set_attribute_alternative_names(self)
 
-    def add_rule(self, atomtype):
+    def add_rule(self, atomtype, priority=0):
         """
         This **function** is used as a **decorator** to add the atom type - judge function
 
         :param atomtype: a string or an AtomType instance
+        :param priority: if more than one judge function returns True, the atom type with higher priority will be chosen. \
+If the priority levels of the functions are the same, the atom type which is added first will be chosen.   
         :return: a **function**, which wraps a judge function (receiving the Assign instance and the atom index \
 and giving True or False as a result)
         """
@@ -45,6 +49,7 @@ and giving True or False as a result)
 
         def wrapper(rule_function):
             self.rules[atomtype] = rule_function
+            self.priority[atomtype] = -priority
 
         return wrapper
 
@@ -354,6 +359,7 @@ class Assign():
         self.element_details = []
         self.coordinate = None
         self.charge = None
+        self.built = False
         self.atom_types = Xdict()
         self.atom_marker = Xdict()
         self.bonds = Xdict()
@@ -537,23 +543,23 @@ connected to two other atoms, "N4" means a nitrogen atom connected to four other
                         self.Add_Bond_Marker(atom, atom2, "DB", True)
                 else:
                     self.Add_Bond_Marker(atom, atom2, "tb", True)
+        self.built = True
 
     def determine_atom_type(self, rule):
         """
         This **function** determines the atom type.
 
-        .. ATTENTION::
-
-            Before determining the atom type, the ring and bond type should be determined. If you use the function \
-``Get_Assignment_From_XXX``, the ring and bond type has been determined by the function, but when you build the Assign \
-instance yourself, remember to determine the ring and bond type!
-
         :param rule: a string or an AssignRule instance
         :return: if the attribute "pure_string" of the rule is False, the atom types will be saved inplace and return
 None, else return the atom types.
         """
+        if not self.built:
+            self.determine_ring_and_bond_type()
         if isinstance(rule, str):
             rule = AssignRule.all[rule]
+        if not rule.built:
+             rule.rules = OrderedDict(sorted(rule.rules.items(), key=lambda x: rule.priority[x[0]]))
+             rule.built = True
         if rule.pure_string:
             backup = deepcopy(self.atom_types)
         if rule.pre_action:
@@ -604,7 +610,7 @@ the rule described in the reference (J. Wang et al., J. Am. Chem. Soc, 2001) wil
                     if dij < simple_cutoff:
                         self.add_bond(i, j, -1)
 
-    def determine_bond_order(self, max_step=200, max_stat=2000, penalty_scores=None, debug=False, total_charge=0):
+    def determine_bond_order(self, max_step=200, max_stat=2000, penalty_scores=None, debug=False, total_charge=0, extra_criteria=None):
         """
         This **function** determines the bond order based on connectivities
 
@@ -614,10 +620,11 @@ the rule described in the reference (J. Wang et al., J. Am. Chem. Soc, 2001) wil
 ordered dict stores the valence-penalty pairs for every atom, and it is sorted by the penalty scores. If None(default),
 a set of penalty scores described in the reference (J. Wang et al., J. Mol. Graph. Model., 2006) will be used.
         :param total_charge: the total charge of the molecule
+        :param extra_criteria: a function as the extra convergence criteria. The function will receive the assignment as input, and give True or False as output.
         :return: ReasonedBool, True for success, False for failure.
         """
         from .bond_order import BondOrderAssignment
-        bo_assign = BondOrderAssignment(penalty_scores, max_step, max_stat, self, debug, total_charge)
+        bo_assign = BondOrderAssignment(penalty_scores, max_step, max_stat, self, debug, total_charge, extra_criteria)
         return bo_assign.main()
 
     def to_residuetype(self, name, charge=None):
