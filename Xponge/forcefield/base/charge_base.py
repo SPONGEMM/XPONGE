@@ -34,11 +34,16 @@ def _do(self, sys_kwarg, ene_kwarg, use_pbc):
     sys_kwarg["atom_charge"].append([atom.charge for atom in self.atoms])
     if "charge" not in ene_kwarg:
         ene_kwarg["charge"] = Xdict()
-        ene_kwarg["charge"]["function"] = lambda system, ene_kwarg: CoulombEnergy(
-            atom_charge=system.atom_charge, length_unit='A', energy_unit='kcal/mol',
-            use_pbc=use_pbc, use_pme=use_pbc,
-            nfft=system.pbc_box.asnumpy().astype(int)//4*4,
-            exclude_index=np.array(sys_kwarg["exclude"]))
-
+        if use_pbc:
+            ene_kwarg["charge"]["function"] = lambda system, ene_kwarg: CoulombEnergy(
+                atom_charge=system.atom_charge, length_unit='A', energy_unit='kcal/mol',
+                pbc_box=system.pbc_box, use_pme=False,
+                nfft=system.pbc_box.asnumpy().astype(int)//4*4,
+                exclude_index=np.array(sys_kwarg["exclude"]))
+        else:
+            ene_kwarg["charge"]["function"] = lambda system, ene_kwarg: CoulombEnergy(
+                atom_charge=system.atom_charge, length_unit='A', energy_unit='kcal/mol',
+                nfft=system.pbc_box.asnumpy().astype(int)//4*4,
+                exclude_index=np.array(sys_kwarg["exclude"]))
 
 set_global_alternative_names()

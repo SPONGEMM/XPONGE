@@ -1,8 +1,7 @@
 """
 This **module** helps to assign bond orders
 """
-import warnings
-from itertools import product
+from itertools import product, combinations
 # pylint: disable=cyclic-import
 from . import AssignRule, Xdict, OrderedDict, set_attribute_alternative_names, deepcopy, np
 from ..helper import ReasonedBool
@@ -215,6 +214,7 @@ class BondOrderAssignment:
         "P": {3: 0, 4: 1, 2: -1, 5: 0, 7: 0},
         "S": {1: -1, 2: 0, 3: 1, 4: 0, 6: 0},
     })
+    failure = ReasonedBool(False, "the calculation can not converge")
     def __init__(self, original_penalties, max_step, max_stat, assign, debug=False, total_charge=0, extra_criteria=None):
         self.prepare_success = True
         self.extra_criteria = extra_criteria
@@ -312,6 +312,112 @@ class BondOrderAssignment:
                 return True
         return False
 
+    def _check_formal_charge(self, bonds):
+        """
+        check whether the formal charge is right
+        """
+        success = True
+        formal_charge_iter = None
+        total_charge = 0
+        c3_atoms = []
+        for atom, bond in bonds.items():
+            valence = sum(bond.values())
+            if self.assign.atoms[atom] == "C" and valence == 3:
+                c3_atoms.append(atom)
+            formal_charge = self.atomic_formal_valence[self.assign.atoms[atom]].get(valence, None)
+            if formal_charge is None:
+                success = self.failure
+                break
+            total_charge += formal_charge
+            self.assign.formal_charge[atom] = formal_charge
+        if self.total_charge is not None and self.total_charge != total_charge:
+            need_to_change = (total_charge - self.total_charge) // 2
+            if need_to_change == len(c3_atoms):
+                for atom in c3_atoms:
+                    self.assign.formal_charge[atom] = -1
+            elif 0 < need_to_change < len(c3_atoms):
+                formal_charge_iter = combinations(c3_atoms, need_to_change)
+                success = self.failure
+            else:
+                success = self.failure
+        return success, formal_charge_iter, c3_atoms
+
+    def _assign_bond_order_one_try(self):
+        """
+        try to assign bond orders
+        """
+        bonds = deepcopy(self.assign.bonds)
+        uc = deepcopy(self.uc)
+        valence = deepcopy(self.valence)
+        guess_bonds = []
+        determined = False
+        while not determined:
+            index_sort = np.argsort([len(uci) for uci in uc]).tolist()
+            no_basic_rule = True
+            for i in index_sort:
+                if self.debug:
+                    print(i, valence, uc)
+                if len(uc[i]) == valence[i] and valence[i] > 0:
+                    while uc[i]:
+                        j = uc[i].pop()
+                        bonds[i][j] = 1
+                        bonds[j][i] = 1
+                        uc[j].remove(i)
+                        valence[j] -= 1
+                    valence[i] = 0
+                    no_basic_rule = False
+                elif len(uc[i]) == 1 and valence[i] > 0:
+                    j = uc[i].pop()
+                    uc[j].remove(i)
+                    bonds[j][i] = valence[i]
+                    bonds[i][j] = valence[i]
+                    valence[j] -= valence[i]
+                    valence[i] -= valence[i]
+                    no_basic_rule = False
+            success = True
+            for i in range(self.assign.atom_numbers):
+                if valence[i] != 0 or len(uc[i]) != 0:
+                    success = self.failure
+                if (len(uc[i]) == 0 and valence[i] != 0) or (valence[i] == 0 and len(uc[i]) != 0):
+                    success = self.failure
+                    determined = True
+                    break
+            if success:
+                determined = True
+            if not determined and no_basic_rule:
+                if not guess_bonds:
+                    i = index_sort.pop()
+                    j = uc[i].pop()
+                    uc[j].remove(i)
+                    guess_bonds = [i, j]
+                    bonds[i][j] = 1
+                    bonds[j][i] = 1
+                    valence[i] -= 1
+                    valence[j] -= 1
+                else:
+                    i, j = guess_bonds
+                    if bonds[i][j] == 3:
+                        determined = True
+                        success = self.failure
+                        break
+                    bonds[i][j] += 1
+                    bonds[j][i] += 1
+                    valence[i] -= 1
+                    valence[j] -= 1
+        return success, bonds
+
+    def _assign_formal_charge_one_try(self, c3_atoms, formal_charge_iter):
+        """
+        try to assign formal charges
+        """
+        for atom in c3_atoms:
+            self.assign.formal_charge[atom] = 1
+        try:
+            for atom in next(formal_charge_iter):
+                self.assign.formal_charge[atom] = -1
+            return True, formal_charge_iter
+        except StopIteration:
+            return self.failure, None
 
     def main(self):
         """
@@ -322,103 +428,20 @@ class BondOrderAssignment:
         if not self.prepare_success:
             return self.prepare_success
         count = 0
-        Failure = ReasonedBool(False, "the calculation can not converge")
-        success = Failure
+        success = self.failure
+        formal_charge_iter = None
         while count < self.max_step and self.current_stat < self.max_stat and not success:
-            bonds = deepcopy(self.assign.bonds)
-            uc = deepcopy(self.uc)
-            valence = deepcopy(self.valence)
-            guess_bonds = []
-            determined = False
-            while not determined:
-                index_sort = np.argsort([len(uci) for uci in uc]).tolist()
-                no_basic_rule = True
-                for i in index_sort:
-                    if self.debug:
-                        print(i, valence, uc)
-                    if len(uc[i]) == valence[i] and valence[i] > 0:
-                        while uc[i]:
-                            j = uc[i].pop()
-                            bonds[i][j] = 1
-                            bonds[j][i] = 1
-                            uc[j].remove(i)
-                            valence[j] -= 1
-                        valence[i] = 0
-                        no_basic_rule = False
-                    elif len(uc[i]) == 1 and valence[i] > 0:
-                        j = uc[i].pop()
-                        uc[j].remove(i)
-                        bonds[j][i] = valence[i]
-                        bonds[i][j] = valence[i]
-                        valence[j] -= valence[i]
-                        valence[i] -= valence[i]
-                        no_basic_rule = False
-                success = True
-                for i in range(self.assign.atom_numbers):
-                    if valence[i] != 0 or len(uc[i]) != 0:
-                        success = Failure
-                    if len(uc[i]) == 0 and valence[i] != 0 or valence[i] == 0 and len(uc[i]) != 0:
-                        success = Failure
-                        determined = True
-                        break
+            if formal_charge_iter is None:
+                success, bonds = self._assign_bond_order_one_try()
                 if success:
-                    determined = True
-                if not determined and no_basic_rule:
-                    if not guess_bonds:
-                        i = index_sort.pop()
-                        j = uc[i].pop()
-                        uc[j].remove(i)
-                        guess_bonds = [i, j]
-                        bonds[i][j] = 1
-                        bonds[j][i] = 1
-                        valence[i] -= 1
-                        valence[j] -= 1
-                    else:
-                        i, j = guess_bonds
-                        if bonds[i][j] == 3:
-                            determined = True
-                            success = Failure
-                            break
-                        bonds[i][j] += 1
-                        bonds[j][i] += 1
-                        valence[i] -= 1
-                        valence[j] -= 1
-
-            if success:
-                total_charge = 0
-                c3_atoms = []
-                for atom, bond in bonds.items():
-                    valence = sum(bond.values())
-                    if self.assign.atoms[atom] == "C" and valence == 3:
-                        c3_atoms.append(atom)
-                    formal_charge = self.atomic_formal_valence[self.assign.atoms[atom]].get(valence, None)
-                    if formal_charge is None:
-                        success = False
-                        break
-                    total_charge += formal_charge
-                    self.assign.formal_charge[atom] = formal_charge
-                if self.total_charge is not None and self.total_charge != total_charge:
-                    need_to_change = (total_charge - self.total_charge) // 2
-                    if need_to_change == len(c3_atoms):
-                        for atom in c3_atoms:
-                            self.assign.formal_charge[atom] = -1
-                    elif 0 < need_to_change < len(c3_atoms):
-                        warnings.warn("The formal charge is not unique")
-                        for i, atom in enumerate(c3_atoms):
-                            if i == need_to_change:
-                                break
-                            self.assign.formal_charge[atom] = -1
-                    else:
-                        success = False
-                    
+                    success, formal_charge_iter, c3_atoms = self._check_formal_charge(bonds)
+            else:
+                success, formal_charge_iter = self._assign_formal_charge_one_try(c3_atoms, formal_charge_iter)
             if success and self.extra_criteria is not None:
                 self.assign.bonds, bonds = bonds, self.assign.bonds
                 success = self.extra_criteria(self.assign)
                 self.assign.bonds, bonds = bonds, self.assign.bonds
-
-            if self.debug:
-                print(valence, uc)
-            if not success:
+            if not success and formal_charge_iter is None:
                 count += 1
                 while self._get_next_valence():
                     pass

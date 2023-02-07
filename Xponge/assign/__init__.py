@@ -414,6 +414,7 @@ connected to two other atoms, "N4" means a nitrogen atom connected to four other
             element_detail = "." + element_detail
         else:
             element_detail = ""
+        self.built = False
         self.element_details.append(element_detail)
         self.atoms.append(element)
         self.bonds[self.atom_numbers] = Xdict()
@@ -454,6 +455,7 @@ connected to two other atoms, "N4" means a nitrogen atom connected to four other
         :param order: the bond order
         :return: None
         """
+        self.built = False
         self.bonds[atom1][atom2] = order
         self.bond_marker[atom1][atom2] = set([])
         self.bonds[atom2][atom1] = order
@@ -489,6 +491,7 @@ connected to two other atoms, "N4" means a nitrogen atom connected to four other
         :param atom2: the index of the the second atom
         :return: None
         """
+        self.built = False
         self.bonds[atom1].pop(atom2, None)
         self.bonds[atom2].pop(atom1, None)
         self.bond_marker[atom1].pop(atom2, None)
@@ -697,6 +700,8 @@ a set of penalty scores described in the reference (J. Wang et al., J. Mol. Grap
 
         :return: None
         """
+        if not self.built:
+            self.determine_ring_and_bond_type()
         for ring in self.rings:
             if ring.check_aromatic(self):
                 for atom0, atom1, atom2 in ring.get_3_neighbors():

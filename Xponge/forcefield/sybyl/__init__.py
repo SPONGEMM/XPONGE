@@ -32,7 +32,7 @@ def _(i, assign):
     :param assign:
     :return:
     """
-    return assign.Atom_Judge(i, "C3") and "AR0" in assign.atom_marker[i]
+    return "AR0" in assign.atom_marker[i]
 
 @atom_types.Add_Rule("C.cat")
 def _(i, assign):
@@ -57,7 +57,7 @@ def _(i, assign):
     :param assign:
     :return:
     """
-    return assign.Atom_Judge(i, "C3")
+    return assign.Atom_Judge(i, "C3") or (assign.Atom_Judge(i, "C2") and assign.formal_charge[i] == -1)
 
 @atom_types.Add_Rule("C.1")
 def _(i, assign):
@@ -115,7 +115,7 @@ def _(i, assign):
     :param assign:
     :return:
     """
-    return assign.Atom_Judge(i, "N1") or (assign.Atom_Judge(i, "N2") and sum(assign.bonds[i].values())  >= 4)
+    return (assign.Atom_Judge(i, "N1") and assign.formal_charge[i] != -1) or (assign.Atom_Judge(i, "N2") and sum(assign.bonds[i].values())  >= 4)
 
 @atom_types.Add_Rule("N.Ccat")
 def _(i, assign):
@@ -153,7 +153,7 @@ def _(i, assign):
     """
     if assign.atoms[i] != "N":
         return False
-    for bond in assign.bonds[i].values():
+    for j, bond in assign.bonds[i].items():
         if bond == 2:
             return True
     return False
@@ -182,7 +182,7 @@ def _(i, assign):
     :param assign:
     :return:
     """
-    return assign.Atom_Judge(i, "N3")
+    return assign.atoms[i] == "N"
 
 @atom_types.Add_Rule("O.co2")
 def _(i, assign):
@@ -300,5 +300,5 @@ def _new_rule(element):
         """
         return assign.atoms[i] == element
 
-for i in ["H", "F", "Cl", "Br", "I"]:
+for i in ["C", "O", "N", "H", "F", "Cl", "Br", "I"]:
     _new_rule(i)
