@@ -1,7 +1,7 @@
 """
 This **module** implements the terminal commands
 """
-import os
+import os, shutil
 import sys
 import unittest
 import multiprocessing as mpc
@@ -489,18 +489,9 @@ def _mol2rfe_build(args, merged_from, merged_to):
 
         for i in range(args.nl + 1):
             if os.path.exists("%d" % i):
-                os.system("rm -rf %d" % i)
+                shutil.rmtree("%d" % i)
             os.mkdir("%d" % i)
             tt = fep.Merge_Force_Field(merged_from, merged_to, i / args.nl)
-            if i == 0:
-                Xprint("Initial Structure Optimizing\n")
-                process.optimize(tt,
-                                 only_bad_coordinate=False,
-                                 extra_commands={"lambda_lj": i / args.nl})
-                for atom_m, atom_t in zip(merged_from.atoms, tt.atoms):
-                    atom_m.x = atom_t.x
-                    atom_m.y = atom_t.y
-                    atom_m.z = atom_t.z
             build.save_mol2(tt, "%d/%s.mol2" % (i, args.temp))
             build.Save_SPONGE_Input(tt, "%d/%s" % (i, args.temp))
             Xprint(f"{i} built success")
@@ -529,21 +520,15 @@ def _mol2rfe_min(args):
     if "min" in args.do:
         for i in range(args.nl + 1):
             if os.path.exists("%d/min" % i):
-                os.system("rm -rf %d/min" % i)
+                shutil.rmtree("%d/min" % i)
             os.mkdir("%d/min" % i)
             basic = f"SPONGE -default_in_file_prefix {i}/{args.temp}"
             lambda_ = i / args.nl
-            basic += f" -mode minimization -lambda_lj {lambda_}"
+            basic += f" -mode minimization -lambda_lj {lambda_} -minimization_dynamic_dt 1 -write_information_interval 1000"
             basic += _mol2rfe_output_path("min", i, args.temp)
             if not args.mi:
-                cif = " -constrain_mode SHAKE -cutoff 8"
-                run(f"{basic} {cif} -dt 1e-8 -step_limit {args.msteps[0]}")
-                cif += " -coordinate_in_file {1}/min/{0}_coordinate.txt".format(args.temp, i)
-                run(f"{basic} {cif} -dt 1e-7 -step_limit {args.msteps[1]}")
-                run(f"{basic} {cif} -dt 1e-6 -step_limit {args.msteps[2]}")
-                run(f"{basic} {cif} -dt 1e-5 -step_limit {args.msteps[3]}")
-                run(f"{basic} {cif} -dt 1e-4 -step_limit {args.msteps[4]}")
-                run(f"{basic} {cif} -dt 1e-3 -step_limit {args.msteps[5]}")
+                cif = " -cutoff 8 -constrain_mode SHAKE"
+                run(f"{basic} {cif} -step_limit {args.msteps[0]}")
             else:
                 mdin = args.mi.pop(0)
                 cif = ""
@@ -564,7 +549,7 @@ def _mol2rfe_pre_equilibrium(args):
     if "pre_equilibrium" in args.do:
         for i in range(args.nl + 1):
             if os.path.exists("%d/pre_equilibrium" % i):
-                os.system("rm -rf %d/pre_equilibrium" % i)
+                shutil.rmtree("%d/pre_equilibrium" % i)
             os.mkdir("%d/pre_equilibrium" % i)
             command = f"SPONGE -default_in_file_prefix {i}/{args.temp}"
             lambda_ = i / args.nl

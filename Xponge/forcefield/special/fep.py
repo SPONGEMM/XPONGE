@@ -479,22 +479,19 @@ def _correct_residueb_coordinates(residue_a, residue_b, matchmap):
     :return:
     """
     t = {residue_b.atoms[i].name for i in matchmap.keys()}
-    uncertified = set([])
-    certified_positions = []
     template_positions = []
+    certified_positions = []
     for i, atom in enumerate(residue_b.atoms):
         if i in matchmap.keys():
             temp_atom = residue_a.atoms[matchmap[i]]
             template_positions.append([temp_atom.x, temp_atom.y, temp_atom.z])
             certified_positions.append([atom.x, atom.y, atom.z])
-        else:
-            uncertified.add(atom)
 
     rotation, center1, center2 = kabsch(template_positions, certified_positions)
 
     for atom in residue_b.atoms:
         temp_position = np.array([getattr(atom, xyz) for xyz in "xyz"])
-        tnew_position = np.dot(rotation, (temp_position - center1)) + center2
+        tnew_position = np.dot(rotation, (temp_position - center2)) + center1
         atom.x = tnew_position[0]
         atom.y = tnew_position[1]
         atom.z = tnew_position[2]

@@ -372,8 +372,7 @@ def get_peptide_from_sequence(sequence, charged_terminal=True):
     return toret
 
 
-def optimize(mol, step=2000, only_bad_coordinate=True, dt=1e-8, force_limit=50,
-             epoch_limit=10, pbc=True, extra_commands=None):
+def optimize(mol, step=2000, only_bad_coordinate=True, dt=1e-8, pbc=True, extra_commands=None):
     """
     This **function** is used to optimize the structure of the Molecule instance
 
@@ -381,12 +380,9 @@ def optimize(mol, step=2000, only_bad_coordinate=True, dt=1e-8, force_limit=50,
     :param step: the limited step for each epoch for minimization, 2000 for default
     :param only_bad_coordinate: whether to optimize all the atoms or the atoms whose coordinates are bad
     :param dt: the start dt for minimization
-    :param force_limit: the minimization will stop if the largest difference in unit of `kcal/mol/A` \
-between forces in two steps is not more than this value.
-    :param epoch_limit: the minimization will stop if the epoch is not less than this value.
     :param pbc: whether to use the periodic box condition
     :param extra_commands: a dict, with the extra commands to pass to the MD engine
-    :return: 0 for reaching the force limitation, 1 for reaching the epoch limitation
+    :return: None
     """
     from tempfile import TemporaryDirectory
     Xprint("Optimizing", verbose=0)
@@ -412,6 +408,7 @@ box = {temp_prefix}.box
 mdout = {temp_out}.out
 mdinfo = {temp_out}.info
 mode = minimization
+minimization_dynamic_dt = 1
 step_limit = {step}
 write_information_interval = {step}
 molecule_map_output  = 1
@@ -426,8 +423,6 @@ molecule_map_output  = 1
             all_to_use = f"SPONGE -mdin {temp_mdin_name} "
         else:
             all_to_use = f"SPONGE_NOPBC -mdin {temp_mdin_name} "
-        if force_limit > 0:
-            all_to_use += f"-frc {temp_out}.frc "
         if only_bad_coordinate:
             all_to_use += f"-mass_in_file {temp_prefix + '_fake_mass.txt'} "
         if GlobalSetting.verbose < 2:
@@ -436,30 +431,8 @@ molecule_map_output  = 1
             print_to = ""
         Xprint("    Running", verbose=0)
         run(all_to_use + f"-dt {dt} {print_to}")
-        all_to_use += f"-coordinate_in_file {temp_out+'_coordinate.txt'} "
-        start_dt = dt
-        if force_limit > 0:
-            frc = np.fromfile(f"{temp_out}.frc", dtype=np.float32).reshape(-1, 3)
-            frc = np.linalg.norm(frc, axis=1)
-            last_frc = np.zeros_like(frc)
-            epoch = 0
-            Xprint("Epoch    Max Force Difference    Force Limit    Epoch Limit", verbose=0)
-            while not np.all(np.abs(frc - last_frc) < force_limit) and epoch < epoch_limit:
-                epoch += 1
-                dt = np.max((np.min((1e-3, np.sqrt(1e-4 / np.max(frc)))), start_dt))
-                run(all_to_use + f"-dt {dt} {print_to}")
-                last_frc = frc
-                frc = np.fromfile(f"{temp_out}.frc", dtype=np.float32).reshape(-1, 3)
-                frc = np.linalg.norm(frc, axis=1)
-                Xprint("{0:5d}{1:>24.4f}{2:15.4f}{3:15d}".format(epoch,
-                                                                 np.max(np.abs(frc - last_frc)),
-                                                                 force_limit,
-                                                                 epoch_limit), verbose=0)
         load_coordinate(temp_out+'_coordinate.txt', mol)
         Xprint("Optimization Finished", verbose=0)
-        if np.all(np.abs(frc - last_frc) < force_limit):
-            return 0
-        return 1
 
 
 class Region(ABC):

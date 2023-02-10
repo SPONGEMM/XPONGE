@@ -32,7 +32,7 @@ def _(i, assign):
     :param assign:
     :return:
     """
-    return "AR0" in assign.atom_marker[i]
+    return assign.atoms[i] == "C" and "AR0" in assign.atom_marker[i]
 
 @atom_types.Add_Rule("C.cat")
 def _(i, assign):
