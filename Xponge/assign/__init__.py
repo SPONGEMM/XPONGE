@@ -928,14 +928,16 @@ def get_assignment_from_xyz(filename, bond_tolerance=1.0, total_charge=0):
         return assign
 
 
-def get_assignment_from_mol2(filename):
+def get_assignment_from_mol2(filename, total_charge=None):
     """
     This **function** gets an Assign instance from a mol2 file
 
     :param filename: the name of the input file
+    :param total_charge: the total charge of the molecule. If None is given, the sum of the partial charges will be used
     :return: the Assign instance
     """
     with open(filename) as f:
+        assign = None
         flag = None
         subflag = None
         real_index = Xdict(not_found_message="Atom #{} not found")
@@ -993,17 +995,19 @@ def get_assignment_from_mol2(filename):
                 else:
                     raise NotImplementedError(f"No implemented method to process bond #{words[0]} type {words[3]}")
     if need_bond_order:
-        success = assign.Determine_Bond_Order(total_charge=int(round(sum(assign.charge))))
+        if total_charge is None:
+            total_charge = int(round(sum(assign.charge)))
+        success = assign.Determine_Bond_Order(total_charge=total_charge)
         if not success:
             for i, bond in assign.bonds.items():
                 for j in bond:
                     assign.bonds[i][j] = -1
-            success = assign.Determine_Bond_Order(total_charge=int(round(sum(assign.charge))))
+            success = assign.Determine_Bond_Order(total_charge=total_charge)
             if not success:
-                raise ValueError(f"Failed to determine the bond orders. Reason: {success.reason}")
+                raise ValueError(f"The bond orders in {filename} are not reasonable")
             warnings.warn(f"The bond orders in {filename} are not reasonable and have been modified")
-            
-    assign.Determine_Ring_And_Bond_Type()
+    if assign:
+        assign.Determine_Ring_And_Bond_Type()
     return assign
 
 set_global_alternative_names()
