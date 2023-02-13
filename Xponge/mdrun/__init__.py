@@ -21,8 +21,9 @@ def run(args):
         print(""" mdrun: run the SPONGE md simulation
         Usage:
             mdrun, mdrun -h, mdrun --help: see this help
-            mdrun -set BIN_PATH: set the SPONGE bin direction path to BIN_PATH
-                                 BIN_PATH can be an absolute path or a relative path to this module file 
+            mdrun -set BIN_PATH: set the SPONGE path to BIN_PATH
+                                 BIN_PATH can be an absolute path or a relative path to this module file
+            mdrun -reset: reset the SPONGE path to ../../bin
             mdrun SPONGE*:  run SPONGE""")
         sys.exit()
 
@@ -31,6 +32,11 @@ def run(args):
     if args[1] == "-set":
         f = Xopen(os.path.join(this_path, "BIN_PATH.dat"), "w")
         f.write(args[2])
+        f.close()
+        sys.exit()
+    elif args[1] == "-reset":
+        f = Xopen(os.path.join(this_path, "BIN_PATH.dat"), "w")
+        f.write("../../bin")
         f.close()
         sys.exit()
 
@@ -43,9 +49,11 @@ def run(args):
 
     cmd = os.path.join(that_path, args[1])
     if not (os.path.exists(cmd) or os.path.exists(cmd + ".exe")):
-        print("Error: No MD Engine found.\n",
-              f"  There is no executable program named '{args[1]}' in '{that_path}'\n",
-              "  Maybe you need to use Xponge.mdrun -set SPONGE_PATH to set the path to MD Engine",
+        t = os.system(args[1] + " -v")
+        if t != 0:
+            print("Error: No MD Engine found.\n",
+                  f"  There is no executable program named '{args[1]}' in '{that_path}' or PATH\n",
+                   "  Maybe you need to use Xponge.mdrun -set SPONGE_PATH to set the path to MD Engine",
               file=sys.__stderr__)
         sys.exit(1)
     if len(args) > 2:

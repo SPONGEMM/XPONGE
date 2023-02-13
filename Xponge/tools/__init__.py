@@ -580,7 +580,7 @@ def _mol2rfe_equilibrium(args):
             os.mkdir("%d/equilibrium" % i)
             command = f"SPONGE -default_in_file_prefix {i}/{args.temp}"
             lambda_ = i / args.nl
-            command += f" -lambda_lj {lambda_} -cutoff 8"
+            command += f" -lambda_lj {lambda_} -cutoff 8 -molecule_map_output 0"
             command += _mol2rfe_output_path("equilibrium", i, args.temp)
             command += f" -coordinate_in_file {i}/pre_equilibrium/{args.temp}_coordinate.txt"
             if not args.ei:
