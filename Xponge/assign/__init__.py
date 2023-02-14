@@ -933,7 +933,7 @@ def get_assignment_from_mol2(filename, total_charge=None):
     This **function** gets an Assign instance from a mol2 file
 
     :param filename: the name of the input file
-    :param total_charge: the total charge of the molecule. If None is given, the sum of the partial charges will be used
+    :param total_charge: the total charge of the molecule used when aligning bond orders. If "sum" is given, the sum of the partial charges will be used; If None is given, the total charge will not be checked
     :return: the Assign instance
     """
     with open(filename) as f:
@@ -995,7 +995,7 @@ def get_assignment_from_mol2(filename, total_charge=None):
                 else:
                     raise NotImplementedError(f"No implemented method to process bond #{words[0]} type {words[3]}")
     if need_bond_order:
-        if total_charge is None:
+        if total_charge == "sum":
             total_charge = int(round(sum(assign.charge)))
         success = assign.Determine_Bond_Order(total_charge=total_charge)
         if not success:
@@ -1006,8 +1006,14 @@ def get_assignment_from_mol2(filename, total_charge=None):
             if not success:
                 raise ValueError(f"The bond orders in {filename} are not reasonable")
             warnings.warn(f"The bond orders in {filename} are not reasonable and have been modified")
-    if assign:
-        assign.Determine_Ring_And_Bond_Type()
+    if assign is None:
+        raise OSError(f"The file {filename} is not a mol2 file")
+
+    assign.Determine_Ring_And_Bond_Type()
+    sum_of_formal_charge = sum(assign.formal_charge)
+    sum_of_partial_charge = int(round(sum(assign.charge)))
+    if  sum_of_formal_charge != sum_of_partial_charge:
+        warnings.warn(f"For {filename}, the sum of formal charges ({sum_of_formal_charge}) != the sum of partial charges ({sum_of_partial_charge})")
     return assign
 
 set_global_alternative_names()

@@ -331,8 +331,11 @@ class BondOrderAssignment:
             total_charge += formal_charge
             self.assign.formal_charge[atom] = formal_charge
         if self.total_charge is not None and self.total_charge != total_charge:
-            need_to_change = (total_charge - self.total_charge) // 2
-            if need_to_change == len(c3_atoms):
+            delta_charge = total_charge - self.total_charge
+            need_to_change = delta_charge // 2
+            if delta_charge % 2 == 1:
+                success = self.failure
+            elif need_to_change == len(c3_atoms):
                 for atom in c3_atoms:
                     self.assign.formal_charge[atom] = -1
             elif 0 < need_to_change < len(c3_atoms):
@@ -349,14 +352,19 @@ class BondOrderAssignment:
         bonds = deepcopy(self.assign.bonds)
         uc = deepcopy(self.uc)
         valence = deepcopy(self.valence)
+        valence_backup = []
+        bonds_backup = []
+        uc_backup = []
+        atom_guessed = set()
         guess_bonds = []
+        success = False
         determined = False
-        while not determined:
-            index_sort = np.argsort([len(uci) for uci in uc]).tolist()
+        if self.debug:
+            print(f"The initial undetermined valence and undetermined conected atoms for every atom:\n{valence}\n{uc}\n\n")
+        while not determined and not success:
+            index_sort = np.argsort([len(uci) or float("inf") for uci in uc]).tolist()
             no_basic_rule = True
             for i in index_sort:
-                if self.debug:
-                    print(i, valence, uc)
                 if len(uc[i]) == valence[i] and valence[i] > 0:
                     while uc[i]:
                         j = uc[i].pop()
@@ -364,8 +372,12 @@ class BondOrderAssignment:
                         bonds[j][i] = 1
                         uc[j].remove(i)
                         valence[j] -= 1
+                        if self.debug:
+                            print(f"try to assign the order of the bond between {i} {j} to {1}")
                     valence[i] = 0
                     no_basic_rule = False
+                    if self.debug:
+                        print(f"{valence}\n{uc}\n\n")
                 elif len(uc[i]) == 1 and valence[i] > 0:
                     j = uc[i].pop()
                     uc[j].remove(i)
@@ -374,36 +386,59 @@ class BondOrderAssignment:
                     valence[j] -= valence[i]
                     valence[i] -= valence[i]
                     no_basic_rule = False
+                    if self.debug:
+                        print(f"try to assign the order of the bond between {i} {j} to {bonds[j][i]}\n{valence}\n{uc}\n\n")
             success = True
             for i in range(self.assign.atom_numbers):
                 if valence[i] != 0 or len(uc[i]) != 0:
                     success = self.failure
-                if (len(uc[i]) == 0 and valence[i] != 0) or (valence[i] == 0 and len(uc[i]) != 0):
+                if (len(uc[i]) == 0 and valence[i] != 0) or (valence[i] == 0 and len(uc[i]) != 0) or valence[i] < 0:
                     success = self.failure
                     determined = True
-                    break
-            if success:
-                determined = True
-            if not determined and no_basic_rule:
-                if not guess_bonds:
-                    i = index_sort.pop()
-                    j = uc[i].pop()
-                    uc[j].remove(i)
-                    guess_bonds = [i, j]
-                    bonds[i][j] = 1
-                    bonds[j][i] = 1
-                    valence[i] -= 1
-                    valence[j] -= 1
-                else:
-                    i, j = guess_bonds
-                    if bonds[i][j] == 3:
-                        determined = True
-                        success = self.failure
+            if not success and determined and guess_bonds:
+                determined = False
+                i, j = guess_bonds[-1]
+                trial = bonds[i][j]
+                if trial == 3:
+                    guess_bonds.pop()
+                    if not guess_bonds:
                         break
-                    bonds[i][j] += 1
-                    bonds[j][i] += 1
-                    valence[i] -= 1
-                    valence[j] -= 1
+                    uc = uc_backup.pop()
+                    uc[i].add(j)
+                    uc[j].add(i)
+                    bonds = bonds_backup.pop()
+                    valence = valence_backup.pop()
+                    continue
+                uc = deepcopy(uc_backup[-1])
+                bonds = deepcopy(bonds_backup[-1])
+                valence = deepcopy(valence_backup[-1])
+                trial += 1
+                bonds[i][j] = trial
+                bonds[j][i] = trial
+                valence[i] -= trial
+                valence[j] -= trial
+                if self.debug:
+                    print(f"guessing the order of the bond between {i} {j} is {trial}\n{valence}\n{uc}\n\n")
+            if not success and not determined and no_basic_rule:
+                index_sort = np.argsort([len(uci) if i not in atom_guessed else -1 for i, uci in enumerate(uc)]).tolist()
+                i = index_sort[-1]
+                if i in atom_guessed or not uc[i]:
+                    break
+                j = uc[i].pop()
+                atom_guessed.add(j)
+                atom_guessed.add(i)
+                uc[j].remove(i)
+                guess_bonds.append([i, j])
+                uc_backup.append(deepcopy(uc))
+                valence_backup.append(deepcopy(valence))
+                valence[i] -= 1
+                valence[j] -= 1
+                bonds_backup.append(deepcopy(bonds))
+                bonds[i][j] = 1
+                bonds[j][i] = 1
+                if self.debug:
+                    print(f"guessing the order of the bond between {i} {j} is {1}\n{valence}\n{uc}\n\n")
+
         return success, bonds
 
     def _assign_formal_charge_one_try(self, c3_atoms, formal_charge_iter):
@@ -445,7 +480,7 @@ class BondOrderAssignment:
                 count += 1
                 while self._get_next_valence():
                     pass
-                if self.debug:
+                if self.debug and self.current_stat != self.max_stat:
                     print("-"*20, self.points[self.stat_position - 1])
         if success:
             self.assign.bonds = bonds
