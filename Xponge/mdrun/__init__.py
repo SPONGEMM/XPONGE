@@ -55,7 +55,9 @@ def run(args):
                   f"  There is no executable program named '{args[1]}' in '{that_path}' or PATH\n",
                    "  Maybe you need to use Xponge.mdrun -set SPONGE_PATH to set the path to MD Engine",
               file=sys.__stderr__)
-        sys.exit(1)
+            sys.exit(1)
+        else:
+            cmd = args[1]
     if len(args) > 2:
         cmd += " " + " ".join(args[2:])
 

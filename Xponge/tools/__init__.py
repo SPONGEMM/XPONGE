@@ -557,7 +557,7 @@ def _mol2rfe_pre_equilibrium(args):
             command += _mol2rfe_output_path("pre_equilibrium", i, args.temp)
             command += f" -coordinate_in_file {i}/min/{args.temp}_coordinate.txt"
             if not args.pi:
-                command += f" -mode NPT -step_limit {args.pre_equilibrium_step} -dt {args.dt} -constrain_mode SHAKE"
+                command += f" -mode NPT -step_limit {args.pre_equilibrium_step} -dt 1e-3 -constrain_mode SHAKE"
                 command += f" -barostat {args.barostat} -thermostat {args.thermostat}"
                 run(command)
             else:
