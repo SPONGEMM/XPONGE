@@ -472,7 +472,7 @@ def name2name(args):
         f.close()
 
 
-def _mol2rfe_build(args, merged_from, merged_to):
+def _mol2rfe_build(args, merged_from, merged_to, matchmap):
     """
 
     :param args:
@@ -485,7 +485,25 @@ def _mol2rfe_build(args, merged_from, merged_to):
 
     if "build" in args.do:
         Xprint("\nBUILDING TOPOLOGY\n", verbose=-1)
-        fep.Save_Soft_Core_LJ()
+
+        findex = next(iter(matchmap.values()))
+        refx = merged_from.residues[args.ri].atoms[findex]
+        refx, refy, refz = refx.x, refx.y, refx.z
+
+        mol_tofit = Molecule.cast(merged_from.residues[args.ri])
+        Save_Soft_Core_LJ()
+        mol_tofit.box_length = [200, 200, 200]
+        optimize(mol_tofit, extra_commands={"lambda_lj": "0"})
+        lrefx = mol_tofit.residues[0].atoms[findex]
+        lrefx, lrefy, lrefz = lrefx.x, lrefx.y, lrefx.z
+        for i, atom in enumerate(merged_from.residues[args.ri].atoms):
+            atom.x += refx - lrefx
+            atom.y += refy - lrefy
+            atom.z += refz - lrefz
+        for atom in merged_to.residues[args.ri].atoms:
+            atom.x += refx - lrefx
+            atom.y += refy - lrefy
+            atom.z += refz - lrefz
 
         for i in range(args.nl + 1):
             if os.path.exists("%d" % i):
@@ -557,7 +575,7 @@ def _mol2rfe_pre_equilibrium(args):
             command += _mol2rfe_output_path("pre_equilibrium", i, args.temp)
             command += f" -coordinate_in_file {i}/min/{args.temp}_coordinate.txt"
             if not args.pi:
-                command += f" -mode NPT -step_limit {args.pre_equilibrium_step} -dt 1e-3 -constrain_mode SHAKE"
+                command += f" -mode NPT -step_limit {args.pre_equilibrium_step} -dt {args.dt} -constrain_mode SHAKE"
                 command += f" -barostat {args.barostat} -thermostat {args.thermostat}"
                 run(command)
             else:
@@ -680,7 +698,7 @@ def mol2rfe(args):
 
     rmol = load_pdb(args.pdb)
 
-    merged_from, merged_to = Merge_Dual_Topology(rmol, rmol.residues[args.ri],
+    merged_from, merged_to, matchmap = Merge_Dual_Topology(rmol, rmol.residues[args.ri],
                                                  to_res_type_, from_, to_,
                                                  args.tmcs, f"{args.fmcs}", args.lmcs)
 
@@ -688,7 +706,7 @@ def mol2rfe(args):
         H_Mass_Repartition(merged_from)
         H_Mass_Repartition(merged_to)
 
-    _mol2rfe_build(args, merged_from, merged_to)
+    _mol2rfe_build(args, merged_from, merged_to, matchmap)
 
     _mol2rfe_min(args)
 

@@ -1,7 +1,7 @@
 """
 This **module** contains the functions for ti analysis
 """
-import os
+import os, shutil
 import numpy as np
 import matplotlib.pyplot as plt
 from ..mdrun import run
@@ -22,7 +22,7 @@ def ti_analysis(args, merged_from):
     frame = args.equilibrium_step // 100
     for i in range(args.nl + 1):
         if os.path.exists("%d/ti" % i):
-            os.system("rm -rf %d/ti" % i)
+            shutil.rmtree("%d/ti" % i)
         os.mkdir("%d/ti" % i)
         inprefix = f"{i}/{args.temp}"
         command = f"SPONGE_TI -LJ_soft_core_in_file {inprefix}_LJ_soft_core.txt"
@@ -59,7 +59,7 @@ def ti_analysis(args, merged_from):
     temp_se_all = 0
     space = 0.5 / args.nl
     if os.path.exists("time_check"):
-        os.system("rm -rf time_check")
+        shutil.rmtree("time_check")
     os.mkdir("time_check")
     for i in range(args.nl):
         temp = (prefix_sum[i] + prefix_sum[i + 1]) * space

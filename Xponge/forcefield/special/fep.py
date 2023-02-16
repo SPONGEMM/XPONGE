@@ -611,7 +611,7 @@ def merge_dual_topology(mol, residue_a, residue_b, assign_a, assign_b,
     :param image_path: the path to save the mcs image
     :param similarity_limit: the limitation of the similarity. The similarity is calculated by \
 the tanimoto coefficient of the max common structure.
-    :return: two molecules in the initial and final lambda stat respectively
+    :return: two molecules in the initial and final lambda stat respectively, and the matchmap
     """
     build.Build_Bonded_Force(mol)
     build.Build_Bonded_Force(residue_b)
@@ -714,7 +714,7 @@ the tanimoto coefficient of the max common structure.
     build.Build_Bonded_Force(mol_a)
     build.Build_Bonded_Force(mol_b)
 
-    return mol_a, mol_b
+    return mol_a, mol_b, matchmap
 
 
 def merge_force_field(mol_a, mol_b, default_lambda, specific_lambda=None, intra_fep=False):

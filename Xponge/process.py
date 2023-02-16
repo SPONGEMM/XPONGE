@@ -392,7 +392,7 @@ def optimize(mol, step=2000, only_bad_coordinate=True, dt=1e-8, pbc=True, extra_
         Xprint("    Parametering", verbose=0)
         save_min_bonded_parameters()
         if not pbc:
-            box_length_backup = mol.box_length
+            box_length_backup = mol.box_length if hasattr(mol, "box_length") else None
             mol.box_length = [999, 999, 999]
         save_sponge_input(mol, temp_prefix)
         if not pbc:
