@@ -527,7 +527,7 @@ def _mol2rfe_min(args):
             basic += f" -mode minimization -lambda_lj {lambda_} -minimization_dynamic_dt 1 -write_information_interval 1000"
             basic += _mol2rfe_output_path("min", i, args.temp)
             if not args.mi:
-                cif = " -cutoff 8 -constrain_mode SHAKE"
+                cif = " -cutoff 8"
                 run(f"{basic} {cif} -step_limit {args.msteps[0]}")
             else:
                 mdin = args.mi.pop(0)

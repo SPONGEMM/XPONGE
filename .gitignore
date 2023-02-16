@@ -6,3 +6,4 @@ lib/XpongeLib.egg-info/*
 Xponge/.idea
 Xponge/mdrun/BIN_PATH.dat
 docs/build/*
+bin/*

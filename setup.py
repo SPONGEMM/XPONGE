@@ -7,7 +7,7 @@ f.close()
 #for formal
 setuptools.setup(
     name="Xponge",
-    version="1.3b4",
+    version="1.3b5",
     author="Yijie Xia",  
     author_email="yijiexia@pku.edu.cn", 
     description="A Python package to perform pre- and post-processing of molecular simulations",
