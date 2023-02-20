@@ -47,6 +47,37 @@ def assign_to_rdmol(assign, ignore_bond_type=False):
     return mol
 
 
+def rdmol_to_assign(rdmol):
+    """
+    This **function** is used to convert a RDKit.rdMol to an Xponge.Assign
+
+    :param rdmol: the RDKit.rdMol instance
+    :return: the Xponge.Assign instance
+    """
+    from .. import Assign
+    assign = Assign()
+
+    for atom in rdmol.GetAtoms():
+        x, y, z = rdmol.GetConformer().GetAtomPosition(atom.GetIdx())
+        assign.add_atom(atom.GetSymbol(), x=x, y=y, z=z)
+        assign.formal_charge[-1] = atom.GetFormalCharge()
+
+    for bond in rdmol.GetBonds():
+        temp_bond = bond.GetBondType()
+        if temp_bond == Chem.BondType.UNSPECIFIED:
+            temp_bond = -1
+        elif temp_bond == Chem.BondType.SINGLE:
+            temp_bond = 1
+        elif temp_bond == Chem.BondType.DOUBLE:
+            temp_bond = 2
+        elif temp_bond == Chem.BondType.TRIPLE:
+            temp_bond = 3
+        else:
+            raise NotImplementedError
+        assign.add_bond(bond.GetBeginAtomIdx(), bond.GetEndAtomIdx(), temp_bond)
+
+    return assign
+
 def insert_atom_type_to_rdmol(mol, res, assign, atom_type_dict=None):
     """
     This **function** inserts the atom types in the force field to the RDKit.rdmol instance.

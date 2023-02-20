@@ -841,6 +841,26 @@ def get_assignment_from_pubchem(parameter, keyword):
     raise NotImplementedError
 
 
+def get_assignment_from_smiles(smiles):
+    """
+    This **function** gets an Assign instance from smiles
+
+    usage example::
+
+        a1 = get_assignment_from_smiles("CC", "smiles")
+
+    :param smiles: the smiles to get
+    :return: the Assign instance
+    """
+    from rdkit import Chem
+    from rdkit.Chem import AllChem
+    from ..helper.rdkit import rdmol_to_assign
+    mol = Chem.MolFromSmiles(smiles)
+    mol = Chem.AddHs(mol)
+    AllChem.EmbedMolecule(mol, AllChem.ETKDG())
+    return rdmol_to_assign(mol)
+
+
 def get_assignment_from_pdb(filename, determine_bond_order=True, only_residue=""):
     """
     This **function** gets an Assign instance from a pdb file
