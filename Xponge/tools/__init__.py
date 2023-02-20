@@ -492,8 +492,9 @@ def _mol2rfe_build(args, merged_from, merged_to, matchmap):
 
         mol_tofit = Molecule.cast(merged_from.residues[args.ri])
         Save_Soft_Core_LJ()
-        mol_tofit.box_length = [200, 200, 200]
-        optimize(mol_tofit, extra_commands={"lambda_lj": "0"})
+        mol_tofit.box_length = [100, 100, 100]
+        optimize(mol_tofit, extra_commands={"lambda_lj": 0, "minimization_dt_factor": 1e-2, "minimization_dt_increasing_rate": 1.2, "minimization_dt_decreasing_rate": 0.5})
+        optimize(mol_tofit, only_bad_coordinate=False, extra_commands={"lambda_lj": 0, "minimization_dt_factor": 1e-2, "minimization_dt_increasing_rate": 1.2, "minimization_dt_decreasing_rate": 0.5})
         lrefx = mol_tofit.residues[0].atoms[findex]
         lrefx, lrefy, lrefz = lrefx.x, lrefx.y, lrefx.z
         for i, atom in enumerate(merged_from.residues[args.ri].atoms):
@@ -534,6 +535,8 @@ def _mol2rfe_min(args):
     :return:
     """
     source("..")
+    from Xponge.analysis import MdoutReader
+    from random import random
 
     if "min" in args.do:
         for i in range(args.nl + 1):
@@ -542,11 +545,25 @@ def _mol2rfe_min(args):
             os.mkdir("%d/min" % i)
             basic = f"SPONGE -default_in_file_prefix {i}/{args.temp}"
             lambda_ = i / args.nl
-            basic += f" -mode minimization -lambda_lj {lambda_} -minimization_dynamic_dt 1 -write_information_interval 1000"
+            basic += f" -mode minimization -lambda_lj {lambda_} -cutoff 8 -write_information_interval 1000"
             basic += _mol2rfe_output_path("min", i, args.temp)
+            dt_factor = 1e-4 + 1e-2 * random()
+            inc_rate = 1 + random()
             if not args.mi:
-                cif = " -cutoff 8"
-                run(f"{basic} {cif} -step_limit {args.msteps[0]}")
+                cif = " -minimization_dynamic_dt 1"
+                exit_code = run(f"{basic} {cif} -step_limit {args.msteps[0]} -minimization_dt_factor {dt_factor} -minimization_dt_increasing_rate {inc_rate}")
+                out = MdoutReader(f"{i}/min/{args.temp}.mdout").potential[-1]
+                min_time = 0
+                while (out > 0 or exit_code != 0) and min_time < 10:
+                    dt_factor = 1e-4 + 1e-2 * random()
+                    inc_rate = 1 + random() 
+                    Xprint("Minimization will be repeated to reduce the potential to 0", "WARNING")
+                    min_time += 1
+                    exit_code = run(f"{basic} {cif} -step_limit {args.msteps[0]}  -minimization_dt_factor {dt_factor} -minimization_dt_increasing_rate {inc_rate} -coordinate_in_file {i}/min/{args.temp}_coordinate.txt")
+                    out = MdoutReader(f"{i}/min/{args.temp}.mdout").potential[-1]
+                if min_time >= 10:
+                    Xprint("Minimization has been repeated for 10 times and the potential still can not be reduced to 0", "ERROR")
+                    sys.exit(1)
             else:
                 mdin = args.mi.pop(0)
                 cif = ""
@@ -563,6 +580,7 @@ def _mol2rfe_pre_equilibrium(args):
     :return:
     """
     source("..")
+    from Xponge.analysis import MdoutReader
 
     if "pre_equilibrium" in args.do:
         for i in range(args.nl + 1):
@@ -573,14 +591,18 @@ def _mol2rfe_pre_equilibrium(args):
             lambda_ = i / args.nl
             command += f" -lambda_lj {lambda_} -cutoff 8"
             command += _mol2rfe_output_path("pre_equilibrium", i, args.temp)
+
             command += f" -coordinate_in_file {i}/min/{args.temp}_coordinate.txt"
             if not args.pi:
                 command += f" -mode NPT -step_limit {args.pre_equilibrium_step} -dt {args.dt} -constrain_mode SHAKE"
                 command += f" -barostat {args.barostat} -thermostat {args.thermostat}"
-                run(command)
+                exit_code = run(command)
             else:
                 command += f" -mdin {args.pi}"
-                run(command)
+                exit_code = run(command)
+            if exit_code != 0:
+                Xprint(f"The command of lambda {i} exited with code {exit_code}", "ERROR")
+                sys.exit(exit_code)
 
 
 def _mol2rfe_equilibrium(args):

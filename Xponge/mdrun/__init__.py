@@ -61,6 +61,6 @@ def run(args):
     if len(args) > 2:
         cmd += " " + " ".join(args[2:])
 
-    os.system(cmd)
+    return os.system(cmd)
 
 set_global_alternative_names()
