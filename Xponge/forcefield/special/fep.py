@@ -623,7 +623,7 @@ the tanimoto coefficient of the max common structure.
     rdmol_a = assign_to_rdmol(assign_a, True)
     rdmol_b = assign_to_rdmol(assign_b, True)
 
-    print("FINDING MAXIMUM COMMON SUBSTRUCTURE\n")
+    Xprint("FINDING MAXIMUM COMMON SUBSTRUCTURE\n")
     result = MCS.FindMCS([rdmol_a, rdmol_b], completeRingsOnly=True, timeout=tmcs)
     rdmol_mcs = result.queryMol
 
@@ -654,7 +654,7 @@ the tanimoto coefficient of the max common structure.
         f.write(f"mcs atoms in r2: {match_b}\n\n")
         f.close()
 
-    print("ALIGNING TOPOLOGY AND COORDINATE\n")
+    Xprint("ALIGNING TOPOLOGY AND COORDINATE\n")
 
     residue_type_a = residue_a.type
 

@@ -9,6 +9,7 @@ import os
 import time
 import stat
 import copy
+import logging
 from types import MethodType, FunctionType
 from functools import partial, partialmethod, wraps, update_wrapper
 from collections import OrderedDict
@@ -94,20 +95,28 @@ def xopen(filename, flag, mode=None):
     return fo
 
 
-def xprint(*args, **kwargs):
+def xprint(to_print, verbose=logging.INFO):
     """
-    This **function** is used to print information according to the verbose level in GlobalSetting
+    This **function** is used to print some contents according to the verbose level in GlobalSetting
 
-    :param args, kwargs except verbose: the arguments to print
+    :param to_print: the contents to print
     :param verbose: only print when the verbose level is not less than this value
     :return: None
     """
-    if "verbose" in kwargs:
-        verbose = kwargs.pop("verbose")
+    if verbose in ("INFO", "DEBUG", "WARNING", "ERROR", "CRITICAL"):
+        verbose = getattr(logging, verbose)
+    GlobalSetting.logger.log(verbose, to_print)
+
+
+def debug(mode=True):
+    """
+    This **function** sets the mode to debug or not
+    :param mode: the value to set the debug mode
+    """
+    if mode:
+        GlobalSetting.logger.setLevel(logging.DEBUG)
     else:
-        verbose = 0
-    if GlobalSetting.verbose >= verbose:
-        print(*args, **kwargs)
+        GlobalSetting.logger.setLevel(logging.INFO)
 
 
 class _GlobalSetting():
@@ -119,9 +128,6 @@ class _GlobalSetting():
     """
     def __init__(self):
         set_attribute_alternative_names(self)
-        # 打印信息的详细程度
-        self.verbose = 0
-        """the global verbose level"""
         # 是否将分子移到中心
         self.nocenter = False
         """move the molecule to the center of the box when building"""
@@ -143,6 +149,22 @@ class _GlobalSetting():
                                       "angle": {"degree": np.pi, "rad": 180}
                                       })
         setattr(self, "PDBResidueNameMap", {"head": Xdict(), "tail": Xdict(), "save": Xdict()})
+        # 消息
+        logger = logging.getLogger("Xponge")
+        console_handler = logging.StreamHandler()
+        debug_formatter = logging.Formatter('[%(name)s | %(levelname)s] %(message)s')
+        console_handler.setFormatter(debug_formatter)
+        console_handler.addFilter(lambda record: record.levelno != logging.INFO)
+
+        console2_handler = logging.StreamHandler()
+        info_formatter = logging.Formatter('%(message)s')
+        console2_handler.setFormatter(info_formatter)
+        console2_handler.addFilter(lambda record: record.levelno == logging.INFO)
+
+        logger.setLevel(logging.INFO)
+        logger.addHandler(console_handler)
+        logger.addHandler(console2_handler)
+        self.logger = logger
 
     @staticmethod
     def set_unit_transfer_function(sometype):
@@ -187,6 +209,13 @@ class _GlobalSetting():
             return func
 
         return wrapper
+
+    @property
+    def verbose(self):
+        """
+            the gloabl verbose level
+        """
+        return self.logger.level
 
     def add_pdb_residue_name_mapping(self, place, pdb_name, real_name):
         """

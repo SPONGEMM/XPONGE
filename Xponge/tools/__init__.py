@@ -213,7 +213,7 @@ def test(args):
     :param args: arguments from argparse
     :return: None
     """
-    GlobalSetting.verbose = args.verbose
+    GlobalSetting.logger.setLevel(args.verbose)
     if not args.do:
         args.do = [["base"]]
     args.do = args.do[0]
@@ -222,8 +222,8 @@ def test(args):
     fcon, ccon = mpc.Pipe()
     errors = []
     failures = []
-    Xprint("Test(s): " + " ".join(args.do), verbose=-1)
-    Xprint("======================================================", verbose=-1)
+    Xprint("Test(s): " + " ".join(args.do), "INFO")
+    Xprint("======================================================", "INFO")
     for name in args.do:
         p = mpc.Process(target=_one_test, args=(ccon, name, args))
         p.start()
@@ -233,17 +233,17 @@ def test(args):
         failures.extend(new_failures)
         this_correct = f"{len(new_errors)} error(s) and {len(new_failures)} failure(s)"
         for ei, error in enumerate(new_errors):
-            Xprint(f"Error {ei+1} for {name}", verbose=1)
-            Xprint(f"{error[1]}", verbose=1)
+            Xprint(f"Error {ei+1} for {name}", "DEBUG")
+            Xprint(f"{error[1]}", "DEBUG")
         for ei, error in enumerate(new_failures):
-            Xprint(f"Failure {ei+1} for {name}", verbose=1)
-            Xprint(f"{error[1]}", verbose=1)
-        Xprint(f"{name}: {this_correct}", verbose=-1)
-    Xprint("======================================================", verbose=-1)
+            Xprint(f"Failure {ei+1} for {name}", "DEBUG")
+            Xprint(f"{error[1]}", "DEBUG")
+        Xprint(f"{name}: {this_correct}", "INFO")
+    Xprint("======================================================", "INFO")
     if not errors and not failures:
-        Xprint("No error or failure", verbose=-1)
+        Xprint("No error or failure", "INFO")
     else:
-        Xprint(f"{len(errors)} error(s) and {len(failures)} failure(s) found", verbose=-1)
+        Xprint(f"{len(errors)} error(s) and {len(failures)} failure(s) found", "INFO")
         sys.exit(len(errors) + len(failures))
 
 
@@ -484,7 +484,7 @@ def _mol2rfe_build(args, merged_from, merged_to, matchmap):
     fep = source("..forcefield.special.fep", False)
 
     if "build" in args.do:
-        Xprint("\nBUILDING TOPOLOGY\n", verbose=-1)
+        Xprint("\nBUILDING TOPOLOGY\n", "INFO")
 
         findex = next(iter(matchmap.values()))
         refx = merged_from.residues[args.ri].atoms[findex]
@@ -512,7 +512,7 @@ def _mol2rfe_build(args, merged_from, merged_to, matchmap):
             tt = fep.Merge_Force_Field(merged_from, merged_to, i / args.nl)
             build.save_mol2(tt, "%d/%s.mol2" % (i, args.temp))
             build.Save_SPONGE_Input(tt, "%d/%s" % (i, args.temp))
-            Xprint(f"{i} built success")
+            Xprint(f"{i} built success", "INFO")
 
 def _mol2rfe_output_path(subdir, workdir, tempname):
     """

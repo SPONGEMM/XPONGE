@@ -3,7 +3,7 @@ This **package** helps to run the molecular dynamics simulation
 """
 import os
 import sys
-from ..helper import Xopen, set_global_alternative_names
+from ..helper import Xopen, Xprint, set_global_alternative_names
 
 
 def run(args):
@@ -18,7 +18,7 @@ def run(args):
         args.insert(0, sys.argv[0])
 
     if len(args) < 2 or args[1] in ("-h", "--help"):
-        print(""" mdrun: run the SPONGE md simulation
+        Xprint(""" mdrun: run the SPONGE md simulation
         Usage:
             mdrun, mdrun -h, mdrun --help: see this help
             mdrun -set BIN_PATH: set the SPONGE path to BIN_PATH
@@ -51,10 +51,10 @@ def run(args):
     if not (os.path.exists(cmd) or os.path.exists(cmd + ".exe")):
         t = os.system(args[1] + " -v")
         if t != 0:
-            print("Error: No MD Engine found.\n",
-                  f"  There is no executable program named '{args[1]}' in '{that_path}' or PATH\n",
-                   "  Maybe you need to use Xponge.mdrun -set SPONGE_PATH to set the path to MD Engine",
-              file=sys.__stderr__)
+            Xprint("No MD Engine found.\n" +
+                  f"  There is no executable program named '{args[1]}' in '{that_path}' or PATH\n" +
+                   "  Maybe you need to use Xponge.mdrun -set SPONGE_PATH to set the path to MD Engine, or add the path to your environment variables",
+              "ERROR")
             sys.exit(1)
         else:
             cmd = args[1]

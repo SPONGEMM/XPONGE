@@ -4,7 +4,7 @@ This **module** helps to assign bond orders
 from itertools import product, combinations
 # pylint: disable=cyclic-import
 from . import AssignRule, Xdict, OrderedDict, set_attribute_alternative_names, deepcopy, np
-from ..helper import ReasonedBool
+from ..helper import ReasonedBool, Xprint
  
 bo = AssignRule("bo", pure_string=True)
 
@@ -168,7 +168,6 @@ class BondOrderAssignment:
     :param original_penalties: the original penalties dict
     :param max_stat: the max valence stats to iterate
     :param assign: the father Assignment instance
-    :param debug: whether to print the debug information
     :param total_charge: the total charge of the molecule
     :param extra_criteria: a function as the extra convergence criteria. The function will receive the assignment as input, and give True or False as output.
     """
@@ -215,7 +214,7 @@ class BondOrderAssignment:
         "S": {1: -1, 2: 0, 3: 1, 4: 0, 6: 0},
     })
     failure = ReasonedBool(False, "the calculation can not converge")
-    def __init__(self, original_penalties, max_step, max_stat, assign, debug=False, total_charge=0, extra_criteria=None):
+    def __init__(self, original_penalties, max_step, max_stat, assign, total_charge=0, extra_criteria=None):
         self.prepare_success = True
         self.extra_criteria = extra_criteria
         if original_penalties is None:
@@ -229,7 +228,6 @@ class BondOrderAssignment:
                 else:
                     raise e
         if self.prepare_success:
-            self.debug = debug
             self.max_step = max_step
             self.max_stat = max_stat
             self.assign = assign
@@ -306,9 +304,8 @@ class BondOrderAssignment:
                 self.current_stat += 1
                 self.stat_position = 0
                 self.points = self._preprocess_penalties(self.current_stat)
-                if self.debug:
-                    print("stat=", self.current_stat)
-                    print("points=\n", self.points)
+                Xprint(f"stat={self.current_stat}", "DEBUG")
+                Xprint("points=\n{self.points}", "DEBUG")
                 return True
         return False
 
@@ -359,8 +356,7 @@ class BondOrderAssignment:
         guess_bonds = []
         success = False
         determined = False
-        if self.debug:
-            print(f"The initial undetermined valence and undetermined conected atoms for every atom:\n{valence}\n{uc}\n\n")
+        Xprint(f"The initial undetermined valence and undetermined conected atoms for every atom:\n{valence}\n{uc}\n\n", "DEBUG")
         while not determined and not success:
             index_sort = np.argsort([len(uci) or float("inf") for uci in uc]).tolist()
             no_basic_rule = True
@@ -372,12 +368,10 @@ class BondOrderAssignment:
                         bonds[j][i] = 1
                         uc[j].remove(i)
                         valence[j] -= 1
-                        if self.debug:
-                            print(f"try to assign the order of the bond between {i} {j} to {1}")
+                        Xprint(f"try to assign the order of the bond between {i} {j} to {1}", "DEBUG")
                     valence[i] = 0
                     no_basic_rule = False
-                    if self.debug:
-                        print(f"{valence}\n{uc}\n\n")
+                    Xprint(f"{valence}\n{uc}\n\n", "DEBUG")
                 elif len(uc[i]) == 1 and valence[i] > 0:
                     j = uc[i].pop()
                     uc[j].remove(i)
@@ -386,8 +380,7 @@ class BondOrderAssignment:
                     valence[j] -= valence[i]
                     valence[i] -= valence[i]
                     no_basic_rule = False
-                    if self.debug:
-                        print(f"try to assign the order of the bond between {i} {j} to {bonds[j][i]}\n{valence}\n{uc}\n\n")
+                    Xprint(f"try to assign the order of the bond between {i} {j} to {bonds[j][i]}\n{valence}\n{uc}\n\n", "DEBUG")
             success = True
             for i in range(self.assign.atom_numbers):
                 if valence[i] != 0 or len(uc[i]) != 0:
@@ -417,8 +410,7 @@ class BondOrderAssignment:
                 bonds[j][i] = trial
                 valence[i] -= trial
                 valence[j] -= trial
-                if self.debug:
-                    print(f"guessing the order of the bond between {i} {j} is {trial}\n{valence}\n{uc}\n\n")
+                Xprint(f"guessing the order of the bond between {i} {j} is {trial}\n{valence}\n{uc}\n\n", "DEBUG")
             if not success and not determined and no_basic_rule:
                 index_sort = np.argsort([len(uci) if i not in atom_guessed else -1 for i, uci in enumerate(uc)]).tolist()
                 i = index_sort[-1]
@@ -436,8 +428,7 @@ class BondOrderAssignment:
                 bonds_backup.append(deepcopy(bonds))
                 bonds[i][j] = 1
                 bonds[j][i] = 1
-                if self.debug:
-                    print(f"guessing the order of the bond between {i} {j} is {1}\n{valence}\n{uc}\n\n")
+                Xprint(f"guessing the order of the bond between {i} {j} is {1}\n{valence}\n{uc}\n\n", "DEBUG")
 
         return success, bonds
 
@@ -480,8 +471,8 @@ class BondOrderAssignment:
                 count += 1
                 while self._get_next_valence():
                     pass
-                if self.debug and self.current_stat != self.max_stat:
-                    print("-"*20, self.points[self.stat_position - 1])
+                if self.current_stat != self.max_stat:
+                    Xprint("-"*20 + f"{self.points[self.stat_position - 1]}", "DEBUG")
         if success:
             self.assign.bonds = bonds
         return success

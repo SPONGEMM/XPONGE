@@ -1,13 +1,16 @@
 import setuptools
- 
+import re, os
+
 f = open("README.md", "r", encoding="utf-8")
 long_description = f.read()
 f.close()
 
-#for formal
+with open(os.path.join("Xponge", "__init__.py")) as f:
+    VERSION = re.search(r"__version__\s*=\s*['\"](.+?)['\"]",f.read()).group(1)
+
 setuptools.setup(
     name="Xponge",
-    version="1.3b6",
+    version=VERSION,
     author="Yijie Xia",  
     author_email="yijiexia@pku.edu.cn", 
     description="A Python package to perform pre- and post-processing of molecular simulations",

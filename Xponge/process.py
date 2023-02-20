@@ -385,11 +385,11 @@ def optimize(mol, step=2000, only_bad_coordinate=True, dt=1e-8, pbc=True, extra_
     :return: None
     """
     from tempfile import TemporaryDirectory
-    Xprint("Optimizing", verbose=0)
+    Xprint("Optimizing")
     with TemporaryDirectory() as tempdir:
         temp_prefix = os.path.join(tempdir, "temp")
         temp_out = os.path.join(tempdir, "min")
-        Xprint("    Parametering", verbose=0)
+        Xprint("    Parametering")
         save_min_bonded_parameters()
         if not pbc:
             box_length_backup = mol.box_length if hasattr(mol, "box_length") else None
@@ -425,14 +425,14 @@ molecule_map_output  = 1
             all_to_use = f"SPONGE_NOPBC -mdin {temp_mdin_name} "
         if only_bad_coordinate:
             all_to_use += f"-mass_in_file {temp_prefix + '_fake_mass.txt'} "
-        if GlobalSetting.verbose < 2:
+        if GlobalSetting.verbose > 10:
             print_to = f" > {os.devnull}"
         else:
             print_to = ""
-        Xprint("    Running", verbose=0)
+        Xprint("    Running")
         run(all_to_use + f"-dt {dt} {print_to}")
         load_coordinate(temp_out+'_coordinate.txt', mol)
-        Xprint("Optimization Finished", verbose=0)
+        Xprint("Optimization Finished")
 
 
 class Region(ABC):

@@ -2,7 +2,6 @@
 This **package** is used to assign the properties for atoms, residues and molecules
 """
 import heapq
-import warnings
 from copy import deepcopy
 from collections import OrderedDict
 from collections.abc import Iterable
@@ -10,6 +9,10 @@ from itertools import groupby
 import numpy as np
 from ..helper import AtomType, ResidueType, Xopen, Xdict, set_real_global_variable, set_attribute_alternative_names, \
     set_global_alternative_names, Guess_Element_From_Mass, Xprint
+
+
+__all__ = ["Assign", "get_assignment_from_pdb", "get_assignment_from_mol2", "get_assignment_from_pubchem",
+           "get_assignment_from_residuetype", "get_assignment_from_xyz", "get_assignment_from_smiles"]
 
 
 class AssignRule:
@@ -613,7 +616,7 @@ the rule described in the reference (J. Wang et al., J. Am. Chem. Soc, 2001) wil
                     if dij < simple_cutoff:
                         self.add_bond(i, j, -1)
 
-    def determine_bond_order(self, max_step=200, max_stat=2000, penalty_scores=None, debug=False, total_charge=0, extra_criteria=None):
+    def determine_bond_order(self, max_step=200, max_stat=2000, penalty_scores=None, total_charge=0, extra_criteria=None):
         """
         This **function** determines the bond order based on connectivities
 
@@ -627,7 +630,7 @@ a set of penalty scores described in the reference (J. Wang et al., J. Mol. Grap
         :return: ReasonedBool, True for success, False for failure.
         """
         from .bond_order import BondOrderAssignment
-        bo_assign = BondOrderAssignment(penalty_scores, max_step, max_stat, self, debug, total_charge, extra_criteria)
+        bo_assign = BondOrderAssignment(penalty_scores, max_step, max_stat, self, total_charge, extra_criteria)
         return bo_assign.main()
 
     def to_residuetype(self, name, charge=None):
@@ -1025,7 +1028,7 @@ def get_assignment_from_mol2(filename, total_charge=None):
             success = assign.Determine_Bond_Order(total_charge=total_charge)
             if not success:
                 raise ValueError(f"The bond orders in {filename} are not reasonable")
-            warnings.warn(f"The bond orders in {filename} are not reasonable and have been modified")
+            Xprint(f"The bond orders in {filename} are not reasonable and have been modified", "WARNING")
     if assign is None:
         raise OSError(f"The file {filename} is not a mol2 file")
 
@@ -1033,7 +1036,7 @@ def get_assignment_from_mol2(filename, total_charge=None):
     sum_of_formal_charge = sum(assign.formal_charge)
     sum_of_partial_charge = int(round(sum(assign.charge)))
     if  sum_of_formal_charge != sum_of_partial_charge:
-        warnings.warn(f"For {filename}, the sum of formal charges ({sum_of_formal_charge}) != the sum of partial charges ({sum_of_partial_charge})")
+        Xprint(f"For {filename}, the sum of formal charges ({sum_of_formal_charge}) != the sum of partial charges ({sum_of_partial_charge})", "WARNING")
     return assign
 
 set_global_alternative_names()

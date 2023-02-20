@@ -87,7 +87,7 @@ from .assign import Assign, get_assignment_from_pdb, get_assignment_from_mol2, g
     get_assignment_from_residuetype, get_assignment_from_xyz, get_assignment_from_smiles
 from .helper import GlobalSetting, Type, AbstractMolecule, ResidueType, Entity, Atom, Residue, ResidueLink, Molecule, \
     AtomType, set_global_alternative_names, generate_new_pairwise_force_type, generate_new_bonded_force_type, source, \
-    Xprint
+    Xprint, debug
 from .load import load_ffitp, load_mol2, load_rst7, load_frcmod, load_pdb, load_parmdat, load_coordinate
 from .build import save_mol2, save_pdb, save_sponge_input, save_gro, build_bonded_force, get_mindsponge_system_energy
 from .process import impose_bond, impose_angle, impose_dihedral, add_solvent_box, h_mass_repartition, solvent_replace, \
