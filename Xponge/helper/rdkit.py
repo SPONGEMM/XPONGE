@@ -7,7 +7,7 @@ except ModuleNotFoundError as exc:
     raise ModuleNotFoundError(
         "'rdkit' package needed. Maybe you need 'conda install -c rdkit rdkit'") from exc
 
-from . import Xdict
+from . import Xdict, Xprint
 from .namespace import set_global_alternative_names
 
 
@@ -62,6 +62,7 @@ def rdmol_to_assign(rdmol):
         assign.add_atom(atom.GetSymbol(), x=x, y=y, z=z)
         assign.formal_charge[-1] = atom.GetFormalCharge()
 
+    has_unknown_bond = False
     for bond in rdmol.GetBonds():
         temp_bond = bond.GetBondType()
         if temp_bond == Chem.BondType.UNSPECIFIED:
@@ -72,9 +73,16 @@ def rdmol_to_assign(rdmol):
             temp_bond = 2
         elif temp_bond == Chem.BondType.TRIPLE:
             temp_bond = 3
+        elif temp_bond == Chem.BondType.AROMATIC:
+            temp_bond = -1
+            has_unknown_bond = True
         else:
+            Xprint(f"Unknown bond type {temp_bond}", "ERROR")
             raise NotImplementedError
         assign.add_bond(bond.GetBeginAtomIdx(), bond.GetEndAtomIdx(), temp_bond)
+    assign.determine_ring_and_bond_type()
+    if has_unknown_bond:
+        assign.determine_bond_order()
 
     return assign
 

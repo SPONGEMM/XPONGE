@@ -375,8 +375,15 @@ class Assign():
 
         :return: None
         """
+        count = Xdict()
         for i in range(self.atom_numbers):
-            self.names[i] = self.atoms[i] + str(i)
+            atom_name = self.names[i] if self.names[i] else self.atoms[i]
+            if atom_name not in count:
+                count[atom_name] = 0
+            else:
+                count[atom_name] += 1
+                atom_name += f"{count[atom_name]}"
+            self.names[i] = atom_name
 
     def atom_judge(self, atom, string):
         """
@@ -486,6 +493,43 @@ connected to two other atoms, "N4" means a nitrogen atom connected to four other
             else:
                 self.atom_marker[atom2][marker] = 1
 
+    def delete_atom(self, atom):
+        """
+        This **function** deletes the atom
+
+        :param atom: the index of the atom to delete
+        :return: None
+        """
+        assert 0 <= atom < self.atom_numbers
+        self.built = False
+        self.element_details.pop(atom)
+        self.atoms.pop(atom)
+        self.names.pop(atom)
+        self.atom_types.pop(atom)
+        self.coordinate = np.delete(self.coordinate, atom, 0)
+        self.charge = np.delete(self.charge, atom, 0)
+        self.formal_charge.pop(atom)
+        self.atom_numbers -= 1
+        bond = self.bonds.pop(atom)
+        for btom in range(atom + 1, self.atom_numbers + 1):
+            self.bonds[btom - 1] = self.bonds[btom]
+        for btom in range(self.atom_numbers):
+            self.bond_marker[btom] = Xdict()
+            self.atom_marker[btom] = Xdict()
+        new_bonds = deepcopy(self.bonds)
+        for btom, bond in new_bonds.items():
+            for ctom in bond:
+                if ctom > atom:
+                    self.bonds[btom].pop(ctom, None)
+                    self.bonds[btom][ctom-1] = new_bonds[btom][ctom]
+                    self.bond_marker[btom][ctom-1] = set([])
+                elif ctom == atom:
+                    self.bonds[btom].pop(ctom)
+                else:
+                    self.bond_marker[btom][ctom-1] = set([])
+        self.bonds.pop(self.atom_numbers)
+
+
     def delete_bond(self, atom1, atom2):
         """
         This **function** deletes the bond between two atoms
@@ -524,9 +568,11 @@ connected to two other atoms, "N4" means a nitrogen atom connected to four other
         _RING.check_rings_type(self, self.rings)
 
         for atom in range(len(self.atoms)):
+            self.atom_marker[atom].clear()
             dlo = 0
             noto = 0
             for atom2, order in self.bonds[atom].items():
+                self.bond_marker[atom][atom2].clear()
                 if self.Atom_Judge(atom2, "O1"):
                     dlo += 1
                 else:
@@ -647,20 +693,9 @@ a set of penalty scores described in the reference (J. Wang et al., J. Mol. Grap
                 charge = np.zeros(self.atom_numbers)
             else:
                 charge = self.charge
-        count = Xdict()
+        self.add_index_to_name()
         for i in range(self.atom_numbers):
-            assert self.atom_types[i] is not None
-            if self.names[i]:
-                atom_name = self.names[i]
-            elif self.atoms[i] in count.keys():
-                atom_name = self.atoms[i] + "%d" % count[self.atoms[i]]
-                self.names[i] = atom_name
-                count[self.atoms[i]] += 1
-            else:
-                count[self.atoms[i]] = 1
-                atom_name = self.atoms[i]
-                self.names[i] = atom_name
-            temp.Add_Atom(atom_name, self.atom_types[i], x=self.coordinate[i][0],
+            temp.Add_Atom(self.names[i], self.atom_types[i], x=self.coordinate[i][0],
                           y=self.coordinate[i][1], z=self.coordinate[i][2])
             temp.atoms[-1].charge = charge[i]
         for i, bondi in self.bonds.items():
