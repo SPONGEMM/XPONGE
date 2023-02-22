@@ -134,8 +134,10 @@ def _mol2rfe(subparsers):
     mol2rfe.add_argument("-dohmr", "-do_hydrogen_mass_repartition", action="store_true",
                          help="use the hydrogen mass repartition method")
     mol2rfe.add_argument("-ff", "-forcefield", help="Use this force field file instead of the default ff14SB and gaff")
-    mol2rfe.add_argument("-mi", "-min_mdin", nargs="*", help="Use the minimization mdin file(s) here \
-instead of the default ones")
+    mol2rfe.add_argument("-mi", "-min_mdin", nargs="*", help="Use this minimization mdin file \
+instead of the default one")
+    mol2rfe.add_argument("-hi", "-heating_mdin", nargs="*", help="Use this heating mdin file \
+instead of the default one")
     mol2rfe.add_argument("-pi", "-pre_equilibrium_mdin", help="Use this pre-equilibrium mdin file \
 instead of the default one")
     mol2rfe.add_argument("-ei", "-equilibrium_mdin", help="Use this equilibrium mdin file instead of the default one")
@@ -151,12 +153,14 @@ instead of the default one")
                          help="minimum limitation of the Tanimoto coefficient of max common structure")
     mol2rfe.add_argument("-dt", default=2e-3, type=float, metavar="dt",
                          help="the dt used for simulation when mdin is not provided")
-    mol2rfe.add_argument("-msteps", type=int, nargs=6,
-                         help="""the minimization steps for all the lambda.
- Default 5000 for each minimization simulation. There are 6 minimization simulations.""",
-                         default=[5000, 5000, 5000, 5000, 5000, 5000])
+    mol2rfe.add_argument("-mstep", "-min_step", dest="min_step", default=5000, type=int,
+                         metavar="5000",
+                         help="the minimization step used for simulation when mdin is not provided")
+    mol2rfe.add_argument("-hstep", "-heating_step", dest="heating_step", default=5000, type=int,
+                         metavar="5000",
+                         help="the heating step used for simulation when mdin is not provided")
     mol2rfe.add_argument("-pstep", "-pre_equilibrium_step", dest="pre_equilibrium_step", default=50000, type=int,
-                         metavar="pre_equilibrium_step",
+                         metavar="50000",
                          help="the pre-equilibrium step used for simulation when mdin is not provided")
     mol2rfe.add_argument("-estep", "-equilibrium_step", dest="equilibrium_step", default=500000, type=int,
                          metavar="500000", help="the equilibrium step used for simulation when mdin is not provided")

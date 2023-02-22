@@ -551,7 +551,7 @@ def _mol2rfe_min(args):
             inc_rate = 1 + random()
             if not args.mi:
                 cif = " -minimization_dynamic_dt 1"
-                exit_code = run(f"{basic} {cif} -step_limit {args.msteps[0]} -minimization_dt_factor {dt_factor} -minimization_dt_increasing_rate {inc_rate}")
+                exit_code = run(f"{basic} {cif} -step_limit {args.min_step} -minimization_dt_factor {dt_factor} -minimization_dt_increasing_rate {inc_rate}")
                 out = MdoutReader(f"{i}/min/{args.temp}.mdout").potential[-1]
                 min_time = 0
                 while (out > 0 or exit_code != 0) and min_time < 10:
@@ -559,18 +559,45 @@ def _mol2rfe_min(args):
                     inc_rate = 1 + random() 
                     Xprint("Minimization will be repeated to reduce the potential to 0", "WARNING")
                     min_time += 1
-                    exit_code = run(f"{basic} {cif} -step_limit {args.msteps[0]}  -minimization_dt_factor {dt_factor} -minimization_dt_increasing_rate {inc_rate} -coordinate_in_file {i}/min/{args.temp}_coordinate.txt")
+                    exit_code = run(f"{basic} {cif} -step_limit {args.min_step}  -minimization_dt_factor {dt_factor} -minimization_dt_increasing_rate {inc_rate} -coordinate_in_file {i}/min/{args.temp}_coordinate.txt")
                     out = MdoutReader(f"{i}/min/{args.temp}.mdout").potential[-1]
                 if min_time >= 10:
                     Xprint("Minimization has been repeated for 10 times and the potential still can not be reduced to 0", "ERROR")
                     sys.exit(1)
             else:
-                mdin = args.mi.pop(0)
-                cif = ""
-                run(f"{basic} {cif} -mdin {mdin}")
-                cif += " -coordinate_in_file {1}/min/{0}_coordinate.txt".format(args.temp, i)
-                for mdin in args.mi:
-                    run(f"{basic} {cif} -mdin {mdin}")
+                command += f" -mdin {args.mi}"
+                exit_code = run(command)
+
+
+def _mol2rfe_heating(args):
+    """
+
+    :param args:
+    :return:
+    """
+    source("..")
+
+    if "heating" in args.do:
+        for i in range(args.nl + 1):
+            if os.path.exists("%d/heating" % i):
+                shutil.rmtree("%d/heating" % i)
+            os.mkdir("%d/heating" % i)
+            command = f"SPONGE -default_in_file_prefix {i}/{args.temp}"
+            lambda_ = i / args.nl
+            command += f" -lambda_lj {lambda_} -cutoff 8"
+            command += _mol2rfe_output_path("heating", i, args.temp)
+
+            command += f" -coordinate_in_file {i}/min/{args.temp}_coordinate.txt"
+            if not args.pi:
+                command += f" -mode NVT -step_limit {args.heating_step} -constrain_mode SHAKE"
+                command += f" -thermostat middle_langevin"
+                exit_code = run(command)
+            else:
+                command += f" -mdin {args.hi}"
+                exit_code = run(command)
+            if exit_code != 0:
+                Xprint(f"The command of lambda {i} exited with code {exit_code}", "ERROR")
+                sys.exit(exit_code)
 
 
 def _mol2rfe_pre_equilibrium(args):
@@ -580,7 +607,6 @@ def _mol2rfe_pre_equilibrium(args):
     :return:
     """
     source("..")
-    from Xponge.analysis import MdoutReader
 
     if "pre_equilibrium" in args.do:
         for i in range(args.nl + 1):
@@ -592,10 +618,10 @@ def _mol2rfe_pre_equilibrium(args):
             command += f" -lambda_lj {lambda_} -cutoff 8"
             command += _mol2rfe_output_path("pre_equilibrium", i, args.temp)
 
-            command += f" -coordinate_in_file {i}/min/{args.temp}_coordinate.txt"
+            command += f" -coordinate_in_file {i}/heating/{args.temp}_coordinate.txt"
             if not args.pi:
                 command += f" -mode NPT -step_limit {args.pre_equilibrium_step} -dt {args.dt} -constrain_mode SHAKE"
-                command += f" -barostat {args.barostat} -thermostat {args.thermostat}"
+                command += f" -barostat berendsen_barostat -thermostat middle_langevin"
                 exit_code = run(command)
             else:
                 command += f" -mdin {args.pi}"
@@ -702,7 +728,7 @@ def mol2rfe(args):
         __import__(ipy)
 
     if not args.do:
-        args.do = [["build", "min", "pre_equilibrium", "equilibrium", "analysis"]]
+        args.do = [["build", "min", "heating", "pre_equilibrium", "equilibrium", "analysis"]]
     args.do = args.do[0]
 
     from_res_type_ = load_mol2(args.r1).residues[0]
@@ -731,6 +757,8 @@ def mol2rfe(args):
     _mol2rfe_build(args, merged_from, merged_to, matchmap)
 
     _mol2rfe_min(args)
+
+    _mol2rfe_heating(args)
 
     _mol2rfe_pre_equilibrium(args)
 
