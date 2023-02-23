@@ -305,7 +305,7 @@ class BondOrderAssignment:
                 self.stat_position = 0
                 self.points = self._preprocess_penalties(self.current_stat)
                 Xprint(f"stat={self.current_stat}", "DEBUG")
-                Xprint("points=\n{self.points}", "DEBUG")
+                Xprint(f"points=\n{self.points}", "DEBUG")
                 return True
         return False
 
@@ -473,6 +473,7 @@ class BondOrderAssignment:
                     pass
                 if self.current_stat != self.max_stat:
                     Xprint("-"*20 + f"{self.points[self.stat_position - 1]}", "DEBUG")
+            
         if success:
             self.assign.bonds = bonds
         return success

@@ -505,7 +505,6 @@ connected to two other atoms, "N4" means a nitrogen atom connected to four other
         self.element_details.pop(atom)
         self.atoms.pop(atom)
         self.names.pop(atom)
-        self.atom_types.pop(atom)
         self.coordinate = np.delete(self.coordinate, atom, 0)
         self.charge = np.delete(self.charge, atom, 0)
         self.formal_charge.pop(atom)
@@ -513,6 +512,9 @@ connected to two other atoms, "N4" means a nitrogen atom connected to four other
         bond = self.bonds.pop(atom)
         for btom in range(atom + 1, self.atom_numbers + 1):
             self.bonds[btom - 1] = self.bonds[btom]
+            self.atom_types[btom - 1] = self.atom_types[btom]
+        self.bonds.pop(self.atom_numbers)
+        self.atom_types.pop(self.atom_numbers)
         for btom in range(self.atom_numbers):
             self.bond_marker[btom] = Xdict()
             self.atom_marker[btom] = Xdict()
@@ -526,9 +528,7 @@ connected to two other atoms, "N4" means a nitrogen atom connected to four other
                 elif ctom == atom:
                     self.bonds[btom].pop(ctom)
                 else:
-                    self.bond_marker[btom][ctom-1] = set([])
-        self.bonds.pop(self.atom_numbers)
-
+                    self.bond_marker[btom][ctom] = set([])
 
     def delete_bond(self, atom1, atom2):
         """
@@ -662,7 +662,7 @@ the rule described in the reference (J. Wang et al., J. Am. Chem. Soc, 2001) wil
                     if dij < simple_cutoff:
                         self.add_bond(i, j, -1)
 
-    def determine_bond_order(self, max_step=200, max_stat=2000, penalty_scores=None, total_charge=0, extra_criteria=None):
+    def determine_bond_order(self, max_step=200, max_stat=2000, penalty_scores=None, total_charge=None, extra_criteria=None):
         """
         This **function** determines the bond order based on connectivities
 
@@ -744,6 +744,19 @@ a set of penalty scores described in the reference (J. Wang et al., J. Mol. Grap
             if ring.check_aromatic(self):
                 for atom0, atom1, atom2 in ring.get_3_neighbors():
                     self.add_bond_marker(atom0, atom1, "ar")
+
+    def uff_optimize(self):
+        """
+        This **function** uses rdkit and uff to optimize the structure
+
+        :return None:
+        """
+        from rdkit.Chem import AllChem
+        from ..helper.rdkit import assign_to_rdmol
+        rdmol = assign_to_rdmol(self)
+        AllChem.UFFOptimizeMolecule(rdmol)
+        for i in range(self.atom_numbers):
+            self.coordinate[i] = rdmol.GetConformer().GetAtomPosition(i)
 
     def save_as_pdb(self, filename):
         """
@@ -849,6 +862,16 @@ a set of penalty scores described in the reference (J. Wang et al., J. Mol. Grap
         f.write(towrite)
         f.close()
 
+    def set_ph(self, ph):
+        """
+            This **function** sets the pH value, and adds or deletes the related hydrogens.
+
+            :param ph: the pH value
+            :return: the sum of final formal charge
+        """
+        from .phmodel import PHModelAssignment
+        phma = PHModelAssignment(self, ph)
+        return phma.main()
 
 def get_assignment_from_pubchem(parameter, keyword):
     """
