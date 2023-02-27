@@ -79,6 +79,7 @@ class _RING():
         self.is_pure_aliphatic_ring = None
         self.is_planar_ring = None
         self.out_plane_double_bond = None
+        self.is_aromatic = False
 
     def __repr__(self):
         return self.tohash
@@ -252,6 +253,7 @@ class _RING():
         :return:
         """
         if len(self) < 4:
+            self.is_aromatic = False
             return False
         pi_electron = 0
         for atom0, atom1, atom2 in self.get_3_neighbors():
@@ -333,7 +335,9 @@ class _RING():
             if pi_electron % 4 == 2:
                 for atom in self.atoms:
                     assign.add_atom_marker(atom, "AR0")
+                self.is_aromatic = True
                 return True
+        self.is_aromatic = False
         return False
 
 
@@ -362,12 +366,25 @@ class Assign():
         self.element_details = []
         self.coordinate = None
         self.charge = None
-        self.built = False
+        self._built = False
+        self.kekulized = False
         self.atom_types = Xdict()
         self.atom_marker = Xdict()
         self.bonds = Xdict()
         self.bond_marker = Xdict()
         set_attribute_alternative_names(self)
+
+    @property
+    def built(self):
+        return self._built
+
+    @built.setter
+    def built(self, value):
+        if value is True:
+            self._built = True
+        else:
+            self._built = False
+            self.kekulized = False
 
     def add_index_to_name(self):
         """
@@ -717,7 +734,7 @@ a set of penalty scores described in the reference (J. Wang et al., J. Mol. Grap
         if method == "RESP":
             from . import resp
             self.charge = resp.RESP_Fit(self, basis=parameters.get("basis", "6-31g*"), opt=parameters.get("opt", False),
-                                        charge=parameters.get("charge", 0), spin=parameters.get("spin", 0),
+                                        charge=parameters.get("charge", int(round(sum(self.formal_charge)))), spin=parameters.get("spin", 0),
                                         extra_equivalence=parameters.get("extra_equivalence", []),
                                         grid_density=parameters.get("grid_density", 6),
                                         grid_cell_layer=parameters.get("grid_cell_layer", 4),
@@ -728,6 +745,9 @@ a set of penalty scores described in the reference (J. Wang et al., J. Mol. Grap
         elif method == "GASTEIGER":
             from . import gasteiger
             self.charge = gasteiger.Gasteiger(self)
+        elif method == "TPACM4":
+            from . import tpacm4
+            self.charge = tpacm4.tpacm4(self, charge=parameters.get("charge", int(round(sum(self.formal_charge)))))
         else:
             raise ValueError("methods should be one of the following: 'RESP', 'GASTEIGER'")
 
@@ -740,10 +760,12 @@ a set of penalty scores described in the reference (J. Wang et al., J. Mol. Grap
         """
         if not self.built:
             self.determine_ring_and_bond_type()
-        for ring in self.rings:
-            if ring.check_aromatic(self):
-                for atom0, atom1, atom2 in ring.get_3_neighbors():
-                    self.add_bond_marker(atom0, atom1, "ar")
+        if not self.kekulized:
+            for ring in self.rings:
+                if ring.check_aromatic(self):
+                    for atom0, atom1, atom2 in ring.get_3_neighbors():
+                        self.add_bond_marker(atom0, atom1, "ar")
+            self.kekulized = True
 
     def uff_optimize(self):
         """
