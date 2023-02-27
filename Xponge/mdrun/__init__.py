@@ -53,7 +53,8 @@ def run(args):
         if t != 0:
             Xprint("No MD Engine found.\n" +
                   f"  There is no executable program named '{args[1]}' in '{that_path}' or PATH\n" +
-                   "  Maybe you need to use Xponge.mdrun -set SPONGE_PATH to set the path to MD Engine, or add the path to your environment variables",
+                   "  Maybe you need to use Xponge.mdrun -set SPONGE_PATH to set the path to MD Engine, " +
+                   "or add the path to your environment variables",
               "ERROR")
             sys.exit(1)
         else:

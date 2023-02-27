@@ -478,7 +478,6 @@ def _correct_residueb_coordinates(residue_a, residue_b, matchmap):
     :param matchmap:
     :return:
     """
-    t = {residue_b.atoms[i].name for i in matchmap.keys()}
     template_positions = []
     certified_positions = []
     for i, atom in enumerate(residue_b.atoms):

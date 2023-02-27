@@ -10,13 +10,14 @@ from ...helper import set_global_alternative_names
 
 __all__ = ["tpacm4"]
 
-
+#pylint: disable=unused-argument
 def _init():
+    """initialize the package"""
     file = Path(__file__).resolve().parent
     with open(file/"ATOMTYPE.dat") as fa, open(file/"CHARGE.dat") as fc:
-        type_charge_mapper = Xdict({a: float(c) for a, c in zip(fa.read().split(), fc.read().split())})
-    string_mapper = Xdict({"Cl": "B", "Br": "B"})
-    string_mapper.update({element: element for element in "CNOFPSH"})
+        type_charge_mapper_ = Xdict({a: float(c) for a, c in zip(fa.read().split(), fc.read().split())})
+    string_mapper_ = Xdict({"Cl": "B", "Br": "B"})
+    string_mapper_.update({element: element for element in "CNOFPSH"})
     tpacm4_helper = AssignRule("_tpacm4", pure_string=True)
     @tpacm4_helper.add_rule("NH4")
     def _(i, assign):
@@ -42,12 +43,47 @@ def _init():
             for k, korder in assign.bonds[j].items():
                 if assign.atoms[k] == "O" and korder == 2:
                     return True
-        return False 
+        return False
     @tpacm4_helper.add_rule("")
     def _(i, assign):
         return True
-    return type_charge_mapper, string_mapper
+    return type_charge_mapper_, string_mapper_
 
+def _ring_process(ring, atom_type_alls, assign, extra_strings):
+    """process the extra strings for a ring"""
+    atom_numbers = len(ring.atoms)
+    if atom_numbers < 6:
+        for atom in ring.atoms:
+            extra_strings[atom].append(f"{atom_numbers}MR")
+    if ring.is_aromatic and len(ring.atoms) <= 6:
+        for i, atom in enumerate(ring.atoms):
+            ring_name = None
+            if assign.atoms[atom] == "N":
+                ring_name = "PY"
+            elif assign.atoms[atom] == "O":
+                ring_name = "FU"
+            elif assign.atoms[atom] == "S":
+                ring_name = "TF"
+            if ring_name is not None:
+                btom = ring.atoms[i - 1]
+                for ctom in assign.bonds[btom]:
+                    if "ar" not in assign.bond_marker[btom][ctom]:
+                        extra_strings[ctom].append(f"o{ring_name}")
+                btom = ring.atoms[(i + 1) % len(ring.atoms)]
+                for ctom in assign.bonds[btom]:
+                    if "ar" not in assign.bond_marker[btom][ctom]:
+                        extra_strings[ctom].append(f"o{ring_name}")
+                btom = ring.atoms[i - 2]
+                for ctom in assign.bonds[btom]:
+                    if "ar" not in assign.bond_marker[btom][ctom]:
+                        extra_strings[ctom].append(f"m{ring_name}")
+                btom = ring.atoms[(i + 2) % len(ring.atoms)]
+                for ctom in assign.bonds[btom]:
+                    if "ar" not in assign.bond_marker[btom][ctom]:
+                        extra_strings[ctom].append(f"m{ring_name}")
+                if len(ring.atoms) == 6:
+                    btom = ring.atoms[i - 3]
+                    extra_strings[btom].append(f"P{ring_name}")
 
 _extra_string_sort = ["NH4", "3MR", "4MR", "5MR", "OEW",
                       "CC4", "OED", "CO2", "CN2", "CN3",
@@ -58,39 +94,7 @@ def _find_extra_string(atom_type_alls, assign):
     """find extra string for every atom"""
     extra_strings = Xdict({i:[] for i in range(assign.atom_numbers)})
     for ring in assign.rings:
-        atom_numbers = len(ring.atoms)
-        if atom_numbers < 6:
-            for atom in ring.atoms:
-                extra_strings[atom].append(f"{atom_numbers}MR")
-        if ring.is_aromatic and len(ring.atoms) <= 6:
-            for i, atom in enumerate(ring.atoms):
-                ring_name = None
-                if assign.atoms[atom] == "N":
-                    ring_name = "PY"
-                elif assign.atoms[atom] == "O":
-                    ring_name = "FU"
-                elif assign.atoms[atom] == "S":
-                    ring_name = "TF"
-                if ring_name is not None:
-                    btom = ring.atoms[i - 1]
-                    for ctom in assign.bonds[btom]:
-                        if "ar" not in assign.bond_marker[btom][ctom]:
-                            extra_strings[ctom].append(f"o{ring_name}")
-                    btom = ring.atoms[(i + 1) % len(ring.atoms)]
-                    for ctom in assign.bonds[btom]:
-                        if "ar" not in assign.bond_marker[btom][ctom]:
-                            extra_strings[ctom].append(f"o{ring_name}")
-                    btom = ring.atoms[i - 2]
-                    for ctom in assign.bonds[btom]:
-                        if "ar" not in assign.bond_marker[btom][ctom]:
-                            extra_strings[ctom].append(f"m{ring_name}")
-                    btom = ring.atoms[(i + 2) % len(ring.atoms)]
-                    for ctom in assign.bonds[btom]:
-                        if "ar" not in assign.bond_marker[btom][ctom]:
-                            extra_strings[ctom].append(f"m{ring_name}")
-                    if len(ring.atoms) == 6:
-                        btom = ring.atoms[i - 3]
-                        extra_strings[btom].append(f"P{ring_name}")
+        _ring_process(ring, atom_type_alls, assign, extra_strings)
     for i in range(assign.atom_numbers):
         if "3MR" in extra_strings[i] or "4MR" in extra_strings[i] or "5MR" in extra_strings[i]:
             continue

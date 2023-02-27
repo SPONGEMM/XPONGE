@@ -115,7 +115,7 @@ def _mol2rfe(subparsers):
     :return:
     """
     mol2rfe = subparsers.add_parser("mol2rfe",
-                                    help='calculate the relative free energy of a small molecule using SPONGE')
+                                    help='calculate the relative binding energy of a small molecule using SPONGE')
     mol2rfe.add_argument("-do", metavar="todo", nargs="*", action="append", help="""the things need to do,
  should be one or more of 'build', 'min', 'pre_equilibrium', 'equilibrium', 'analysis'""",
                          choices=["build", "min", "pre_equilibrium", "equilibrium", "analysis"])
@@ -125,7 +125,8 @@ def _mol2rfe(subparsers):
                          help="molecule mutated to by an Xponge ResidueType mol2 file")
     mol2rfe.add_argument("-r1", "-residuetype1", required=True,
                          help="molecule mutated from by an Xponge ResidueType mol2 file")
-    mol2rfe.add_argument("-r0", "-residuetype0", nargs="*", default=[], help="small molecules that do not mutate")
+    mol2rfe.add_argument("-r0", "-residuetype0", nargs="*", default=[],
+                         help="small molecules or non-standard residues that are also in the system")
     mol2rfe.add_argument("-ri", "-residue_index", type=int, metavar=0, default=0,
                          help="the residue index of the molecule to mutate")
     mol2rfe.add_argument("-nl", "-lambda_numbers", metavar=20, type=int, default=20,
@@ -158,13 +159,74 @@ instead of the default one")
                          metavar="50000",
                          help="the pre-equilibrium step used for simulation when mdin is not provided")
     mol2rfe.add_argument("-estep", "-equilibrium_step", dest="equilibrium_step", default=500000, type=int,
-                         metavar="500000", help="the equilibrium step used for simulation when mdin is not provided")
-    mol2rfe.add_argument("-thermostat", default="middle_langevin", metavar="middle_langevin", choices=["middle_langevin"],
+                         metavar="500000",
+                         help="the equilibrium step used for simulation when mdin is not provided")
+    mol2rfe.add_argument("-thermostat", default="middle_langevin",
+                         metavar="middle_langevin", choices=["middle_langevin"],
                          help="the thermostat used for simulation when mdin is not provided")
-    mol2rfe.add_argument("-barostat", default="andersen_barostat", metavar="andersen_barostat", choices=["andersen_barostat"],
+    mol2rfe.add_argument("-barostat", default="andersen_barostat",
+                         metavar="andersen_barostat", choices=["andersen_barostat"],
                          help="the barostat used for simulation when mdin is not provided")
 
     mol2rfe.set_defaults(func=tools.mol2rfe)
+
+
+def _mm_gbsa(subparsers):
+    """
+
+    :param subparsers:
+    :return:
+    """
+    mm_gbsa = subparsers.add_parser("mmgbsa",
+                                    help='calculate the absolute binding energy using SPONGE via MM/GBSA')
+    mm_gbsa.add_argument("-do", metavar="todo", nargs="*", action="append", help="""the things need to do,
+ should be one or more of 'build', 'min', 'pre_equilibrium', 'equilibrium', 'analysis'""",
+                         choices=["build", "min", "pre_equilibrium", "equilibrium", "analysis"])
+
+    mm_gbsa.add_argument("-pdb", required=True, help="the initial conformation given by the pdb file")
+    mm_gbsa.add_argument("-r1", "-residuetype1", required=True,
+                         help="the ligand given by an Xponge ResidueType mol2 file")
+    mm_gbsa.add_argument("-r0", "-residuetype0", nargs="*", default=[],
+                         help="small molecules or non-standard residues that are also in the system")
+    mm_gbsa.add_argument("-ri", "-residue_index", type=int, metavar=0, default=0,
+                         help="the residue index of the ligand")
+
+    mm_gbsa.add_argument("-dohmr", "-do_hydrogen_mass_repartition", action="store_true",
+                         help="use the hydrogen mass repartition method")
+    mm_gbsa.add_argument("-ff", "-forcefield", help="Use this force field file instead of the default ff14SB and gaff")
+    mm_gbsa.add_argument("-mi", "-min_mdin", nargs="*", help="Use this minimization mdin file \
+instead of the default one")
+    mm_gbsa.add_argument("-pi", "-pre_equilibrium_mdin", help="Use this pre-equilibrium mdin file \
+instead of the default one")
+    mm_gbsa.add_argument("-ei", "-equilibrium_mdin", help="Use this equilibrium mdin file instead of the default one")
+    mm_gbsa.add_argument("-ai", "-analysis_mdin", help="Use this analysis mdin file instead of the default one")
+    mm_gbsa.add_argument("-temp", default="TMP", metavar="TMP", help="the temporary file name prefix")
+
+    mm_gbsa.add_argument("-dt", default=2e-3, type=float, metavar="dt",
+                         help="the dt used for simulation when mdin is not provided")
+    mm_gbsa.add_argument("-mstep", "-min_step", dest="min_step", default=5000, type=int,
+                         metavar="5000",
+                         help="the minimization step used for simulation when mdin is not provided")
+    mm_gbsa.add_argument("-pstep", "-pre_equilibrium_step", dest="pre_equilibrium_step", default=50000, type=int,
+                         metavar="50000",
+                         help="the pre-equilibrium step used for simulation when mdin is not provided")
+    mm_gbsa.add_argument("-estep", "-equilibrium_step", dest="equilibrium_step", default=500000, type=int,
+                         metavar="500000",
+                         help="the equilibrium step used for simulation when mdin is not provided")
+    mm_gbsa.add_argument("-astart", "-analysis_start", default=200, type=int,
+                         metavar="200", help="the start frame for analysis")
+    mm_gbsa.add_argument("-astop", "-analysis_stop", default=-1, type=int,
+                         metavar="-1", help="the stop frame for analysis")
+    mm_gbsa.add_argument("-astride", "-analysis_stride", default=500, type=int,
+                         metavar="500", help="the stride frame for analysis")
+    mm_gbsa.add_argument("-thermostat", default="middle_langevin",
+                         metavar="middle_langevin", choices=["middle_langevin"],
+                         help="the thermostat used for simulation when mdin is not provided")
+    mm_gbsa.add_argument("-barostat", default="andersen_barostat",
+                         metavar="andersen_barostat", choices=["andersen_barostat"],
+                         help="the barostat used for simulation when mdin is not provided")
+
+    mm_gbsa.set_defaults(func=tools.mm_gbsa)
 
 
 def main():
@@ -182,6 +244,7 @@ def main():
     _name2name(subparsers)
     _mol2rfe(subparsers)
     _converter(subparsers)
+    _mm_gbsa(subparsers)
 
     args = parser.parse_args()
 

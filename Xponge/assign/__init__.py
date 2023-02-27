@@ -1,6 +1,7 @@
 """
 This **package** is used to assign the properties for atoms, residues and molecules
 """
+#pylint: disable=cyclic-import
 import heapq
 from copy import deepcopy
 from collections import OrderedDict
@@ -39,8 +40,9 @@ class AssignRule:
         This **function** is used as a **decorator** to add the atom type - judge function
 
         :param atomtype: a string or an AtomType instance
-        :param priority: if more than one judge function returns True, the atom type with higher priority will be chosen. \
-If the priority levels of the functions are the same, the atom type which is added first will be chosen.   
+        :param priority: if more than one judge function returns True,  \
+the atom type with higher priority will be chosen. \
+If the priority levels of the functions are the same, the atom type which is added first will be chosen.
         :return: a **function**, which wraps a judge function (receiving the Assign instance and the atom index \
 and giving True or False as a result)
         """
@@ -627,8 +629,9 @@ None, else return the atom types.
         if isinstance(rule, str):
             rule = AssignRule.all[rule]
         if not rule.built:
-             rule.rules = OrderedDict(sorted(rule.rules.items(), key=lambda x: rule.priority[x[0]]))
-             rule.built = True
+            rule.rules = OrderedDict(sorted(rule.rules.items(),
+                                            key=lambda x: rule.priority[x[0]]))
+            rule.built = True
         if rule.pure_string:
             backup = deepcopy(self.atom_types)
         if rule.pre_action:
@@ -679,17 +682,20 @@ the rule described in the reference (J. Wang et al., J. Am. Chem. Soc, 2001) wil
                     if dij < simple_cutoff:
                         self.add_bond(i, j, -1)
 
-    def determine_bond_order(self, max_step=200, max_stat=2000, penalty_scores=None, total_charge=None, extra_criteria=None):
+    def determine_bond_order(self, max_step=200, max_stat=2000, penalty_scores=None,
+                             total_charge=None, extra_criteria=None):
         """
         This **function** determines the bond order based on connectivities
 
         :param max_step: the max iterative step
         :param max_stat: the max iterative stat
-        :param penalty_scores: the penalty scores for every atom. This should be a list of ordered dicts, and every
-ordered dict stores the valence-penalty pairs for every atom, and it is sorted by the penalty scores. If None(default),
+        :param penalty_scores: the penalty scores for every atom. \
+This should be a list of ordered dicts, and every ordered dict stores the valence-penalty pairs for every atom, \
+and it is sorted by the penalty scores. If None(default), \
 a set of penalty scores described in the reference (J. Wang et al., J. Mol. Graph. Model., 2006) will be used.
         :param total_charge: the total charge of the molecule
-        :param extra_criteria: a function as the extra convergence criteria. The function will receive the assignment as input, and give True or False as output.
+        :param extra_criteria: a function as the extra convergence criteria. \
+The function will receive the assignment as input, and give True or False as output.
         :return: ReasonedBool, True for success, False for failure.
         """
         from .bond_order import BondOrderAssignment
@@ -734,7 +740,8 @@ a set of penalty scores described in the reference (J. Wang et al., J. Mol. Grap
         if method == "RESP":
             from . import resp
             self.charge = resp.RESP_Fit(self, basis=parameters.get("basis", "6-31g*"), opt=parameters.get("opt", False),
-                                        charge=parameters.get("charge", int(round(sum(self.formal_charge)))), spin=parameters.get("spin", 0),
+                                        charge=parameters.get("charge", int(round(sum(self.formal_charge)))),
+                                        spin=parameters.get("spin", 0),
                                         extra_equivalence=parameters.get("extra_equivalence", []),
                                         grid_density=parameters.get("grid_density", 6),
                                         grid_cell_layer=parameters.get("grid_cell_layer", 4),
@@ -753,8 +760,9 @@ a set of penalty scores described in the reference (J. Wang et al., J. Mol. Grap
 
     def kekulize(self):
         """
-        This **function** kekulizes the structure. 
-        The marker "AR0" will be added to the aromatic atom and the marker "ar" will be added to the aromatic bond
+        This **function** kekulizes the structure.
+        The marker "AR0" will be added to the aromatic atom and \
+the marker "ar" will be added to the aromatic bond.
 
         :return: None
         """
@@ -763,7 +771,7 @@ a set of penalty scores described in the reference (J. Wang et al., J. Mol. Grap
         if not self.kekulized:
             for ring in self.rings:
                 if ring.check_aromatic(self):
-                    for atom0, atom1, atom2 in ring.get_3_neighbors():
+                    for atom0, atom1, _ in ring.get_3_neighbors():
                         self.add_bond_marker(atom0, atom1, "ar")
             self.kekulized = True
 
@@ -803,8 +811,10 @@ a set of penalty scores described in the reference (J. Wang et al., J. Mol. Grap
                 atom_name = self.atoms[i]
                 self.names[i] = atom_name
         for i, atom in enumerate(self.atoms):
-            towrite += "ATOM  %5d %4s %3s %1s%4d    %8.3f%8.3f%8.3f%17s%2s\n" % (i + 1, self.names[i],
-                                                                                 self.name, " ", 1,
+            towrite += "ATOM  %5d %4s %3s %1s%4d    %8.3f%8.3f%8.3f%17s%2s\n" % (i + 1,
+                                                                                 self.names[i],
+                                                                                 self.name,
+                                                                                 " ", 1,
                                                                                  self.coordinate[i][0],
                                                                                  self.coordinate[i][1],
                                                                                  self.coordinate[i][2], " ", atom)
@@ -833,7 +843,7 @@ a set of penalty scores described in the reference (J. Wang et al., J. Mol. Grap
         """
         if not isinstance(filename, str):
             raise TypeError("filename needed to save an assignment as a mol2 file")
-        import Xponge.forcefield.sybyl
+        import Xponge.forcefield.sybyl #pylint: disable=unused-import
         atom_types = self.determine_atom_type("sybyl")
         for atom, atype in enumerate(atom_types):
             self.element_details[atom] = "." + atype.split(".")[1] if "." in atype else ""
@@ -1014,7 +1024,8 @@ def get_assignment_from_xyz(filename, bond_tolerance=1.0, total_charge=0):
     This **function** gets an Assign instance from a xyz file
 
     :param filename: the name of the input file
-    :param bond_tolerance: the parameter to determine the atomic connections. The larger tolerance, the easier to set a bond between two atoms
+    :param bond_tolerance: the parameter to determine the atomic connections. \
+The larger tolerance, the easier to set a bond between two atoms
     :param total_charge: the total charge of the molecule
     :return: the Assign instance
     """
@@ -1022,7 +1033,7 @@ def get_assignment_from_xyz(filename, bond_tolerance=1.0, total_charge=0):
         atom_numbers = int(f.readline())
         assign = Assign()
         f.readline()
-        for i in range(atom_numbers):
+        for _ in range(atom_numbers):
             atom_name, x, y, z = f.readline().split()
             assign.Add_Atom(atom_name, float(x), float(y), float(z))
         assign.determine_connectivity(tolerance=bond_tolerance)
@@ -1036,7 +1047,9 @@ def get_assignment_from_mol2(filename, total_charge=None):
     This **function** gets an Assign instance from a mol2 file
 
     :param filename: the name of the input file
-    :param total_charge: the total charge of the molecule used when aligning bond orders. If "sum" is given, the sum of the partial charges will be used; If None is given, the total charge will not be checked
+    :param total_charge: the total charge of the molecule used when aligning bond orders. \
+If "sum" is given, the sum of the partial charges will be used; \
+If None is given, the total charge will not be checked
     :return: the Assign instance
     """
     with open(filename) as f:
@@ -1102,9 +1115,9 @@ def get_assignment_from_mol2(filename, total_charge=None):
             total_charge = int(round(sum(assign.charge)))
         success = assign.Determine_Bond_Order(total_charge=total_charge)
         if not success:
-            for i, bond in assign.bonds.items():
+            for bond in assign.bonds.values():
                 for j in bond:
-                    assign.bonds[i][j] = -1
+                    bond[j] = -1
             success = assign.Determine_Bond_Order(total_charge=total_charge)
             if not success:
                 raise ValueError(f"The bond orders in {filename} are not reasonable")
@@ -1116,7 +1129,8 @@ def get_assignment_from_mol2(filename, total_charge=None):
     sum_of_formal_charge = sum(assign.formal_charge)
     sum_of_partial_charge = int(round(sum(assign.charge)))
     if  sum_of_formal_charge != sum_of_partial_charge:
-        Xprint(f"For {filename}, the sum of formal charges ({sum_of_formal_charge}) != the sum of partial charges ({sum_of_partial_charge})", "WARNING")
+        Xprint(f"For {filename}, the sum of formal charges ({sum_of_formal_charge}) \
+!= the sum of partial charges ({sum_of_partial_charge})", "WARNING")
     return assign
 
 set_global_alternative_names()

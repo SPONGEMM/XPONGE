@@ -58,14 +58,23 @@ when the key is not found. **New From 1.2.6.7**
             raise KeyError(self.not_found_message.format(key))
         raise KeyError(f"{key}")
 
-
+#pylint: disable=unused-argument
 class ReasonedBool(int):
+    """
+        This **class** is a boolean value with a reason
+
+        :param value: True or False
+        :param reason: the reason why the boolean value is given
+    """
     _repr = ["False", "True"]
     def __new__(cls, value, reason=None):
         return int.__new__(cls, bool(value))
 
     def __init__(self, value, reason=None):
         self.reason = reason
+
+    def __str__(self):
+        return self.__repr__()
 
     def __repr__(self):
         if self.reason:
@@ -1702,7 +1711,7 @@ If None, the information will be deleted between start and end
                 self.del_residue_link(tail, link_to_tail)
             elif start is not None and end is None:
                 if not add_tail:
-                     continue
+                    continue
                 ref_res = start
                 start.unterminal()
                 tail = start.name2atom(start.type.tail)
@@ -1718,7 +1727,7 @@ If None, the information will be deleted between start and end
                 loop_direction = np.zeros_like(start_position)
             elif start is None and end is not None:
                 if not add_head:
-                     continue
+                    continue
                 tail = None
                 ref_res = end
                 end.unterminal()
@@ -2027,8 +2036,9 @@ def _add(self, other, deepcopy, link):
         res_b = other_molecule.residues[0]
         new_molecule.residues += other_molecule.residues
         new_molecule.residue_links |= other_molecule.residue_links
-        getattr(new_molecule, "_residue_links_map")["atom"].update(getattr(other_molecule, "_residue_links_map")["atom"])
-        getattr(new_molecule, "_residue_links_map")["residue"].update(getattr(other_molecule, "_residue_links_map")["residue"])
+        #pylint: disable=protected-access
+        new_molecule._residue_links_map["atom"].update(other_molecule._residue_links_mapp["atom"])
+        new_molecule._residue_links_map["residue"].update(other_molecule._residue_links_mapp["residue"])
         if link and res_a and res_a.type.tail and res_b.type.head:
             atom1 = res_a.name2atom(res_a.type.tail)
             atom2 = res_b.name2atom(res_b.type.head)

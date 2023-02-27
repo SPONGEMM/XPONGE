@@ -1,7 +1,8 @@
 """
 This **module** contains the functions for ti analysis
 """
-import os, shutil
+import os
+import shutil
 import numpy as np
 import matplotlib.pyplot as plt
 from ..mdrun import run

@@ -2,10 +2,9 @@
 This **module** helps to assign bond orders
 """
 from itertools import product, combinations
-# pylint: disable=cyclic-import
 from . import AssignRule, Xdict, OrderedDict, set_attribute_alternative_names, deepcopy, np
 from ..helper import ReasonedBool, Xprint
- 
+
 bo = AssignRule("bo", pure_string=True)
 
 @bo.add_rule("X")
@@ -46,7 +45,8 @@ def _(i, assign):
 
 @bo.add_rule("Nnn2")
 def _(i, assign):
-    return assign.Atom_Judge(i, "N2") and "N1" in {assign.atoms[key] + str(len(assign.bonds[key])) for key in assign.bonds[i]}
+    return assign.Atom_Judge(i, "N2") and \
+           "N1" in {assign.atoms[key] + str(len(assign.bonds[key])) for key in assign.bonds[i]}
 
 
 @bo.add_rule("Nx2")
@@ -169,7 +169,8 @@ class BondOrderAssignment:
     :param max_stat: the max valence stats to iterate
     :param assign: the father Assignment instance
     :param total_charge: the total charge of the molecule
-    :param extra_criteria: a function as the extra convergence criteria. The function will receive the assignment as input, and give True or False as output.
+    :param extra_criteria: a function as the extra convergence criteria. \
+The function will receive the assignment as input, and give True or False as output.
     """
     atomic_valence = Xdict({
         "X": OrderedDict({1: 0}),
@@ -232,11 +233,14 @@ class BondOrderAssignment:
             self.max_stat = max_stat
             self.assign = assign
             self.original_penalties = original_penalties
-            self.uc = [set(filter(lambda aj: self.assign.bonds[ai][aj] == -1, self.assign.bonds[ai]))
-                         for ai in range(self.assign.atom_numbers)]
+            # pylint: disable=cell-var-from-loop
+            self.uc = [set(filter(lambda aj: self.assign.bonds[ai][aj] == -1,
+                                  self.assign.bonds[ai]))
+                       for ai in range(self.assign.atom_numbers)]
             self.connected = [sum(filter(lambda x: x > 0, self.assign.bonds[ai].values()))
                          for ai in range(self.assign.atom_numbers)]
-            self.valence_best = [next(iter(pi)) - self.connected[i] if self.uc[i] else 0 for i, pi in enumerate(self.original_penalties)]
+            self.valence_best = [next(iter(pi)) - self.connected[i] if self.uc[i] else 0
+                                 for i, pi in enumerate(self.original_penalties)]
             self.valence = deepcopy(self.valence_best)
             self.penalties = Xdict(not_found_method=lambda x: [])
             self._get_penalties(original_penalties)
@@ -356,7 +360,8 @@ class BondOrderAssignment:
         guess_bonds = []
         success = False
         determined = False
-        Xprint(f"The initial undetermined valence and undetermined conected atoms for every atom:\n{valence}\n{uc}\n\n", "DEBUG")
+        Xprint(f"The initial undetermined valence and undetermined \
+conected atoms for every atom:\n{valence}\n{uc}\n\n", "DEBUG")
         while not determined and not success:
             index_sort = np.argsort([len(uci) or float("inf") for uci in uc]).tolist()
             no_basic_rule = True
@@ -380,7 +385,8 @@ class BondOrderAssignment:
                     valence[j] -= valence[i]
                     valence[i] -= valence[i]
                     no_basic_rule = False
-                    Xprint(f"try to assign the order of the bond between {i} {j} to {bonds[j][i]}\n{valence}\n{uc}\n\n", "DEBUG")
+                    Xprint(f"try to assign the order of the bond between \
+{i} {j} to {bonds[j][i]}\n{valence}\n{uc}\n\n", "DEBUG")
             success = True
             for i in range(self.assign.atom_numbers):
                 if valence[i] != 0 or len(uc[i]) != 0:
@@ -410,9 +416,11 @@ class BondOrderAssignment:
                 bonds[j][i] = trial
                 valence[i] -= trial
                 valence[j] -= trial
-                Xprint(f"guessing the order of the bond between {i} {j} is {trial}\n{valence}\n{uc}\n\n", "DEBUG")
+                Xprint(f"guessing the order of the bond between \
+{i} {j} is {trial}\n{valence}\n{uc}\n\n", "DEBUG")
             if not success and not determined and no_basic_rule:
-                index_sort = np.argsort([len(uci) if i not in atom_guessed else -1 for i, uci in enumerate(uc)]).tolist()
+                index_sort = np.argsort([len(uci) if i not in atom_guessed else -1
+                                         for i, uci in enumerate(uc)]).tolist()
                 i = index_sort[-1]
                 if i in atom_guessed or not uc[i]:
                     break
@@ -473,7 +481,6 @@ class BondOrderAssignment:
                     pass
                 if self.current_stat != self.max_stat:
                     Xprint("-"*20 + f"{self.points[self.stat_position - 1]}", "DEBUG")
-            
         if success:
             self.assign.bonds = bonds
         return success

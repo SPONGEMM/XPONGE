@@ -4,7 +4,7 @@ This **module** gives functions and classes to use MDAnalysis to analyze the tra
 import os.path
 
 import numpy as np
-from .. import Residue, ResidueType
+from .. import ResidueType
 from ..helper import Xopen, guess_element_from_mass, set_global_alternative_names, set_attribute_alternative_name
 try:
     import MDAnalysis as mda
@@ -17,8 +17,11 @@ except ModuleNotFoundError as exc:
     raise ModuleNotFoundError(
         "'MDAnalysis' package needed. Maybe you need 'pip install MDAnalysis'") from exc
 
-
+# pylint: disable=abstract-method, arguments-differ
 class SpongeNoneReader(base.ReaderBase):
+    """
+        This **class** is used to give a universe with no coordinate
+    """
     def __init__(self, _, n_atoms, **kwargs):
         super().__init__(_, **kwargs)
         self._n_atoms = n_atoms
@@ -153,9 +156,11 @@ class XpongeResidueReader(base.ReaderBase):
         attrs.append(topologyattrs.Resnames([residue.name]))
         resid = np.zeros(natoms, dtype=np.int32)
         if isinstance(residue, ResidueType):
-            bonds = [[residue.atom2index(ai), residue.atom2index(aj)] for ai, bondi in residue.connectivity.items() for aj in bondi]
+            bonds = [[residue.atom2index(ai), residue.atom2index(aj)]
+                     for ai, bondi in residue.connectivity.items() for aj in bondi]
         else:
-            bonds = [[residue.name2index(residue.type.atom2name(ai)), residue.name2index(residue.type.atom2name(aj))] for ai, bondi in residue.type.connectivity.items() for aj in bondi]
+            bonds = [[residue.name2index(residue.type.atom2name(ai)), residue.name2index(residue.type.atom2name(aj))]
+                     for ai, bondi in residue.type.connectivity.items() for aj in bondi]
         attrs.append(topologyattrs.Bonds(bonds))
         return Topology(natoms, nres, 1, attrs, resid, None)
 
@@ -217,9 +222,12 @@ class XpongeMoleculeReader(base.ReaderBase):
         for i, res in enumerate(molecule.residues):
             resid[count:count + len(res.atoms)] = i
             count += len(res.atoms)
-        bonds = [[molecule.atom2index[self._t2a(residue, ai)], molecule.atom2index[self._t2a(residue, aj)]] for residue in molecule.residues for ai, bondi in residue.type.connectivity.items() for aj in bondi]
-        bonds.extend([[molecule.atom2index[rl.atom1], molecule.atom2index[rl.atom2]] for rl in molecule.residue_links])
-        
+        bonds = [[molecule.atom2index[self._t2a(residue, ai)],
+                  molecule.atom2index[self._t2a(residue, aj)]]
+                  for residue in molecule.residues
+                  for ai, bondi in residue.type.connectivity.items() for aj in bondi]
+        bonds.extend([[molecule.atom2index[rl.atom1], molecule.atom2index[rl.atom2]]
+                     for rl in molecule.residue_links])
         attrs.append(topologyattrs.Bonds(bonds))
         return Topology(natoms, nres, 1, attrs, resid, None)
 

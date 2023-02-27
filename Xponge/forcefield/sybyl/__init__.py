@@ -1,9 +1,11 @@
 """
 This **module** defines the atom types for SYBYL
 """
-from ... import assign
+from ...assign import AssignRule
 
-atom_types = assign.AssignRule("sybyl", pure_string=True)
+__all__ = ["atom_types"]
+
+atom_types = AssignRule("sybyl", pure_string=True)
 
 @atom_types.set_pre_action
 def _(assign):
@@ -115,7 +117,8 @@ def _(i, assign):
     :param assign:
     :return:
     """
-    return (assign.Atom_Judge(i, "N1") and assign.formal_charge[i] != -1) or (assign.Atom_Judge(i, "N2") and sum(assign.bonds[i].values())  >= 4)
+    return (assign.Atom_Judge(i, "N1") and assign.formal_charge[i] != -1) or \
+           (assign.Atom_Judge(i, "N2") and sum(assign.bonds[i].values()) >= 4)
 
 @atom_types.Add_Rule("N.Ccat")
 def _(i, assign):
@@ -153,7 +156,7 @@ def _(i, assign):
     """
     if assign.atoms[i] != "N":
         return False
-    for j, bond in assign.bonds[i].items():
+    for bond in assign.bonds[i].values():
         if bond == 2:
             return True
     return False
@@ -169,7 +172,7 @@ def _(i, assign):
     if assign.atoms[i] != "N":
         return False
     for j in assign.bonds[i]:
-        for k, order in assign.bonds[j].items():
+        for order in assign.bonds[j].values():
             if order > 1:
                 return True
     return False
@@ -266,7 +269,7 @@ def _(i, assign):
     :param assign:
     :return:
     """
-    return assign.Atom_Judge(i, "S1") or (assign.Atom_Judge(i, "S2") 
+    return assign.Atom_Judge(i, "S1") or (assign.Atom_Judge(i, "S2")
                                           and "AR0" in assign.atom_marker[i].keys())
 
 @atom_types.Add_Rule("S.3")
@@ -300,5 +303,9 @@ def _new_rule(element):
         """
         return assign.atoms[i] == element
 
-for i in ["C", "O", "N", "H", "F", "Cl", "Br", "I"]:
-    _new_rule(i)
+def _init():
+    """initialize the module"""
+    for i in ["C", "O", "N", "H", "F", "Cl", "Br", "I"]:
+        _new_rule(i)
+
+_init()

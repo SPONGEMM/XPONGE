@@ -1,13 +1,15 @@
 """
 This **module** implements the terminal commands
 """
-import os, shutil
+import os
+import shutil
 import sys
 import unittest
 import multiprocessing as mpc
 
 from ..helper import source, GlobalSetting, Xopen, Xprint
 from ..mdrun import run
+from .mol2rfe import *
 
 class TestMyPackage(unittest.TestCase):
     """
@@ -472,207 +474,6 @@ def name2name(args):
         f.close()
 
 
-def _mol2rfe_build(args, merged_from, merged_to, matchmap):
-    """
-
-    :param args:
-    :param merged_from:
-    :param merged_to:
-    :return:
-    """
-    source("..")
-    fep = source("..forcefield.special.fep", False)
-
-    if "build" in args.do:
-        Xprint("\nBUILDING TOPOLOGY\n", "INFO")
-
-        findex = next(iter(matchmap.values()))
-        refx = merged_from.residues[args.ri].atoms[findex]
-        refx, refy, refz = refx.x, refx.y, refx.z
-
-        mol_tofit = Molecule.cast(merged_from.residues[args.ri])
-        Save_Soft_Core_LJ()
-        mol_tofit.box_length = [100, 100, 100]
-        optimize(mol_tofit, extra_commands={"lambda_lj": 0, "minimization_dt_factor": 1e-2, "minimization_dt_increasing_rate": 1.2, "minimization_dt_decreasing_rate": 0.5})
-        optimize(mol_tofit, only_bad_coordinate=False, extra_commands={"lambda_lj": 0, "minimization_dt_factor": 1e-2, "minimization_dt_increasing_rate": 1.2, "minimization_dt_decreasing_rate": 0.5})
-        lrefx = mol_tofit.residues[0].atoms[findex]
-        lrefx, lrefy, lrefz = lrefx.x, lrefx.y, lrefx.z
-        for i, atom in enumerate(merged_from.residues[args.ri].atoms):
-            atom.x += refx - lrefx
-            atom.y += refy - lrefy
-            atom.z += refz - lrefz
-        for atom in merged_to.residues[args.ri].atoms:
-            atom.x += refx - lrefx
-            atom.y += refy - lrefy
-            atom.z += refz - lrefz
-
-        for i in range(args.nl + 1):
-            if os.path.exists("%d" % i):
-                shutil.rmtree("%d" % i)
-            os.mkdir("%d" % i)
-            tt = fep.Merge_Force_Field(merged_from, merged_to, i / args.nl)
-            build.save_mol2(tt, "%d/%s.mol2" % (i, args.temp))
-            build.Save_SPONGE_Input(tt, "%d/%s" % (i, args.temp))
-            Xprint(f"{i} built success", "INFO")
-
-def _mol2rfe_output_path(subdir, workdir, tempname):
-    """
-
-    :param subdir:
-    :param workdir:
-    :param tempname:
-    :return:
-    """
-    toadd = " -mdinfo {2}/{0}/{1}.mdinfo -mdout {2}/{0}/{1}.mdout".format(subdir, tempname, workdir)
-    toadd += " -rst {2}/{0}/{1} -crd {2}/{0}/{1}.dat -box {2}/{0}/{1}.box".format(subdir, tempname, workdir)
-    return toadd
-
-
-def _mol2rfe_min(args):
-    """
-
-    :param args:
-    :return:
-    """
-    source("..")
-    from Xponge.analysis import MdoutReader
-    from random import random
-
-    if "min" in args.do:
-        for i in range(args.nl + 1):
-            if os.path.exists("%d/min" % i):
-                shutil.rmtree("%d/min" % i)
-            os.mkdir("%d/min" % i)
-            basic = f"SPONGE -default_in_file_prefix {i}/{args.temp}"
-            lambda_ = i / args.nl
-            basic += f" -mode minimization -lambda_lj {lambda_} -cutoff 8 -write_information_interval 1000"
-            basic += _mol2rfe_output_path("min", i, args.temp)
-            dt_factor = 1e-4 + 1e-2 * random()
-            inc_rate = 1 + random()
-            if not args.mi:
-                cif = " -minimization_dynamic_dt 1"
-                exit_code = run(f"{basic} {cif} -step_limit {args.min_step} -minimization_dt_factor {dt_factor} -minimization_dt_increasing_rate {inc_rate}")
-                out = MdoutReader(f"{i}/min/{args.temp}.mdout").potential[-1]
-                min_time = 0
-                while (out > 0 or exit_code != 0) and min_time < 10:
-                    dt_factor = 1e-4 + 1e-2 * random()
-                    inc_rate = 1 + random() 
-                    Xprint("Minimization will be repeated to reduce the potential to 0", "WARNING")
-                    min_time += 1
-                    exit_code = run(f"{basic} {cif} -step_limit {args.min_step}  -minimization_dt_factor {dt_factor} -minimization_dt_increasing_rate {inc_rate}")
-                    out = MdoutReader(f"{i}/min/{args.temp}.mdout").potential[-1]
-                if min_time >= 10:
-                    Xprint("Minimization has been repeated for 10 times and the potential still can not be reduced to 0", "ERROR")
-                    sys.exit(1)
-            else:
-                command += f" -mdin {args.mi}"
-                exit_code = run(command)
-
-
-def _mol2rfe_pre_equilibrium(args):
-    """
-
-    :param args:
-    :return:
-    """
-    source("..")
-
-    if "pre_equilibrium" in args.do:
-        for i in range(args.nl + 1):
-            if os.path.exists("%d/pre_equilibrium" % i):
-                shutil.rmtree("%d/pre_equilibrium" % i)
-            os.mkdir("%d/pre_equilibrium" % i)
-            command = f"SPONGE -default_in_file_prefix {i}/{args.temp}"
-            lambda_ = i / args.nl
-            command += f" -lambda_lj {lambda_} -cutoff 8"
-            command += _mol2rfe_output_path("pre_equilibrium", i, args.temp)
-            command += f" -coordinate_in_file {i}/min/{args.temp}_coordinate.txt"
-            if not args.pi:
-                command += f" -mode NPT -step_limit {args.pre_equilibrium_step} -dt {args.dt} -constrain_mode SHAKE"
-                command += f" -barostat andersen_barostat -thermostat middle_langevin -middle_langevin_gamma 10 -middle_langevin_velocity_max 20"
-                exit_code = run(command)
-            else:
-                command += f" -mdin {args.pi}"
-                exit_code = run(command)
-            if exit_code != 0:
-                Xprint(f"The pre_equilibrium of lambda {i} exited with code {exit_code}", "ERROR")
-                sys.exit(exit_code)
-
-
-def _mol2rfe_equilibrium(args):
-    """
-
-    :param args:
-    :return:
-    """
-    source("..")
-
-    if "equilibrium" in args.do:
-        for i in range(args.nl + 1):
-            if os.path.exists("%d/equilibrium" % i):
-                os.system("rm -rf %d/equilibrium" % i)
-            os.mkdir("%d/equilibrium" % i)
-            command = f"SPONGE -default_in_file_prefix {i}/{args.temp}"
-            lambda_ = i / args.nl
-            command += f" -lambda_lj {lambda_} -cutoff 8 -molecule_map_output 0"
-            command += _mol2rfe_output_path("equilibrium", i, args.temp)
-            command += f" -coordinate_in_file {i}/pre_equilibrium/{args.temp}_coordinate.txt -velocity_in_file {i}/pre_equilibrium/{args.temp}_velocity.txt"
-            if not args.ei:
-                command += f" -mode NPT -step_limit {args.equilibrium_step} -dt {args.dt} -constrain_mode SHAKE"
-                command += f" -barostat andersen_barostat -thermostat middle_langevin -middle_langevin_gamma 10 -middle_langevin_velocity_max 20"
-                command += f" -write_information_interval 100 -write_restart_file_interval {args.equilibrium_step}"
-                run(command)
-            else:
-                command += f" -mdin {args.pi}"
-                run(command)
-
-
-def _mol2rfe_analysis(args, merged_from, merged_to):
-    """
-
-    :param args:
-    :param merged_from:
-    :param merged_to:
-    :return:
-    """
-    source("..")
-    source("..analysis")
-
-    if "analysis" in args.do:
-        f = Xopen("dh_dlambda.txt", "w")
-        f.close()
-        resname = merged_from.residues[args.ri].name
-        draw_r1_mol = merged_from.deepcopy()
-        draw_r2_mol = merged_to.deepcopy()
-        load_coordinate(f"0/equilibrium/{args.temp}_coordinate.txt", draw_r1_mol)
-        load_coordinate(f"{args.nl}/equilibrium/{args.temp}_coordinate.txt", draw_r2_mol)
-        draw_r1_res = draw_r1_mol.residues[args.ri]
-        draw_r2_res = draw_r2_mol.residues[args.ri]
-        draw_r1_res.name = resname.split("_")[0]
-        draw_r2_res.name = resname.split("_")[1]
-        to_delete = []
-        for atom in draw_r1_res.atoms:
-            if atom.LJtype == "ZERO_LJ_ATOM":
-                to_delete.append(atom)
-        for atom in to_delete:
-            draw_r1_res.atoms.remove(atom)
-        to_delete = []
-        for atom in draw_r2_res.atoms:
-            if atom.LJtype == "ZERO_LJ_ATOM":
-                to_delete.append(atom)
-            if atom.name.endswith("R2"):
-                atom.name = atom.name[:-2]
-        for atom in to_delete:
-            draw_r2_res.atoms.remove(atom)
-        save_pdb(draw_r1_mol, "r1.pdb")
-        save_pdb(draw_r2_mol, "r2.pdb")
-        if args.method == "TI":
-            ti = source(".ti", False)
-            ti.ti_analysis(args, merged_from)
-        elif args.method == "FEP_BAR":
-            raise NotImplementedError
-
-
 def mol2rfe(args):
     """
     This **function** helps with the relative free energy calculation
@@ -683,6 +484,7 @@ def mol2rfe(args):
     source("..")
     source("..forcefield.special.fep")
     source("..forcefield.special.min")
+
 
     if not args.ff:
         source("..forcefield.amber.gaff")
@@ -709,8 +511,9 @@ def mol2rfe(args):
     if not args.ff:
         parmchk2_gaff(args.r2, args.temp + "_TMP2.frcmod")
 
-    for mol2file in args.r0:
+    for extrai, mol2file in enumerate(args.r0):
         load_mol2(mol2file)
+        parmchk2_gaff(mol2file, f"{args.temp}_TMP{3+extrai}.frcmod")
 
     rmol = load_pdb(args.pdb)
 
@@ -731,3 +534,12 @@ def mol2rfe(args):
     _mol2rfe_equilibrium(args)
 
     _mol2rfe_analysis(args, merged_from, merged_to)
+
+def mm_gbsa(args):
+    """
+    This **function** helps with the MM/GBSA calculation
+
+    :param args: arguments from argparse
+    :return: None
+    """
+    raise NotImplementedError

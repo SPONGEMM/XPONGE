@@ -403,8 +403,8 @@ def _pdb_find_missing_residues(mol, sequences, chain, residue_type_map):
                 name_index_to_mol_index[i - pdb_index[0]] = pdb_index_to_mol_index[i]
             offset = 0
             for offset in range(len(sequence) - len(names_with_none) + 1):
-                if all(b in (a, None) or 
-                       (a == "HIS" and b in (None, "HID", "HIE", "HIP")) 
+                if all(b in (a, None) or
+                       (a == "HIS" and b in (None, "HID", "HIE", "HIP"))
                        for a, b in zip(sequence[offset:], names_with_none)):
                     break
             if offset:

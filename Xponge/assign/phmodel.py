@@ -1,14 +1,15 @@
 """
 This **module** helps to assign hydrogens according to pH
 """
-from . import AssignRule, Xdict, set_attribute_alternative_names, np
-from ..helper import Xprint
-
+from . import AssignRule, Xdict, np
+#pylint: disable=unused-argument, missing-function-docstring
 phmodel = AssignRule("phmodel", pure_string=True)
 
 @phmodel.add_rule("B-phenol")
 def _(i, assign):
-    return assign.atoms[i] == "O" and assign.formal_charge[i] == -1 and "AR0" in assign.atom_marker[next(iter(assign.bonds[i]))]
+    return assign.atoms[i] == "O" and \
+           assign.formal_charge[i] == -1 and \
+           "AR0" in assign.atom_marker[next(iter(assign.bonds[i]))]
 
 
 @phmodel.add_rule("A-phenol")

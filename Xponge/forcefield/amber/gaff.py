@@ -1270,7 +1270,7 @@ def _rule_p5(i, assign):
     """
     return assign.Atom_Judge(i, "P4") or assign.Atom_Judge(i, "P5") or assign.Atom_Judge(i, "P6")
 
-
+#pylint: disable=consider-using-with
 def parmchk2_gaff(ifname, ofname, direct_load=True, keep=True):
     """
     This **function** is to do parmchk2 for gaff
