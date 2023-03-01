@@ -430,8 +430,11 @@ molecule_map_output  = 1
         else:
             print_to = ""
         Xprint("    Running")
-        run(all_to_use + f"-dt {dt} {print_to}")
-        load_coordinate(temp_out+'_coordinate.txt', mol)
+        out = run(all_to_use + f"-dt {dt} {print_to}")
+        if out == 0:
+            load_coordinate(temp_out+'_coordinate.txt', mol)
+        else:
+            Xprint("The optimization failed", "ERROR")
         Xprint("Optimization Finished")
 
 

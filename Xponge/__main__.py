@@ -117,8 +117,8 @@ def _mol2rfe(subparsers):
     mol2rfe = subparsers.add_parser("mol2rfe",
                                     help='calculate the relative binding energy of a small molecule using SPONGE')
     mol2rfe.add_argument("-do", metavar="todo", nargs="*", action="append", help="""the things need to do,
- should be one or more of 'build', 'min', 'pre_equilibrium', 'equilibrium', 'analysis'""",
-                         choices=["build", "min", "pre_equilibrium", "equilibrium", "analysis"])
+ should be one or more of 'build', 'min', 'pre_equilibrium', 'equilibrium', 'analysis', 'debug'""",
+                         choices=["build", "min", "pre_equilibrium", "equilibrium", "analysis", "debug"])
 
     mol2rfe.add_argument("-pdb", required=True, help="the initial conformation given by the pdb file")
     mol2rfe.add_argument("-r2", "-residuetype2", required=True,
@@ -180,8 +180,8 @@ def _mm_gbsa(subparsers):
     mm_gbsa = subparsers.add_parser("mmgbsa",
                                     help='calculate the absolute binding energy using SPONGE via MM/GBSA')
     mm_gbsa.add_argument("-do", metavar="todo", nargs="*", action="append", help="""the things need to do,
- should be one or more of 'build', 'min', 'pre_equilibrium', 'equilibrium', 'analysis'""",
-                         choices=["build", "min", "pre_equilibrium", "equilibrium", "analysis"])
+ should be one or more of 'build', 'min', 'pre_equilibrium', 'equilibrium', 'analysis', 'debug'""",
+                         choices=["build", "min", "pre_equilibrium", "equilibrium", "analysis", "debug"])
 
     mm_gbsa.add_argument("-pdb", required=True, help="the initial conformation given by the pdb file")
     mm_gbsa.add_argument("-r1", "-residuetype1", required=True,

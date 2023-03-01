@@ -7,14 +7,18 @@ from random import random
 
 from .. import Molecule, Optimize, load, build
 from ..analysis import MdoutReader
-from ..helper import Xopen, Xprint
+from ..helper import Xopen, Xprint, GlobalSetting
 from ..mdrun import run
 
 
 __all__ = ["_mol2rfe_build", "_mol2rfe_min", "_mol2rfe_pre_equilibrium",
            "_mol2rfe_equilibrium", "_mol2rfe_analysis"]
 
-def _mol2rfe_build(args, merged_from, merged_to, matchmap):
+def _do_nothing(mol_r, mol_a, mol_b, forcetype, rforces, bforces, lambda_, mol_r2mol_a, mol_a2mol_r,
+                mol_r2mol_b, mol_b2mol_r):
+    """do nothing to save time"""
+
+def _mol2rfe_build(args, merged_from, merged_to):
     """
 
     :param args:
@@ -27,30 +31,20 @@ def _mol2rfe_build(args, merged_from, merged_to, matchmap):
     if "build" in args.do:
         Xprint("\nBUILDING TOPOLOGY\n", "INFO")
 
-        findex = next(iter(matchmap.values()))
-        refx = merged_from.residues[args.ri].atoms[findex]
-        refx, refy, refz = refx.x, refx.y, refx.z
-
-        mol_tofit = Molecule.cast(merged_from.residues[args.ri])
         fep.Save_Soft_Core_LJ()
-        mol_tofit.box_length = [100, 100, 100]
-        Optimize(mol_tofit, extra_commands={"lambda_lj": 0, "minimization_dt_factor": 1e-2, "minimization_dt_increasing_rate": 1.2, "minimization_dt_decreasing_rate": 0.5})
-        Optimize(mol_tofit, only_bad_coordinate=False, extra_commands={"lambda_lj": 0, "minimization_dt_factor": 1e-2, "minimization_dt_increasing_rate": 1.2, "minimization_dt_decreasing_rate": 0.5})
-        lrefx = mol_tofit.residues[0].atoms[findex]
-        lrefx, lrefy, lrefz = lrefx.x, lrefx.y, lrefx.z
-        for i, atom in enumerate(merged_from.residues[args.ri].atoms):
-            atom.x += refx - lrefx
-            atom.y += refy - lrefy
-            atom.z += refz - lrefz
-        for atom in merged_to.residues[args.ri].atoms:
-            atom.x += refx - lrefx
-            atom.y += refy - lrefy
-            atom.z += refz - lrefz
-
+        unchanged = ["bond", "angle", "dihedral", "coordinate", "exclude",
+                     "LJ_soft_core", "mass", "residue", "subsys_division"]
         for i in range(args.nl + 1):
             if os.path.exists("%d" % i):
                 shutil.rmtree("%d" % i)
             os.mkdir("%d" % i)
+            if i == 1:
+                for j in unchanged:
+                    getattr(Molecule, "_save_functions").pop(j)
+                    fep.FEP_BONDED_FORCE_MERGE_RULE[j] = {"lambda_name": "_", "merge_function": _do_nothing}
+            if i > 0:
+                for j in unchanged:
+                    shutil.copy(f"0/{args.temp}_{j}.txt", f"{i}/{args.temp}_{j}.txt")
             tt = fep.Merge_Force_Field(merged_from, merged_to, i / args.nl)
             build.save_mol2(tt, "%d/%s.mol2" % (i, args.temp))
             build.Save_SPONGE_Input(tt, "%d/%s" % (i, args.temp))

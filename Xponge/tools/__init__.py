@@ -500,7 +500,8 @@ def mol2rfe(args):
     if not args.do:
         args.do = [["build", "min", "pre_equilibrium", "equilibrium", "analysis"]]
     args.do = args.do[0]
-
+    if "debug" in args.do:
+        Debug()
     from_res_type_ = load_mol2(args.r1).residues[0]
     from_ = assign.Get_Assignment_From_ResidueType(from_res_type_)
     if not args.ff:
@@ -525,7 +526,7 @@ def mol2rfe(args):
         H_Mass_Repartition(merged_from)
         H_Mass_Repartition(merged_to)
 
-    _mol2rfe_build(args, merged_from, merged_to, matchmap)
+    _mol2rfe_build(args, merged_from, merged_to)
 
     _mol2rfe_min(args)
 
