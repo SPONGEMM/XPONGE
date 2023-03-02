@@ -171,12 +171,12 @@ def add_solvent_box(molecule, solvent, distance, tolerance=3):
     if isinstance(distance, (float, int)):
         distance = [distance] * 6
     elif not isinstance(distance, list):
-        raise Exception("parameter distance should be a list, an int or a float")
+        raise TypeError("parameter distance should be a list, an int or a float")
 
     if len(distance) == 3:
         distance = distance + distance
     elif len(distance) != 6:
-        raise Exception("the length of parameter distance should be 3 or 6")
+        raise TypeError("the length of parameter distance should be 3 or 6")
 
     if isinstance(molecule, ResidueType):
         new_molecule = Molecule(molecule.name)

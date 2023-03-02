@@ -6,15 +6,16 @@ import os
 import shutil
 from random import random
 
-from .. import Molecule, Optimize, load, build
+from .. import Molecule, load, build
 from ..analysis import MdoutReader
-from ..helper import Xopen, Xprint, GlobalSetting
+from ..helper import Xopen, Xprint
 from ..mdrun import run
 
 
 __all__ = ["_mol2rfe_build", "_mol2rfe_min", "_mol2rfe_pre_equilibrium",
            "_mol2rfe_equilibrium", "_mol2rfe_analysis"]
 
+# pylint: disable=unused-argument
 def _do_nothing(mol_r, mol_a, mol_b, forcetype, rforces, bforces, lambda_, mol_r2mol_a, mol_a2mol_r,
                 mol_r2mol_b, mol_b2mol_r):
     """do nothing to save time"""

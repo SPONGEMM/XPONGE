@@ -17,7 +17,11 @@ Xponge/analysis/md_analysis.py
 Xponge/assign/__init__.py
 Xponge/assign/bond_order.py
 Xponge/assign/gasteiger.py
+Xponge/assign/phmodel.py
 Xponge/assign/resp.py
+Xponge/assign/tpacm4/ATOMTYPE.dat
+Xponge/assign/tpacm4/CHARGE.dat
+Xponge/assign/tpacm4/__init__.py
 Xponge/forcefield/__init__.py
 Xponge/forcefield/amber/OL15.frcmod
 Xponge/forcefield/amber/RNA.mol2
@@ -118,4 +122,6 @@ Xponge/mdrun/BIN_PATH.dat
 Xponge/mdrun/__init__.py
 Xponge/mdrun/__main__.py
 Xponge/tools/__init__.py
+Xponge/tools/mmgbsa.py
+Xponge/tools/mol2rfe.py
 Xponge/tools/ti.py

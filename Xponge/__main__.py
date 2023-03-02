@@ -130,7 +130,6 @@ def _mol2rfe(subparsers):
     mol2rfe.add_argument("-ri", "-residue_index", type=int, metavar=0, default=0,
                          help="the residue index of the molecule to mutate")
 
-    mol2rfe.add_argument("-cv", "-cvdef", "-cv_in_file", help="Use this CV definition file to track protein CV during ABFE calculation.")
     mol2rfe.add_argument("-fl", "-lambda_in_file", type=str, default=None,
                          help="Specify lambda values in file. \
                             Lambda numbers will be counted in this file. \

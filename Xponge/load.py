@@ -969,7 +969,7 @@ class GromacsTopologyIterator():
         elif words[0] == "#undef":
             self.defined_macros.pop(words[1])
         elif words[0] == "#error":
-            raise Exception(line)
+            raise AssertionError(line)
         line = next(self)
         return line
 

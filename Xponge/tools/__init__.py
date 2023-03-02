@@ -382,7 +382,7 @@ def exgen(args):
                 elif t in (2, 3):
                     exclude_4_atoms(words[1:])
                 else:
-                    raise Exception("virtual atom type wrong: are you sure this is a SPONGE virtual atom file?")
+                    raise TypeError("virtual atom type wrong: are you sure this is a SPONGE virtual atom file?")
 
     for exclude in args.exclude:
         with open(exclude) as f:
@@ -485,23 +485,23 @@ def mol2rfe(args):
     source("..forcefield.special.fep")
     source("..forcefield.special.min")
 
-    if args.fl != None:
+    if args.fl is not None:
         l = list(np.loadtxt(args.fl))
         args.l = sorted(list(set(l)))
-    elif args.l != None:
+    elif args.l is not None:
         args.l = sorted(list(set(args.l)))
 
-    if args.l != None:
-        for i in range(len(args.l)):
-            if args.l[i] > 1 or args.l[i] < 0:
-                Xprint(f"There is a weird lambda == {args.l[i]}", "WARNING")
-            if args.l[-1] != 1:
-                Xprint(f"The largest lambda {args.l[-1]} != 1", "WARNING")
-            if args.l[0] != 0:
-                Xprint(f"The smallest lambda {args.l[0]} != 0", "WARNING")
-            args.nl = len(args.l) - 1
-    else: 
-        args.l = np.arange(0, 1, args.nl + 1)
+    if args.l is not None:
+        for li in args.l:
+            if li > 1 or li < 0:
+                Xprint(f"There is a weird lambda == {li}", "WARNING")
+        if args.l[-1] != 1:
+            Xprint(f"The largest lambda {args.l[-1]} != 1", "WARNING")
+        if args.l[0] != 0:
+            Xprint(f"The smallest lambda {args.l[0]} != 0", "WARNING")
+        args.nl = len(args.l) - 1
+    else:
+        args.l = np.linspace(0.0, 1.0, args.nl + 1)
 
     if not args.ff:
         source("..forcefield.amber.gaff")
@@ -535,9 +535,9 @@ def mol2rfe(args):
 
     rmol = load_pdb(args.pdb)
 
-    merged_from, merged_to, matchmap = Merge_Dual_Topology(rmol, rmol.residues[args.ri],
-                                                 to_res_type_, from_, to_,
-                                                 args.tmcs, f"{args.fmcs}", args.lmcs)
+    merged_from, merged_to, _ = Merge_Dual_Topology(rmol, rmol.residues[args.ri],
+                                                    to_res_type_, from_, to_,
+                                                    args.tmcs, f"{args.fmcs}", args.lmcs)
 
     if args.dohmr:
         H_Mass_Repartition(merged_from)

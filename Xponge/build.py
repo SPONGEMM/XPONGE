@@ -132,7 +132,7 @@ def _find_the_force(frc, frc_all_final, cls):
             frc.get_class_name(), "-".join([atom.type.name for atom in frc_one]))
 
         if finded:
-            for finded_type, finded_atoms in finded.values():
+            for finded_type, finded_atoms in finded.values(): #pylint: disable=unbalanced-dict-unpacking
                 cls.Add_Bonded_Force(frc.entity(finded_atoms, finded_type))
 
 

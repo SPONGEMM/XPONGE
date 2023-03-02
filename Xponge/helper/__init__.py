@@ -1342,7 +1342,7 @@ class ResidueLink:
         """
         if self.atom1.copied[forcopy] and self.atom2.copied[forcopy]:
             return ResidueLink(self.atom1.copied[forcopy], self.atom2.copied[forcopy])
-        raise Exception("Not Right forcopy")
+        raise ValueError("Not Right forcopy")
 
 
 class Molecule():
@@ -2037,8 +2037,8 @@ def _add(self, other, deepcopy, link):
         new_molecule.residues += other_molecule.residues
         new_molecule.residue_links |= other_molecule.residue_links
         #pylint: disable=protected-access
-        new_molecule._residue_links_map["atom"].update(other_molecule._residue_links_mapp["atom"])
-        new_molecule._residue_links_map["residue"].update(other_molecule._residue_links_mapp["residue"])
+        new_molecule._residue_links_map["atom"].update(other_molecule._residue_links_map["atom"])
+        new_molecule._residue_links_map["residue"].update(other_molecule._residue_links_map["residue"])
         if link and res_a and res_a.type.tail and res_b.type.head:
             atom1 = res_a.name2atom(res_a.type.tail)
             atom2 = res_b.name2atom(res_b.type.head)
