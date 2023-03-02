@@ -129,8 +129,21 @@ def _mol2rfe(subparsers):
                          help="small molecules or non-standard residues that are also in the system")
     mol2rfe.add_argument("-ri", "-residue_index", type=int, metavar=0, default=0,
                          help="the residue index of the molecule to mutate")
+
+    mol2rfe.add_argument("-cv", "-cvdef", "-cv_in_file", help="Use this CV definition file to track protein CV during ABFE calculation.")
+    mol2rfe.add_argument("-fl", "-lambda_in_file", type=str, default=None,
+                         help="Specify lambda values in file. \
+                            Lambda numbers will be counted in this file. \
+                            This option overrides the -nl and -l option.")
+    mol2rfe.add_argument("-l", "-lambda", type=float, nargs="+", default=None,
+                         help="Specify lambda values in command line. \
+                            Lambda numbers will be counted in this file. \
+                            This option overrides the -nl option and is overrided by \
+                            the -fl option.")
     mol2rfe.add_argument("-nl", "-lambda_numbers", metavar=20, type=int, default=20,
                          help="the number of lambda groups - 1, default 20 for 0, 0.05, 0.10, 0.15..., 1.0")
+    mol2rfe.add_argument("-cp", "-charge_power", metavar=2, type=int, default=2,
+                         help="The power of charge as a function of the lambda")
 
     mol2rfe.add_argument("-dohmr", "-do_hydrogen_mass_repartition", action="store_true",
                          help="use the hydrogen mass repartition method")

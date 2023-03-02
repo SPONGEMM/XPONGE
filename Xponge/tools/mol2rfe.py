@@ -1,6 +1,7 @@
 """
 This **module** gives the helper functions to do mol2rfe
 """
+import sys
 import os
 import shutil
 from random import random
@@ -45,7 +46,7 @@ def _mol2rfe_build(args, merged_from, merged_to):
             if i > 0:
                 for j in unchanged:
                     shutil.copy(f"0/{args.temp}_{j}.txt", f"{i}/{args.temp}_{j}.txt")
-            tt = fep.Merge_Force_Field(merged_from, merged_to, i / args.nl)
+            tt = fep.Merge_Force_Field(merged_from, merged_to, args.l[i], {"charge": args.l[i] ** args.cp})
             build.save_mol2(tt, "%d/%s.mol2" % (i, args.temp))
             build.Save_SPONGE_Input(tt, "%d/%s" % (i, args.temp))
             Xprint(f"{i} built success")
@@ -75,7 +76,7 @@ def _mol2rfe_min(args):
                 shutil.rmtree("%d/min" % i)
             os.mkdir("%d/min" % i)
             basic = f"SPONGE -default_in_file_prefix {i}/{args.temp}"
-            lambda_ = i / args.nl
+            lambda_ = args.l[i]
             basic += f" -mode minimization -lambda_lj {lambda_} -cutoff 8 -write_information_interval 1000"
             basic += _mol2rfe_output_path("min", i, args.temp)
             dt_factor = 1e-4 + 1e-2 * random()
@@ -102,7 +103,6 @@ the potential still can not be reduced to 0", "ERROR")
                 command += f" -mdin {args.mi}"
                 exit_code = run(command)
 
-
 def _mol2rfe_pre_equilibrium(args):
     """
 
@@ -115,7 +115,7 @@ def _mol2rfe_pre_equilibrium(args):
                 shutil.rmtree("%d/pre_equilibrium" % i)
             os.mkdir("%d/pre_equilibrium" % i)
             command = f"SPONGE -default_in_file_prefix {i}/{args.temp}"
-            lambda_ = i / args.nl
+            lambda_ = args.l[i]
             command += f" -lambda_lj {lambda_} -cutoff 8"
             command += _mol2rfe_output_path("pre_equilibrium", i, args.temp)
             command += f" -coordinate_in_file {i}/min/{args.temp}_coordinate.txt"
@@ -145,7 +145,7 @@ def _mol2rfe_equilibrium(args):
                 os.system("rm -rf %d/equilibrium" % i)
             os.mkdir("%d/equilibrium" % i)
             command = f"SPONGE -default_in_file_prefix {i}/{args.temp}"
-            lambda_ = i / args.nl
+            lambda_ = args.l[i]
             command += f" -lambda_lj {lambda_} -cutoff 8 -molecule_map_output 0"
             command += _mol2rfe_output_path("equilibrium", i, args.temp)
             command += f" -coordinate_in_file {i}/pre_equilibrium/{args.temp}_coordinate.txt"

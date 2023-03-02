@@ -30,9 +30,9 @@ def ti_analysis(args, merged_from):
         command += " -exclude_in_file {0}_exclude.txt -charge_in_file {0}_charge.txt".format(inprefix)
         command += f" -chargeA_in_file 0/{args.temp}_charge.txt"
         command += f" -chargeB_in_file {args.nl}/{args.temp}_charge.txt"
-        lambda_ = i / args.nl
+        lambda_ = args.l[i]
         command += f" -lambda_lj {lambda_}"
-        command += f" -subsys_division_in_file {inprefix}_subsys_division.txt  -charge_pertubated 1"
+        command += f" -subsys_division_in_file {inprefix}_subsys_division.txt  -charge_perturbated {args.cp}"
         inprefix = f"{i}/ti/{args.temp}"
         command += f" -mdinfo {inprefix}.mdinfo -mdout {inprefix}.mdout"
         inprefix = f"{i}/equilibrium/{args.temp}"
@@ -58,11 +58,11 @@ def ti_analysis(args, merged_from):
     dh_int_se = []
     tempall = 0
     temp_se_all = 0
-    space = 0.5 / args.nl
     if os.path.exists("time_check"):
         shutil.rmtree("time_check")
     os.mkdir("time_check")
     for i in range(args.nl):
+        space = (args.l[i+1] - args.l[i]) / 2
         temp = (prefix_sum[i] + prefix_sum[i + 1]) * space
         time = args.dt * 0.1 * (np.arange(frame) + 1)
         plt.plot(time, temp, label="forward")

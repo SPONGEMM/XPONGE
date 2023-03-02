@@ -485,6 +485,23 @@ def mol2rfe(args):
     source("..forcefield.special.fep")
     source("..forcefield.special.min")
 
+    if args.fl != None:
+        l = list(np.loadtxt(args.fl))
+        args.l = sorted(list(set(l)))
+    elif args.l != None:
+        args.l = sorted(list(set(args.l)))
+
+    if args.l != None:
+        for i in range(len(args.l)):
+            if args.l[i] > 1 or args.l[i] < 0:
+                Xprint(f"There is a weird lambda == {args.l[i]}", "WARNING")
+            if args.l[-1] != 1:
+                Xprint(f"The largest lambda {args.l[-1]} != 1", "WARNING")
+            if args.l[0] != 0:
+                Xprint(f"The smallest lambda {args.l[0]} != 0", "WARNING")
+            args.nl = len(args.l) - 1
+    else: 
+        args.l = np.arange(0, 1, args.nl + 1)
 
     if not args.ff:
         source("..forcefield.amber.gaff")
