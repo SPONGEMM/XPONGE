@@ -12,10 +12,11 @@ class WHAM:
         :param temperature: the temperature
         :param weight: the weight of the bias
         :param references: the references of the bias
+        :param period: the period of the CV
         :param step_limit: the maximum step to calculate the free energy
         :param diff_limit: stop iterations when the difference reaches the diff_limit 
     """
-    def __init__(self, window_edges, temperature, weight, references, step_limit=3000, diff_limit=1e-4):
+    def __init__(self, window_edges, temperature, weight, references, period=None, step_limit=3000, diff_limit=1e-4):
         self.diff_limit = diff_limit
         self.step_limit = step_limit
         self.beta = 4184 / 8.314 / temperature
@@ -24,8 +25,9 @@ class WHAM:
         self.window_edges = window_edges
         self.cvs = None
         self.sampling_steps = None
+        self.period = period
 
-    def get_data_from_mdout(mdouts, cv_name):
+    def get_data_from_mdout(self, mdouts, cv_name):
         """
             get the CV information from the mdout files
 
@@ -48,7 +50,10 @@ class WHAM:
 
     def bias(self, weight, x, ref):
         """the function to get the bias"""
-        return weight*(x - ref)**2 
+        dx = x - ref
+        if self.period is not None:
+            dx -= np.floor(dx / self.period + 0.5) * self.period
+        return weight*dx**2 
 
     def main(self):
         windows = (self.window_edges[1:] + self.window_edges[:-1]) / 2
@@ -57,16 +62,14 @@ class WHAM:
         for _ in range(self.step_limit):
             bias = self.bias(self.weight, self.cvs.reshape(1, -1, self.sampling_steps), self.references.reshape(-1, 1, 1))
             numerator = np.exp(-self.beta*bias)
-            my_denominator = np.sum(self.sampling_steps * np.exp(self.beta * f).reshape(-1,1,1) * numerator, axis = 0)
-            arg = numerator/my_denominator
-            arg = np.sum(np.sum(arg, axis = 2), axis=1) # sum across configurations and then sum across windows
-            f = -np.log(arg)/self.beta
+            denominator = np.sum(self.sampling_steps * np.exp(self.beta * f).reshape(-1,1,1) * numerator, axis = 0)
+            f = -np.log(np.sum(numerator/denominator, axis = (1,2)))/self.beta
             f_record = np.vstack([f_record, f.reshape(1,-1)])
             if np.abs(np.max(f_record[-1,:] - f_record[-2,:])) < self.diff_limit:
                 break
 
         prob = np.zeros_like(windows)
-        for i in range(len(prob)): 
+        for i in range(len(prob)):
             count = len(np.where(( self.cvs >= self.window_edges[i] ) & ( self.cvs < self.window_edges[i+1] ))[0])
             if count:
                 bias = self.bias(self.weight, windows[i], self.references)
@@ -84,33 +87,32 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
     import random
     kT = 1.2
-    MCsteps = 10**3
-    force_constant = 200
-    sigma = 0.11 # step size in MCMC
+    MCsteps = 5000
+    weight = 200
+    sigma = 0.11
 
     G = 10
     U = lambda x: G*(x-1)**2*(x+1)**2
     lower_boundary = -1.5
     upper_boundary = 1.5
-    x = np.linspace(lower_boundary,upper_boundary,10**3)
 
-    num_windows = 14
-    window_boundaries = np.linspace(lower_boundary, upper_boundary, num = num_windows+1)
-    X_equilibrium = window_boundaries[:-1] + 0.5*np.mean(np.diff(window_boundaries))
+    num_windows = 20
+    test_boundaries = np.linspace(lower_boundary, upper_boundary, num = num_windows+1)
+    X_reference = test_boundaries[:-1] + 0.5*np.mean(np.diff(test_boundaries))
     X_record = np.zeros([num_windows, MCsteps])
     E_record = np.zeros([num_windows, MCsteps])
-    X_current = X_equilibrium[0]
+    X_current = X_reference[0]
     def MCMC(kT,
             MCsteps,
-            X_equilibrium,
+            X_reference,
             lower_boundary,
             upper_boundary,
-            force_constant,
+            weight,
             U,
             X_current,
             sigma):
         beta = 1/kT
-        U_biased = lambda x: U(x) + force_constant*(x - X_equilibrium)**2
+        U_biased = lambda x: U(x) + weight*(x - X_reference)**2
         E_current = U_biased(X_current)
         X_record = np.zeros(MCsteps)
         E_record = np.zeros(MCsteps)   
@@ -139,21 +141,21 @@ if __name__ == "__main__":
         print(count)
         [ X_record[i,:], E_record[i,:] ] = MCMC(kT,
                                                 MCsteps,
-                                                X_equilibrium[i],
+                                                X_reference[i],
                                                 lower_boundary,
                                                 upper_boundary,
-                                                force_constant,
+                                                weight,
                                                 U,
                                                 X_current,
                                                sigma)  
-        if i < num_windows-1: # Choose a configuration closest to the center of next umbrella       
+        if i < num_windows-1:
             sampled_states_so_far = (np.asanyarray(X_record)).flatten()
-            idx = (np.abs(sampled_states_so_far - X_equilibrium[i+1])).argmin()
+            idx = (np.abs(sampled_states_so_far - X_reference[i+1])).argmin()
             X_current = sampled_states_so_far[idx]      
         else:        
             continue
 
-    w = WHAM(np.linspace(lower_boundary, upper_boundary, 201), 600, 200, X_equilibrium)
+    w = WHAM(np.linspace(lower_boundary, upper_boundary, 101), 600, 200, X_reference)
     w.cvs = X_record
     w.sampling_steps = MCsteps
     x, y, f_record = w.main()
