@@ -298,32 +298,28 @@ def maskgen(args):
     :param args: arguments from argparse
     :return: None
     """
-    s = input("Please Enter Your Selection Mask:\n")
-
-    p = args.p.split(os.path.sep)
-    p = "/".join(p)
-
-    c = ""
-    if args.c:
-        c = args.c.split(os.path.sep)
-        c = "/".join(c)
-        c = "mol addfile " + c
-
-    temp_write = """set f [open "{0}" "w"]
-mol new {1}
-{2}
-atomselect top "{3}"
-puts $f [atomselect0 list]
-close $f
-quit
-""".format(args.o, p, c, s)
-
-    temp = Xopen("maskgen_temp_tcl_file", "w")
-    temp.write(temp_write)
-    temp.close()
-
-    os.system("{0} -dispdev none -e maskgen_temp_tcl_file".format(args.vmd))
-    os.remove("maskgen_temp_tcl_file")
+    import MDAnalysis as mda
+    import Xponge.analysis.md_analysis as xmda
+    if not os.path.exists(args.p):
+        raise FileNotFoundError(f"can not find {args.p}")
+    kwargs = {}
+    if args.pf is not None:
+        kwargs["topology_format"] = args.pf
+    if args.cf is not None:
+        kwargs["format"] = args.cf
+    if args.c is not None:
+        if not os.path.exists(args.c):
+            raise FileNotFoundError(f"can not find {args.c}")
+        u = mda.Universe(args.p, args.c, **kwargs)
+    else:
+        u = mda.Universe(args.p, **kwargs)
+    id2index_map = {atom.id: str(i) for i, atom in enumerate(u.atoms)}
+    atoms = u.select_atoms(args.s)
+    with open(args.o, "w") as f:
+        f.write("\n".join([id2index_map[atom.id] for atom in atoms]))
+    if args.oc is not None:
+        with open(args.oc, "w") as f:
+            f.write("\n".join([f"{atom.position[0]} {atom.position[1]} {atom.position[2]}" for atom in atoms]))
 
 
 def exgen(args):

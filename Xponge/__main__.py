@@ -45,12 +45,16 @@ def _maskgen(subparsers):
     :param subparsers:
     :return:
     """
-    maskgen = subparsers.add_parser("maskgen", help="""use VMD to generate a file to record the atom
- indexes of the corresponding mask""")
+    maskgen = subparsers.add_parser("maskgen", help="""use MDAnalysis to generate a file to record the atom
+ indexes (and coordinates ) of the corresponding mask""")
     maskgen.add_argument("-p", required=True, help="the topology file")
+    maskgen.add_argument("-pf", help="the topology file format")
     maskgen.add_argument("-c", help="the coordinate file")
+    maskgen.add_argument("-cf", help="the coordinate file format")
+    maskgen.add_argument("-b", help="the box file, which is required for the SPONGE trajectory file")
     maskgen.add_argument("-o", required=True, help="the output file")
-    maskgen.add_argument("--vmd", metavar="vmd", default="vmd", help="the command to start vmd")
+    maskgen.add_argument("-s", required=True, help="the select string")
+    maskgen.add_argument("-oc", help="the output coordinate file")
     maskgen.set_defaults(func=tools.maskgen)
 
 
