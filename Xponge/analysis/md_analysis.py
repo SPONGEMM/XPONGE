@@ -251,6 +251,8 @@ representing the 3 box lengths and 3 box angles.
             self.boxname = box
             self.box = None
             self._get_box_offset()
+        elif box is None:
+            raise TypeError(f"box should be provided for the sponge trajectory file {dat_file_name}")
         else:
             self.boxname = None
             self.box = box
@@ -288,6 +290,7 @@ representing the 3 box lengths and 3 box angles.
             def __init__(self, dat_file_name, n_atoms, **kwargs_):
                 kwargs_.update(kwargs)
                 super().__init__(dat_file_name, n_atoms, **kwargs_)
+        mda._READERS[""]
         return SpongeTrajectoryReaderWithArguments
 
     def close(self):
@@ -597,5 +600,7 @@ class SpongeCoordinateWriter():
             towrite += "999 999 999 90 90 90\n"
         self.file.write(towrite)
 
+mda._READERS["SPONGE_TRAJ"] = SpongeTrajectoryReader
+mda._READER_HINTS["SPONGE_TRAJ"] = lambda x: x.endswith(".dat")
 
 set_global_alternative_names()
