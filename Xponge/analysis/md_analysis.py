@@ -17,7 +17,7 @@ except ModuleNotFoundError as exc:
     raise ModuleNotFoundError(
         "'MDAnalysis' package needed. Maybe you need 'pip install MDAnalysis'") from exc
 
-# pylint: disable=abstract-method, arguments-differ
+# pylint: disable=abstract-method, arguments-differ, protected-access
 class SpongeNoneReader(base.ReaderBase):
     """
         This **class** is used to give a universe with no coordinate
@@ -290,7 +290,6 @@ representing the 3 box lengths and 3 box angles.
             def __init__(self, dat_file_name, n_atoms, **kwargs_):
                 kwargs_.update(kwargs)
                 super().__init__(dat_file_name, n_atoms, **kwargs_)
-        mda._READERS[""]
         return SpongeTrajectoryReaderWithArguments
 
     def close(self):

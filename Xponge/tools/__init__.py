@@ -256,7 +256,7 @@ def converter(args):
     :param args: arguments from argparse
     :return: None
     """
-    from ..analysis import md_analysis as xmda
+    from ..analysis import md_analysis as xmda #pylint:disable=unused-import
     import MDAnalysis as mda
 
     if args.c:
@@ -299,7 +299,7 @@ def maskgen(args):
     :return: None
     """
     import MDAnalysis as mda
-    import Xponge.analysis.md_analysis as xmda
+    import Xponge.analysis.md_analysis as xmda #pylint: disable=unused-import
     if not os.path.exists(args.p):
         raise FileNotFoundError(f"can not find {args.p}")
     kwargs = {}
