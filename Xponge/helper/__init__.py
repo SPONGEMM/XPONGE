@@ -136,7 +136,6 @@ class _GlobalSetting():
     Do not initialize an instance yourself.
     """
     def __init__(self):
-        set_attribute_alternative_names(self)
         # 是否将分子移到中心
         self.nocenter = False
         """move the molecule to the center of the box when building"""
@@ -260,6 +259,7 @@ class _GlobalSetting():
         for typename in types:
             self.BondedForces.append(self.BondedForcesMap[typename])
 
+set_classmethod_alternative_names(_GlobalSetting)
 
 globals()["GlobalSetting"] = _GlobalSetting()
 
@@ -299,7 +299,7 @@ class Type(ABC):
         return hash(repr(self))
 
     def __getattribute__(self, attr):
-        if attr != "contents" and attr in self.contents.keys():
+        if attr != "contents" and hasattr(self, "contents") and attr in self.contents.keys():
             return self.contents[attr]
         return super().__getattribute__(attr)
 
@@ -567,11 +567,6 @@ class AtomType(Type):
     _types_different_name = Xdict(not_found_message="Atom Type {} not found. Did you import the proper force field?")
 
 
-set_classmethod_alternative_names(AtomType)
-
-AtomType.New_From_String("name\nUNKNOWN")
-
-
 class ResidueType(Type):
     """
     This **class** is a subclass of Type, for residue types
@@ -612,10 +607,8 @@ class ResidueType(Type):
         """a dict mapping the atom to \
  another dict which mapping the connecting type to the name of the connected atom"""
 
-        set_attribute_alternative_names(self)
-
     def __getattribute__(self, attr):
-        if attr not in ("_name2atom", "contents") and attr in self._name2atom.keys():
+        if attr not in ("_name2atom", "contents") and hasattr(self, "_name2atom") and attr in self._name2atom.keys():
             return self._name2atom[attr]
         if getattr(AtomType, "_parameters").get(attr, None) == float:
             return np.sum([getattr(atom, attr) for atom in self.atoms])
@@ -867,7 +860,6 @@ None to use the charge sum of the unomitted atoms
 
         return new_restype
 
-
 class Entity(ABC):
     """
     This **class** is the abstract class of the entities (atoms, bonded forces, residues and so on).
@@ -896,7 +888,7 @@ class Entity(ABC):
         return hash(repr(self))
 
     def __getattribute__(self, attr):
-        if attr != "contents" and attr in self.contents.keys():
+        if attr != "contents" and hasattr(self, "contents") and attr in self.contents.keys():
             return self.contents[attr]
         return super().__getattribute__(attr)
 
@@ -964,7 +956,6 @@ class Atom(Entity):
         # 复制信息
         self.copied = Xdict()
         """a dict to find who is a copy of the atom"""
-        set_attribute_alternative_names(self)
 
     @property
     def extra_excluded_atoms(self):
@@ -1021,9 +1012,6 @@ class Atom(Entity):
             self.Extra_Exclude_Atom(atom)
 
 
-set_classmethod_alternative_names(Atom)
-
-
 class Residue(Entity):
     """
     This **class** is a subclass of Entity, for residues
@@ -1061,10 +1049,8 @@ class Residue(Entity):
                 for aton in atom.extra_excluded_atoms:
                     atom.copied[forcopy].Extra_Exclude_Atom(aton.copied[forcopy])
 
-        set_attribute_alternative_names(self)
-
     def __getattribute__(self, attr):
-        if attr not in ("_name2atom", "contents") and attr in self._name2atom.keys():
+        if attr not in ("_name2atom", "contents") and hasattr(self, "_name2atom") and attr in self._name2atom.keys():
             return self._name2atom[attr]
         if getattr(AtomType, "_parameters").get(attr, None) == float:
             return np.sum([getattr(atom, attr) for atom in self.atoms])
@@ -1270,9 +1256,6 @@ class Residue(Entity):
         return new_residue
 
 
-set_classmethod_alternative_names(Residue)
-
-
 class ResidueLink:
     """
     This **class** is a class for the link between residues
@@ -1292,7 +1275,6 @@ class ResidueLink:
         """the bonded forces after building"""
         self.tohash = ResidueLink.get_hash(atom1, atom2, "atom")
         self.residue_tohash = ResidueLink.get_hash(atom1.residue, atom2.residue, "residue")
-        set_attribute_alternative_names(self)
 
     def __repr__(self):
         return "Entity of ResidueLink: " + repr(self.atom1) + "-" + repr(self.atom2)
@@ -1394,8 +1376,6 @@ class Molecule():
             for i in name.atoms:
                 new_residue.Add_Atom(i)
             self.Add_Residue(new_residue)
-
-        set_attribute_alternative_names(self)
 
     def __repr__(self):
         return "Entity of Molecule: " + self.name
@@ -2009,8 +1989,6 @@ def _link_residue_process_coordinate(molecule, atom1, atom2):
         atom.z = crd[i][2]
 
 
-set_classmethod_alternative_names(Molecule)
-set_classmethod_alternative_names(ResidueLink)
 Entity.register(ResidueLink)
 Entity.register(Molecule)
 AbstractMolecule.register(Residue)
@@ -2157,6 +2135,7 @@ def generate_new_bonded_force_type(type_name, atoms, properties, is_compulsory, 
         def same_force(cls, atom_list):
             """
             This **function** receives a list of atoms and output all the same force permutations for the list
+
             :param atom_list:
             :return:
             """
@@ -2169,7 +2148,9 @@ def generate_new_bonded_force_type(type_name, atoms, properties, is_compulsory, 
 
         @classmethod
         def set_same_force_function(cls, func):
-            cls.Same_Force = classmethod(func)
+            update_wrapper(func, cls.same_force)
+            cls.same_force = classmethod(func)
+            set_attribute_alternative_name(cls, cls.same_force)
 
         @classmethod
         def type_name_getter(cls, func):
@@ -2240,3 +2221,4 @@ def generate_new_pairwise_force_type(type_name, properties):
     return PairwiseForceType
 
 set_global_alternative_names(True)
+AtomType.New_From_String("name\nUNKNOWN")

@@ -2,7 +2,7 @@
 This **module** is used to provide help functions and classes about namespace
 """
 import sys
-from inspect import currentframe
+from inspect import currentframe, getattr_static
 from importlib import import_module, reload
 from types import MethodType, FunctionType
 from functools import partial
@@ -78,7 +78,7 @@ def remove_real_global_variable(name):
     sys.modules.get("__main__").__dict__.pop(name)
 
 
-def set_alternative_name(obj, func, set_method):
+def set_alternative_name(obj, func, set_method, name=None):
     """
     This **function** is used to set the alternative names for a function to an object.
     This is the basic function, and some other partial functions with specific ``set_method`` is more useful.
@@ -88,7 +88,8 @@ def set_alternative_name(obj, func, set_method):
     :param set_method: the method to set
     :return: None
     """
-    name = func.__name__
+    if name is None:
+        name = func.__name__
     set_method(obj, name, func)
     new_name = "_".join([i.capitalize() for i in name.split("_")])
     second_new_name = "".join([i.capitalize() for i in name.split("_")])
@@ -117,15 +118,22 @@ def set_classmethod_alternative_names(cls):
     usage example::
 
         class A:
-            #@staticmethod
+            @staticmethod
+            def static_method():
+                pass
+
+            def instance_method(self):
+                pass
+
             @classmethod
-            def hello_world(cls):
+            def class_method(cls):
                 print("hello")
+
         set_classmethod_alternative_names(A)
-        A.hello_world()
-        A.helloWorld()
-        A.Hello_World()
-        A.HelloWorld()
+
+        A.Static_Method()
+        A.instanceMethod()
+        A.ClassMethod()
 
     :param cls: the class to set alternative names
     :return: None
@@ -137,13 +145,16 @@ def set_classmethod_alternative_names(cls):
         old_dict.update(sometype.__dict__)
         for i in old_dict:
             self_func = getattr(cls, i, None)
-            if self_func and isinstance(self_func, (MethodType, FunctionType)) and not self_func.__name__.startswith(
-                    "_"):
-                set_attribute_alternative_name(cls, self_func)
+            if self_func and isinstance(self_func, (MethodType, FunctionType, classmethod, staticmethod)) \
+                and not self_func.__name__.startswith("_"):
+                set_attribute_alternative_name(cls, getattr_static(cls, i), name=self_func.__name__)
 
 
 def set_attribute_alternative_names(instance):
     """
+    .. deprecated:: 1.3.1
+        this function is not efficient. Use set_classmethod_alternative_names instead
+
     This **function** is used to set the attribute/method alternative names for an instance
     usage example::
 
@@ -204,19 +215,26 @@ def set_global_alternative_names(real_global=False):
     dic = currentframe().f_back.f_globals
     new_dict = {}
     for key, value in dic.items():
-        if not isinstance(value, (FunctionType, type)) or value.__name__.startswith("_") or not key.islower():
+        if not isinstance(value, (FunctionType, type)) or value.__name__.startswith("_"):
             continue
 
         if real_global:
             if isinstance(value, FunctionType):
+                if not key.islower():
+                    continue
                 def _global_set_method(obj, name, func):
                     obj[name] = func
                     set_real_global_variable(name, func)
 
                 set_alternative_name(new_dict, value, _global_set_method)
             else:
+                set_classmethod_alternative_names(value)
                 set_real_global_variable(value.__name__, value)
         else:
+            if isinstance(value, type):
+                set_classmethod_alternative_names(value)
+            elif not key.islower():
+                continue
             set_dict_value_alternative_name(new_dict, value)
     dic.update(new_dict)
 

@@ -14,6 +14,7 @@ Xponge.egg-info/requires.txt
 Xponge.egg-info/top_level.txt
 Xponge/analysis/__init__.py
 Xponge/analysis/md_analysis.py
+Xponge/analysis/wham.py
 Xponge/assign/__init__.py
 Xponge/assign/bond_order.py
 Xponge/assign/gasteiger.py

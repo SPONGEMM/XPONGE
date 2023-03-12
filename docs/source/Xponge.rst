@@ -1,11 +1,6 @@
 Xponge package
 ==============
 
-.. automodule:: Xponge
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 Subpackages
 -----------
 
@@ -42,6 +37,14 @@ Xponge.process module
 ---------------------
 
 .. automodule:: Xponge.process
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module contents
+---------------
+
+.. automodule:: Xponge
    :members:
    :undoc-members:
    :show-inheritance:

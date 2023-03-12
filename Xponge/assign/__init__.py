@@ -8,7 +8,7 @@ from collections import OrderedDict
 from collections.abc import Iterable
 from itertools import groupby
 import numpy as np
-from ..helper import AtomType, ResidueType, Xopen, Xdict, set_real_global_variable, set_attribute_alternative_names, \
+from ..helper import AtomType, ResidueType, Xopen, Xdict, set_real_global_variable, \
     set_global_alternative_names, Guess_Element_From_Mass, Xprint
 
 
@@ -33,7 +33,6 @@ class AssignRule:
         self.pure_string = pure_string
         self.pre_action = pre_action
         self.post_action = post_action
-        set_attribute_alternative_names(self)
 
     def add_rule(self, atomtype, priority=0):
         """
@@ -63,7 +62,6 @@ and giving True or False as a result)
 
     def set_post_action(self, function):
         self.post_action = function
-
 
 class _RING():
     """
@@ -374,7 +372,6 @@ class Assign():
         self.atom_marker = Xdict()
         self.bonds = Xdict()
         self.bond_marker = Xdict()
-        set_attribute_alternative_names(self)
 
     @property
     def built(self):

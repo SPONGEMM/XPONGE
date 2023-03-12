@@ -129,3 +129,5 @@ class PHModelAssignment:
             self.assign.delete_atom(i)
         self.assign.determine_bond_order()
         return int(round(sum(self.assign.formal_charge)))
+
+set_global_alternative_names()

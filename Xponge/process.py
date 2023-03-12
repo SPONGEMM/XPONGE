@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 from .helper import get_rotate_matrix, ResidueType, Molecule, Residue, set_global_alternative_names, Xdict, \
-    GlobalSetting, set_attribute_alternative_names, Xopen, Xprint
+    GlobalSetting, Xopen, Xprint
 from .build import save_sponge_input
 from .load import load_coordinate
 from .forcefield.special.min import save_min_bonded_parameters, do_not_save_min_bonded_parameters
@@ -446,7 +446,6 @@ class Region(ABC):
     def __init__(self):
         self.side = "in"
         self._side = True
-        set_attribute_alternative_names(self)
 
     @abstractmethod
     def __contains__(self, item):
@@ -466,7 +465,6 @@ class Region(ABC):
             self._side = False
         else:
             raise ValueError("side should be 'in' or 'out'")
-
 
 
 class IntersectRegion:
@@ -696,8 +694,6 @@ class Lattice:
         if style.startswith("template:"):
             style_name = style.split(":")[1].strip()
             Lattice.styles[style_name] = self
-
-        set_attribute_alternative_names(self)
 
     @staticmethod
     def _judge_region(x1, y1, z1, x2, y2, z2, region, mol, basis_mol, res_len):

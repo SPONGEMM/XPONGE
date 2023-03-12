@@ -2,7 +2,7 @@
 This **module** helps to assign bond orders
 """
 from itertools import product, combinations
-from . import AssignRule, Xdict, OrderedDict, set_attribute_alternative_names, deepcopy, np
+from . import AssignRule, Xdict, OrderedDict, deepcopy, np, set_global_alternative_names
 from ..helper import ReasonedBool, Xprint
 
 bo = AssignRule("bo", pure_string=True)
@@ -249,7 +249,6 @@ The function will receive the assignment as input, and give True or False as out
             self.points = []
             self.cached = {}
             self.total_charge = total_charge
-        set_attribute_alternative_names(self)
 
     def _get_penalties(self, original_penalties):
         """
@@ -488,3 +487,5 @@ conected atoms for every atom:\n{valence}\n{uc}\n\n", "DEBUG")
 
 for key, value in BondOrderAssignment.atomic_valence.items():
     BondOrderAssignment.atomic_valence[key] = OrderedDict(sorted(value.items(), key=lambda t: t[1]))
+
+set_global_alternative_names()

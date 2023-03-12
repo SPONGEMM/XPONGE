@@ -1,11 +1,6 @@
 Xponge.forcefield.amber package
 ===============================
 
-.. automodule:: Xponge.forcefield.amber
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 Subpackages
 -----------
 
@@ -89,6 +84,14 @@ Xponge.forcefield.amber.opc module
    :undoc-members:
    :show-inheritance:
 
+Xponge.forcefield.amber.rsff2c module
+-------------------------------------
+
+.. automodule:: Xponge.forcefield.amber.rsff2c
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Xponge.forcefield.amber.spce module
 -----------------------------------
 
@@ -105,10 +108,26 @@ Xponge.forcefield.amber.tip3p module
    :undoc-members:
    :show-inheritance:
 
+Xponge.forcefield.amber.tip4p module
+------------------------------------
+
+.. automodule:: Xponge.forcefield.amber.tip4p
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Xponge.forcefield.amber.tip4pew module
 --------------------------------------
 
 .. automodule:: Xponge.forcefield.amber.tip4pew
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module contents
+---------------
+
+.. automodule:: Xponge.forcefield.amber
    :members:
    :undoc-members:
    :show-inheritance:

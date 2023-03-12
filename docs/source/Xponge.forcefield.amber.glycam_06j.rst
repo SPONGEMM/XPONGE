@@ -1,11 +1,6 @@
 Xponge.forcefield.amber.glycam\_06j package
 ===========================================
 
-.. automodule:: Xponge.forcefield.amber.glycam_06j
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 Submodules
 ----------
 
@@ -45,6 +40,14 @@ Xponge.forcefield.amber.glycam\_06j.l\_pyranose module
 ------------------------------------------------------
 
 .. automodule:: Xponge.forcefield.amber.glycam_06j.l_pyranose
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module contents
+---------------
+
+.. automodule:: Xponge.forcefield.amber.glycam_06j
    :members:
    :undoc-members:
    :show-inheritance:

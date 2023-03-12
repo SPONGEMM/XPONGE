@@ -70,16 +70,21 @@ Here are the list all the tests you can do:
 maskgen
 ###############
 
-maskgen is used to generate the atom index list file according to VMD mask::
+maskgen is used to generate the atom index list file according to MDAnalysis mask::
 
-    usage: Xponge maskgen [-h] -p P [-c C] -o O [--vmd vmd]
+    usage: Xponge maskgen [-h] -p P [-pf PF] [-c C] [-cf CF] [-b B] -o O -s S
+                          [-oc OC]
 
     optional arguments:
       -h, --help  show this help message and exit
       -p P        the topology file
+      -pf PF      the topology file format
       -c C        the coordinate file
+      -cf CF      the coordinate file format
+      -b B        the box file, which is required for the SPONGE trajectory file
       -o O        the output file
-      --vmd vmd   the command to start vmd
+      -s S        the select string
+      -oc OC      the output coordinate file
 
 exgen
 ###############
@@ -173,7 +178,7 @@ converter is used to convert the format of the coordinate file::
       -p TOP      the name of the topology file
       -c CRD      the name of the coordinate file
       -o OUT      the name of the output file
-      -cf GUESS   the format of the topology file, can be "guess", "sponge_crd" or
+      -cf GUESS   the format of the coordinate file, can be "guess", "sponge_crd" or
                   "sponge_traj"
       -of GUESS   the format of the output file, can be "guess", "sponge_crd" or
                   "sponge_traj"
@@ -193,6 +198,15 @@ The meaning of the choices of format:
       - the SPONGE coordinate file
     * - sponge_traj
       - the SPONGE trajectory file
+
+.. note::
+    if you set ``-cf`` to ``sponge_traj``, you need to put the box file in the same directory with the same prefix. For example::
+
+        traj1.dat
+        traj1.box
+        some_directory
+        |  traj2.dat
+        |  traj2.box
 
 mol2rfe
 ####################
@@ -297,9 +311,4 @@ There are 4 subtools now, and here is a list of the subtools:
     * - SPONGE_FEP
       - the MD calculation for free energy perturbation
 
-.. toctree::
-    :maxdepth: 3
-    :caption: input arguments
-
-    sponge_api
-    
+The commands can be seen in the `SPONGE documents <https://spongemm.readthedocs.io/zh_CN/latest/%E8%BE%93%E5%85%A5%E5%91%BD%E4%BB%A4/%E8%BE%93%E5%85%A5%E5%91%BD%E4%BB%A4.html>`_ (in Chinese)

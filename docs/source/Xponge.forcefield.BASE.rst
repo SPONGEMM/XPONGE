@@ -1,11 +1,6 @@
 Xponge.forcefield.base package
 ==============================
 
-.. automodule:: Xponge.forcefield.base
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 Submodules
 ----------
 
@@ -13,14 +8,6 @@ Xponge.forcefield.base.angle\_base module
 -----------------------------------------
 
 .. automodule:: Xponge.forcefield.base.angle_base
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-Xponge.forcefield.base.atom\_cmap\_base module
-----------------------------------------------
-
-.. automodule:: Xponge.forcefield.base.atom_cmap_base
    :members:
    :undoc-members:
    :show-inheritance:
@@ -37,6 +24,14 @@ Xponge.forcefield.base.charge\_base module
 ------------------------------------------
 
 .. automodule:: Xponge.forcefield.base.charge_base
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Xponge.forcefield.base.cmap\_base module
+----------------------------------------
+
+.. automodule:: Xponge.forcefield.base.cmap_base
    :members:
    :undoc-members:
    :show-inheritance:
@@ -97,14 +92,6 @@ Xponge.forcefield.base.nb14\_extra\_base module
    :undoc-members:
    :show-inheritance:
 
-Xponge.forcefield.base.residue\_cmap\_base module
--------------------------------------------------
-
-.. automodule:: Xponge.forcefield.base.residue_cmap_base
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 Xponge.forcefield.base.soft\_bond\_base module
 ----------------------------------------------
 
@@ -125,6 +112,14 @@ Xponge.forcefield.base.virtual\_atom\_base module
 -------------------------------------------------
 
 .. automodule:: Xponge.forcefield.base.virtual_atom_base
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module contents
+---------------
+
+.. automodule:: Xponge.forcefield.base
    :members:
    :undoc-members:
    :show-inheritance:
