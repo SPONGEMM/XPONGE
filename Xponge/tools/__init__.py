@@ -167,6 +167,26 @@ class TestMyPackage(unittest.TestCase):
         mol = t5.create(box, region_7, mol)
         Save_PDB(mol, f"{args.o}.pdb")
 
+    def test_sasa(self):
+        """
+            This **function** does the test for the calculation of the sasa
+        """
+        source("..")
+        source("..forcefield.amber.ff14sb")
+        source("__main__")
+        args = self.args
+        t = ACE + ALA + NME
+        save_pdb(t, f"{args.o}.pdb")
+        save_sponge_input(t, f"{args.o}")
+        sasa = source("..analysis.sasa", False)
+        u = sasa.mda.Universe(f"{args.o}_mass.txt", f"{args.o}_coordinate.txt")
+        #u = sasa.mda.Universe(f"{args.o}.pdb")
+        s = sasa.SASA(u, n_points=1000)
+        s.main()
+        s.write_surface_xyz(f"{args.o}.xyz")
+        Xprint((s.get_sasa_result("resid 1"), s.get_sasa_result()), "DEBUG")
+
+
     def test_fep(self):
         """
         This **function** does the assignment test for the FEP functions

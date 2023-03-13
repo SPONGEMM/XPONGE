@@ -160,20 +160,11 @@ def _build_residue(cls):
     if not cls.type.built:
         _build_residue_type(cls.type)
 
-    res_type_atom_map = Xdict(not_found_message="{} in the ResidueType is not in the Residue. \
-You need to add the missing atoms before building.")
-    res_type_atom_map_inverse = Xdict()
-    clsatoms = {atom: None for atom in cls.atoms}
-    for atom0 in cls.type.atoms:
-        for atom in clsatoms.keys():
-            if atom0.name == atom.name:
-                res_type_atom_map[atom0] = atom
-                res_type_atom_map_inverse[atom] = atom0
-                clsatoms.pop(atom)
-                break
+    res_type_atom_map = Xdict({atom : cls.name2atom(atom.name) for atom in cls.type.atoms},
+        not_found_message="{} in the ResidueType is not in the Residue. \
+        You need to add the missing atoms before building.")
 
-    for atom in cls.atoms:
-        atom0 = res_type_atom_map_inverse[atom]
+    for atom0, atom in res_type_atom_map.items():
         for key in atom0.linked_atoms.keys():
             for atomi in atom0.linked_atoms[key]:
                 atom.Link_Atom(key, res_type_atom_map[atomi])

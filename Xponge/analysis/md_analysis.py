@@ -66,6 +66,7 @@ class SpongeInputReader(TopologyReaderBase):
         """
         attrs = [topologyattrs.Segids(np.array(['SYSTEM'], dtype=object))]
         nres = 1
+        self.filename = self.filename.replace("_mass.txt", "")
         if os.path.exists(self.filename + "_mass.txt"):
             with util.openany(self.filename + "_mass.txt") as fm:
                 natoms = int(fm.readline())
@@ -601,5 +602,11 @@ class SpongeCoordinateWriter():
 
 mda._READERS["SPONGE_TRAJ"] = SpongeTrajectoryReader
 mda._READER_HINTS["SPONGE_TRAJ"] = lambda x: x.endswith(".dat")
+
+mda._PARSERS["SPONGE_MASS"] = SpongeInputReader
+mda._PARSER_HINTS["SPONGE_MASS"] = lambda x: x.endswith("_mass.txt")
+
+mda._READERS["SPONGE_CRD"] = SpongeCoordinateReader
+mda._READER_HINTS["SPONGE_CRD"] = lambda x: x.endswith("_coordinate.txt")
 
 set_global_alternative_names()

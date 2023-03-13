@@ -4,7 +4,6 @@ This **module** gives the helper functions to do mol2rfe
 import sys
 import os
 import shutil
-from random import random
 
 from .. import Molecule, load, build
 from ..analysis import MdoutReader

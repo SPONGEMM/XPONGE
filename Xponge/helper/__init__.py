@@ -921,6 +921,10 @@ class Entity(ABC):
         unit_transfer(self)
 
 
+def not_found_method(key):
+    return {}
+
+
 class Atom(Entity):
     """
     This **class** is a subclass of Entity, for atoms
@@ -949,7 +953,7 @@ class Atom(Entity):
 
         # 成键信息
         self.linked_atoms = Xdict({i + 1: set() for i in range(1, GlobalSetting.farthest_bonded_force)},
-                                  not_found_method=lambda key:set())
+                                  not_found_method=not_found_method)
         """a dict mapping the type and the atoms linked"""
         self.linked_atoms["extra_excluded_atoms"] = set()
 
