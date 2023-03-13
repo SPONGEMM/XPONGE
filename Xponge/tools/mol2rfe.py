@@ -80,8 +80,10 @@ def _mol2rfe_min(args):
             lambda_ = args.l[i]
             basic += f" -mode minimization -lambda_lj {lambda_} -cutoff 8 -write_information_interval 1000"
             basic += _mol2rfe_output_path("min", i, args.temp)
-            dt_factor = 1e-4 + 1e-2 * random()
-            inc_rate = 1 + random()
+            if i != 0:
+                basic += f" -coordinate_in_file {i-1}/{args.temp}_coordinate.txt"
+            dt_factor = 1e-2
+            inc_rate = 1.5
             if not args.mi:
                 cif = " -minimization_dynamic_dt 1"
                 exit_code = run(f"{basic} {cif} -step_limit {args.min_step} \
@@ -89,8 +91,12 @@ def _mol2rfe_min(args):
                 out = MdoutReader(f"{i}/min/{args.temp}.mdout").potential[-1]
                 min_time = 0
                 while (out > 0 or exit_code != 0) and min_time < 10:
-                    dt_factor = 1e-4 + 1e-2 * random()
-                    inc_rate = 1 + random()
+                    if exit_code != 0:
+                        dt_factor /= 3
+                        inc_rate -= 0.049
+                    else:
+                        dt_factor *= 2
+                        inc_rate += 0.04
                     Xprint("Minimization will be repeated to reduce the potential to 0", "WARNING")
                     min_time += 1
                     exit_code = run(f"{basic} {cif} -step_limit {args.min_step} \
