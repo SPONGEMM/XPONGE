@@ -1,6 +1,11 @@
 Xponge.helper package
 =====================
 
+.. automodule:: Xponge.helper
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Submodules
 ----------
 
@@ -24,14 +29,6 @@ Xponge.helper.rdkit module
 --------------------------
 
 .. automodule:: Xponge.helper.rdkit
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-Module contents
----------------
-
-.. automodule:: Xponge.helper
    :members:
    :undoc-members:
    :show-inheritance:

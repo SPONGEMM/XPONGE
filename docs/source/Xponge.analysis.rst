@@ -1,6 +1,11 @@
 Xponge.analysis package
 =======================
 
+.. automodule:: Xponge.analysis
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Submodules
 ----------
 
@@ -12,18 +17,18 @@ Xponge.analysis.md\_analysis module
    :undoc-members:
    :show-inheritance:
 
-Xponge.analysis.wham module
+Xponge.analysis.sasa module
 ---------------------------
 
-.. automodule:: Xponge.analysis.wham
+.. automodule:: Xponge.analysis.sasa
    :members:
    :undoc-members:
    :show-inheritance:
 
-Module contents
----------------
+Xponge.analysis.wham module
+---------------------------
 
-.. automodule:: Xponge.analysis
+.. automodule:: Xponge.analysis.wham
    :members:
    :undoc-members:
    :show-inheritance:

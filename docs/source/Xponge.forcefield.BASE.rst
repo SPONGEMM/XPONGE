@@ -1,6 +1,11 @@
 Xponge.forcefield.base package
 ==============================
 
+.. automodule:: Xponge.forcefield.base
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Submodules
 ----------
 
@@ -112,14 +117,6 @@ Xponge.forcefield.base.virtual\_atom\_base module
 -------------------------------------------------
 
 .. automodule:: Xponge.forcefield.base.virtual_atom_base
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-Module contents
----------------
-
-.. automodule:: Xponge.forcefield.base
    :members:
    :undoc-members:
    :show-inheritance:

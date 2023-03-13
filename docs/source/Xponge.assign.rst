@@ -1,6 +1,11 @@
 Xponge.assign package
 =====================
 
+.. automodule:: Xponge.assign
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Subpackages
 -----------
 
@@ -40,14 +45,6 @@ Xponge.assign.resp module
 -------------------------
 
 .. automodule:: Xponge.assign.resp
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-Module contents
----------------
-
-.. automodule:: Xponge.assign
    :members:
    :undoc-members:
    :show-inheritance:

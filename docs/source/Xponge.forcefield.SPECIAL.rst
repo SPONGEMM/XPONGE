@@ -1,6 +1,11 @@
 Xponge.forcefield.special package
 =================================
 
+.. automodule:: Xponge.forcefield.special
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Submodules
 ----------
 
@@ -24,14 +29,6 @@ Xponge.forcefield.special.min module
 ------------------------------------
 
 .. automodule:: Xponge.forcefield.special.min
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-Module contents
----------------
-
-.. automodule:: Xponge.forcefield.special
    :members:
    :undoc-members:
    :show-inheritance:

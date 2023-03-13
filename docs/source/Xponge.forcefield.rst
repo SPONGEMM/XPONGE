@@ -1,6 +1,11 @@
 Xponge.forcefield package
 =========================
 
+.. automodule:: Xponge.forcefield
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Subpackages
 -----------
 
@@ -12,11 +17,3 @@ Subpackages
    Xponge.forcefield.charmm27
    Xponge.forcefield.special
    Xponge.forcefield.sybyl
-
-Module contents
----------------
-
-.. automodule:: Xponge.forcefield
-   :members:
-   :undoc-members:
-   :show-inheritance:

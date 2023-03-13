@@ -65,7 +65,12 @@ You can use ``SpongeCoordinateWriter`` or ``SpongeTrajectoryWriter`` in ``Xponge
 Trajectory Analysis
 ====================
 
-Xponge use the MDAnalysis to do the analysis. Here take the calculation of RDF as an example::
+Xponge uses the MDAnalysis to do the analysis. 
+
+RDF
+####
+
+Here let's first take the calculation of radial distribution function (RDF) as an example::
 
     import Xponge.analysis.md_analysis as xmda
     from MDAnalysis import Universe
@@ -84,3 +89,34 @@ Xponge use the MDAnalysis to do the analysis. Here take the calculation of RDF a
 The final figure looks like
 
 .. image:: https://gitee.com/gao_hyp_xyj_admin/xponge/raw/master/README_PICTURE/14.png
+
+SASA
+#####
+
+Then we try to calculate the solvent accessible surface area (SASA)::
+
+    #First, we build an alamine dipeptide to do the job
+    import Xponge.forcefield.amber.ff14sb
+    dipeptide = ACE + ALA + NME
+    save_pdb(dipeptide, "test.pdb")
+    save_sponge_input(dipeptide, "test")
+
+    #Then we analyze it
+    from Xponge.analysis.sasa import SASA
+    from MDAnalysis import Universe
+    u = Universe("test.pdb")
+    # You can also read the SPONGE files like this
+    #u = Universe("test_mass.txt", "test_coordinate.txt")
+    # the meaning of the parameter can be seen in API part or just use help(SASA)
+    s = SASA(u, r_probe=1.4, n_points=1000)
+    s.main(need_area=True, need_surface=True)
+    print(s.get_sasa_result("resid 1"), s.get_sasa_result("all"))
+    s.write_surface_xyz("test.xyz", headlines=True)
+
+After run the script, we can use VMD to visualize the result::
+
+    VMD -m test.xyz test.pdb
+
+and the final figure looks like
+
+.. image:: https://gitee.com/gao_hyp_xyj_admin/xponge/raw/master/README_PICTURE/16.png
