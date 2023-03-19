@@ -387,18 +387,17 @@ class SpongeTrajectoryWriter():
             for ts in u.trajectory:
                 W.write(u)
 
-    :param prefix: the prefix of the output files
+    :param filename: the filename of the output files
     :param write_box: whether to write the box file **New From 1.2.7.0**
     """
-    def __init__(self, prefix, write_box=True):
+    def __init__(self, filename, write_box=True, **kwargs):
         self.write_box = write_box
-        self.datname = prefix + ".dat"
-        self.boxname = prefix + ".box"
+        if  not filename.endswith(".dat"):
+            raise ValueError("the name of the SPONGE trajectory file should end with '.dat'")
+        self.datname = filename
+        self.boxname = filename[::-1].replace(".dat"[::-1], ".box"[::-1], 1)[::-1]
         self.datfile = None
         self.boxfile = None
-        set_attribute_alternative_name(self, self.open)
-        set_attribute_alternative_name(self, self.close)
-        set_attribute_alternative_name(self, self.write)
 
     def __enter__(self):
         self.open()
@@ -414,7 +413,8 @@ class SpongeTrajectoryWriter():
         :return: None
         """
         self.datfile = Xopen(self.datname, "wb")
-        self.boxfile = Xopen(self.boxname, "w")
+        if self.write_box:
+            self.boxfile = Xopen(self.boxname, "w")
 
     def close(self):
         """
@@ -439,8 +439,8 @@ class SpongeTrajectoryWriter():
         else:
             raise TypeError(f"u should be Universe or AtomGroup, but {type(u)} got")
         self.datfile.write(ts.positions.astype(np.float32).tobytes())
-        if self.self.write_box:
-            self.boxfile.write(" ".join([f"{i}" for i in ts.dimensions]) + "\n")
+        if self.write_box and hasattr(ts, "dimensions"):
+            self.boxfile.write(" ".join([f"{i:.6f}" for i in ts.dimensions]) + "\n")
 
 
 class SpongeCoordinateReader(base.ReaderBase):
@@ -593,9 +593,9 @@ class SpongeCoordinateWriter():
             self.n_atoms = len(ts.positions)
         towrite = f"{self.n_atoms}\n"
         for crd in ts.positions[:self.n_atoms]:
-            towrite += f"{crd[0]} {crd[1]} {crd[2]}\n"
-        if ts.dimensions:
-            towrite += " ".join([f"{i}" for i in ts.dimensions]) + "\n"
+            towrite += f"{crd[0]:.6f} {crd[1]:.6f} {crd[2]:.6f}\n"
+        if hasattr(ts, "dimensions"):
+            towrite += " ".join([f"{i:.6f}" for i in ts.dimensions]) + "\n"
         else:
             towrite += "999 999 999 90 90 90\n"
         self.file.write(towrite)
@@ -608,5 +608,9 @@ mda._PARSER_HINTS["SPONGE_MASS"] = lambda x: x.endswith("_mass.txt")
 
 mda._READERS["SPONGE_CRD"] = SpongeCoordinateReader
 mda._READER_HINTS["SPONGE_CRD"] = lambda x: x.endswith("_coordinate.txt")
+
+mda._SINGLEFRAME_WRITERS["SPONGE_CRD"] = SpongeCoordinateWriter
+mda._MULTIFRAME_WRITERS["SPONGE_TRAJ"] = SpongeTrajectoryWriter
+
 
 set_global_alternative_names()

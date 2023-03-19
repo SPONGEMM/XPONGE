@@ -69,8 +69,10 @@ instead of looking up in radii_dict.
         if need_surface:
             surface = []
         alls = set(range(n_points))
-        if hasattr(u.trajectory.ts, "dimensions"):
+        if hasattr(u, "trajectory") and hasattr(u.trajectory.ts, "dimensions"):
             search_neighbor = partial(mda.lib.distances.capped_distance, box=u.trajectory.ts.dimensions)
+        elif hasattr(u, "ts") and hasattr(u.ts, "dimensions"):
+            search_neighbor = partial(mda.lib.distances.capped_distance, box=u.ts.dimensions)
         else:
             search_neighbor = mda.lib.distances.capped_distance
         for i, r_i in enumerate(self.r):
