@@ -1006,13 +1006,16 @@ def get_assignment_from_residuetype(restype):
     """
     assign = Assign()
     for atom in restype.atoms:
-        assign.Add_Atom(Guess_Element_From_Mass(atom.mass), atom.x, atom.y, atom.z, atom.name)
+        assign.Add_Atom(Guess_Element_From_Mass(atom.mass),
+                        atom.x, atom.y, atom.z,
+                        atom.name, atom.charge)
     for atom in restype.atoms:
         i = restype.atom2index(atom)
         for atomb in restype.connectivity[atom]:
             j = restype.atom2index(atomb)
             if i < j:
                 assign.Add_Bond(i, j)
+    assign.determine_bond_order()
     return assign
 
 

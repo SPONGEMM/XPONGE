@@ -463,7 +463,7 @@ def name2name(args):
     rdmol_a = rdktool.assign_to_rdmol(to_, True)
     rdmol_b = rdktool.assign_to_rdmol(from_, True)
 
-    result = rdFMCS.FindMCS([rdmol_a, rdmol_b], completeRingsOnly=True, timeout=args.tmcs)
+    result = rdFMCS.FindMCS([rdmol_a, rdmol_b], timeout=args.tmcs)
     rdmol_mcs = Chem.MolFromSmarts(result.smartsString)
 
     match_a = rdmol_a.GetSubstructMatch(rdmol_mcs)
@@ -535,13 +535,13 @@ def mol2rfe(args):
     args.do = args.do[0]
     if "debug" in args.do:
         Debug()
-    from_res_type_ = load_mol2(args.r1).residues[0]
+    from_res_type_ = load_mol2(args.r1).residues[0].type
     from_ = assign.Get_Assignment_From_ResidueType(from_res_type_)
     if not args.ff:
         parmchk2_gaff(args.r1, args.temp + "_TMP1.frcmod")
 
-    to_res_type_ = load_mol2(args.r2).residues[0]
-    to_ = assign.Get_Assignment_From_ResidueType(to_res_type_)
+    to_res = load_mol2(args.r2).residues[0]
+    to_ = assign.Get_Assignment_From_ResidueType(to_res.type)
     if not args.ff:
         parmchk2_gaff(args.r2, args.temp + "_TMP2.frcmod")
 
@@ -552,8 +552,9 @@ def mol2rfe(args):
     rmol = load_pdb(args.pdb)
 
     merged_from, merged_to, _ = Merge_Dual_Topology(rmol, rmol.residues[args.ri],
-                                                    to_res_type_, from_, to_,
-                                                    args.tmcs, f"{args.fmcs}", args.lmcs)
+                                                    to_res, from_, to_,
+                                                    args.tmcs, f"{args.fmcs}",
+                                                    args.lmcs, args.imcs)
 
     if args.dohmr:
         H_Mass_Repartition(merged_from)

@@ -17,7 +17,7 @@ except ModuleNotFoundError as exc:
     raise ModuleNotFoundError(
         "'MDAnalysis' package needed. Maybe you need 'pip install MDAnalysis'") from exc
 
-# pylint: disable=abstract-method, arguments-differ, protected-access
+# pylint: disable=abstract-method, arguments-differ, protected-access, unused-argument
 class SpongeNoneReader(base.ReaderBase):
     """
         This **class** is used to give a universe with no coordinate

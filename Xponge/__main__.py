@@ -159,10 +159,12 @@ instead of the default one")
     mol2rfe.add_argument("-method", default="TI", choices=["TI"], help="the method to calculate the free energy")
     mol2rfe.add_argument("-temp", default="TMP", metavar="TMP", help="the temporary file name prefix")
 
-    mol2rfe.add_argument("-tmcs", default=10, type=int, metavar="10",
+    mol2rfe.add_argument("-tmcs", default=60, type=int, metavar="60",
                          help="the timeout parameter for max common structure in unit of second")
     mol2rfe.add_argument("-fmcs", default="mcs.png", type=str, metavar="mcs.png",
                          help="the file name for max common structure image")
+    mol2rfe.add_argument("-imcs", type=str,
+                         help="the input max common structure file name")
     mol2rfe.add_argument("-lmcs", default=0.0, type=float, metavar="0.0",
                          help="minimum limitation of the Tanimoto coefficient of max common structure")
     mol2rfe.add_argument("-dt", default=2e-3, type=float, metavar="dt",
@@ -251,6 +253,7 @@ def main():
     """
 
     parser = argparse.ArgumentParser(prog="Xponge")
+    parser.add_argument("-v", "--version", action="store_true", help="show the version of Xponge")
     subparsers = parser.add_subparsers(help="subcommands",
                                        description="Tools for SPONGE. Use Xponge XXX -h for the help of tool 'XXX'.")
     _mytest(subparsers)
@@ -263,7 +266,10 @@ def main():
 
     args = parser.parse_args()
 
-    if hasattr(args, "func"):
+    if args.version:
+        from . import __version__
+        print(__version__)
+    elif hasattr(args, "func"):
         args.func(args)
     else:
         parser.print_help()

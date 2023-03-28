@@ -1,6 +1,7 @@
 """
 This **module** gives the basic functions for fep calculations
 """
+import re
 from ...helper import source, set_global_alternative_names, Xdict, Xopen, Xprint, kabsch
 from ..base import lj_base, exclude_base, bond_base, angle_base, dihedral_base, nb14_extra_base
 
@@ -480,9 +481,10 @@ def _correct_residueb_coordinates(residue_a, residue_b, matchmap):
     """
     template_positions = []
     certified_positions = []
+    residue_type_a = residue_a.type
     for i, atom in enumerate(residue_b.atoms):
         if i in matchmap.keys():
-            temp_atom = residue_a.atoms[matchmap[i]]
+            temp_atom = residue_a.name2atom(residue_type_a.atoms[matchmap[i]].name)
             template_positions.append([temp_atom.x, temp_atom.y, temp_atom.z])
             certified_positions.append([atom.x, atom.y, atom.z])
 
@@ -597,7 +599,7 @@ def _get_residue_ab(residue_type_a, residue_type_b, residue_a, forcopy, matchmap
 
 
 def merge_dual_topology(mol, residue_a, residue_b, assign_a, assign_b,
-                        tmcs=60, image_path=None, similarity_limit=0):
+                        tmcs=60, image_path=None, similarity_limit=0, imcs=None):
     """
     This **function** perturbs a residue in the molecule into another type in the dual topology way
 
@@ -610,6 +612,7 @@ def merge_dual_topology(mol, residue_a, residue_b, assign_a, assign_b,
     :param image_path: the path to save the mcs image
     :param similarity_limit: the limitation of the similarity. The similarity is calculated by \
 the tanimoto coefficient of the max common structure.
+    :param imcs: the input file to store the mcs information
     :return: two molecules in the initial and final lambda stat respectively, and the matchmap
     """
     build.Build_Bonded_Force(mol)
@@ -617,42 +620,83 @@ the tanimoto coefficient of the max common structure.
 
     from ...helper.rdkit import assign_to_rdmol
     from rdkit.Chem import rdFMCS as MCS
-    from rdkit.Chem import Draw, AllChem
+    from rdkit.Chem import Draw, AllChem, RemoveHs
 
-    rdmol_a = assign_to_rdmol(assign_a, True)
-    rdmol_b = assign_to_rdmol(assign_b, True)
+    rdmol_a = assign_to_rdmol(assign_a)
+    rdmol_b = assign_to_rdmol(assign_b)
 
-    Xprint("FINDING MAXIMUM COMMON SUBSTRUCTURE\n")
-    result = MCS.FindMCS([rdmol_a, rdmol_b], completeRingsOnly=True, timeout=tmcs)
-    rdmol_mcs = result.queryMol
-
-    match_a = rdmol_a.GetSubstructMatch(rdmol_mcs)
-    match_b = rdmol_b.GetSubstructMatch(rdmol_mcs)
-    tanimoto = len(match_a)
-    tanimoto /= len(assign_a.atoms) + len(assign_b.atoms) - tanimoto
-    Xprint(f"similarity: {tanimoto}")
-    assert tanimoto > similarity_limit, f"similarity (={tanimoto}) should be greater than {similarity_limit}"
-    matchmap = {match_b[j]: match_a[j] for j in range(len(match_a))}
-    if image_path:
-        draw_a = assign_to_rdmol(assign_a, True)
-        draw_b = assign_to_rdmol(assign_b, True)
-        AllChem.Compute2DCoords(draw_a)
-        AllChem.Compute2DCoords(draw_b)
-        for atom in draw_a.GetAtoms():
-            atom.SetProp("atomLabel", atom.GetSymbol())
-        for atom in draw_b.GetAtoms():
-            atom.SetProp("atomLabel", atom.GetSymbol())
-        img = Draw.MolsToGridImage([draw_a, draw_b],
-                                   molsPerRow=1,
-                                   subImgSize=(1200, 600),
-                                   highlightAtomLists=[match_a, match_b])
-        img.save(image_path)
-        f = Xopen(os.path.splitext(image_path)[0] + ".txt", "w")
-        f.write(f"similarity: {tanimoto}\n")
-        f.write(f"mcs atoms in r1: {match_a}\n\n")
-        f.write(f"mcs atoms in r2: {match_b}\n\n")
-        f.close()
-
+    if imcs is None:
+        Xprint("FINDING MAXIMUM COMMON SUBSTRUCTURE\n")
+        result = MCS.FindMCS([RemoveHs(rdmol_a), RemoveHs(rdmol_b)], completeRingsOnly=True, timeout=tmcs)
+        rdmol_mcs = result.queryMol
+        match_a = rdmol_a.GetSubstructMatch(rdmol_mcs)
+        match_b = rdmol_b.GetSubstructMatch(rdmol_mcs)
+        matchmap = {match_b[j]: match_a[j] for j in range(len(match_a))}
+        extra_map = {}
+        for j, i in matchmap.items():
+            a = rdmol_a.GetAtomWithIdx(i)
+            a_hydrogens = []
+            for ai in a.GetNeighbors():
+                if ai.GetAtomicNum() == 1:
+                    a_hydrogens.append(ai.GetIdx())
+            b = rdmol_b.GetAtomWithIdx(j)
+            for bi in b.GetNeighbors():
+                if not a_hydrogens:
+                    break
+                if bi.GetAtomicNum() == 1:
+                    extra_map[bi.GetIdx()] = a_hydrogens.pop()
+        matchmap.update(extra_map)
+        match_a, match_b = zip(*[[value, key] for key, value in matchmap.items()])
+        tanimoto = len(match_a)
+        tanimoto /= len(assign_a.atoms) + len(assign_b.atoms) - tanimoto
+        Xprint(f"similarity: {tanimoto}")
+        if tanimoto <= similarity_limit:
+            Xprint(f"similarity (={tanimoto}) should be greater than {similarity_limit}", "ERROR")
+            sys.exit(1)
+        if image_path:
+            draw_a = assign_to_rdmol(assign_a)
+            draw_b = assign_to_rdmol(assign_b)
+            AllChem.Compute2DCoords(draw_a)
+            AllChem.Compute2DCoords(draw_b)
+            for atom in draw_a.GetAtoms():
+                atom.SetProp("atomLabel", atom.GetSymbol())
+            for atom in draw_b.GetAtoms():
+                atom.SetProp("atomLabel", atom.GetSymbol())
+            img = Draw.MolsToGridImage([draw_a, draw_b],
+                                       molsPerRow=1,
+                                       subImgSize=(1200, 600),
+                                       highlightAtomLists=[match_a, match_b])
+            img.save(image_path)
+            f = Xopen(os.path.splitext(image_path)[0] + ".txt", "w")
+            f.write(f"similarity: {tanimoto}\n")
+            f.write(f"mcs atoms in r1: {match_a}\n\n")
+            f.write(f"mcs atoms in r2: {match_b}\n\n")
+            f.close()
+    else:
+        match_a = None
+        match_b = None
+        with open(imcs) as f:
+            for line in f:
+                if line.startswith("mcs atoms in"):
+                    result = re.search(r"r(\d): (.*)", line)
+                    if result is None or len(result.groups()) != 2:
+                        raise ValueError(f"the format of the mcs file {imcs} is not right")
+                    id_ = int(result.group(1))
+                    atoms = tuple(int(i) for i in result.group(2).replace('(', "")
+                                                            .replace(')', "")
+                                                            .split(","))
+                    if id_ == 1:
+                        match_a = atoms
+                    elif id_ == 2:
+                        match_b = atoms
+                    else:
+                        raise ValueError(f"the format of the mcs file {imcs} is not right")
+        if match_a is None or match_b is None or len(match_a) != len(match_b):
+            raise ValueError(f"the format of the mcs file {imcs} is not right")
+        matchmap = {match_b[j]: match_a[j] for j in range(len(match_a))}
+        tanimoto = len(match_a)
+        tanimoto /= len(assign_a.atoms) + len(assign_b.atoms) - tanimoto
+        Xprint(f"similarity: {tanimoto}")
     Xprint("ALIGNING TOPOLOGY AND COORDINATE\n")
 
     residue_type_a = residue_a.type
