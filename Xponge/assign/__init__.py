@@ -679,7 +679,7 @@ the rule described in the reference (J. Wang et al., J. Am. Chem. Soc, 2001) wil
                     if dij < simple_cutoff:
                         self.add_bond(i, j, -1)
 
-    def determine_bond_order(self, max_step=200, max_stat=2000, penalty_scores=None,
+    def determine_bond_order(self, max_step=2000, max_stat=20000, penalty_scores=None,
                              total_charge=None, extra_criteria=None):
         """
         This **function** determines the bond order based on connectivities
@@ -1110,18 +1110,17 @@ If None is given, the total charge will not be checked
                     assign.Add_Bond(atom1, atom2, -1)
                 else:
                     raise NotImplementedError(f"No implemented method to process bond #{words[0]} type {words[3]}")
-    if need_bond_order:
-        if total_charge == "sum":
-            total_charge = int(round(sum(assign.charge)))
+    if total_charge == "sum":
+        total_charge = int(round(sum(assign.charge)))
+    success = assign.Determine_Bond_Order(total_charge=total_charge)
+    if not success:
+        for bond in assign.bonds.values():
+            for j in bond:
+                bond[j] = -1
         success = assign.Determine_Bond_Order(total_charge=total_charge)
         if not success:
-            for bond in assign.bonds.values():
-                for j in bond:
-                    bond[j] = -1
-            success = assign.Determine_Bond_Order(total_charge=total_charge)
-            if not success:
-                raise ValueError(f"The bond orders in {filename} are not reasonable")
-            Xprint(f"The bond orders in {filename} are not reasonable and have been modified", "WARNING")
+            Xprint(f"The bond orders in {filename} are not reasonable", "ERROR")
+        Xprint(f"The bond orders in {filename} are not reasonable and have been modified", "WARNING")
     if assign is None:
         raise OSError(f"The file {filename} is not a mol2 file")
 

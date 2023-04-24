@@ -27,6 +27,7 @@ def ti_analysis(args, merged_from):
         os.mkdir("%d/ti" % i)
         inprefix = f"{i}/{args.temp}"
         command = f"SPONGE_TI -LJ_soft_core_in_file {inprefix}_LJ_soft_core.txt"
+        command += f" -neighbor_list_max_atom_in_grid_numbers 128 -neighbor_list_max_neighbor_numbers 1200"
         command += " -exclude_in_file {0}_exclude.txt -charge_in_file {0}_charge.txt".format(inprefix)
         command += f" -chargeA_in_file 0/{args.temp}_charge.txt"
         command += f" -chargeB_in_file {args.nl}/{args.temp}_charge.txt"

@@ -562,9 +562,13 @@ def mol2rfe(args):
 
     _mol2rfe_build(args, merged_from, merged_to)
 
-    _mol2rfe_min(args)
+    _mol2rfe_min(args, [0])
 
-    _mol2rfe_pre_equilibrium(args)
+    _mol2rfe_pre_equilibrium(args, [0])
+
+    _mol2rfe_min(args, range(1, args.nl + 1))
+
+    _mol2rfe_pre_equilibrium(args, range(1, args.nl + 1))
 
     _mol2rfe_equilibrium(args)
 

@@ -64,23 +64,24 @@ def _mol2rfe_output_path(subdir, workdir, tempname):
     return toadd
 
 
-def _mol2rfe_min(args):
+def _mol2rfe_min(args, iteror):
     """
 
     :param args:
     :return:
     """
     if "min" in args.do:
-        for i in range(args.nl + 1):
+        for i in iteror:
             if os.path.exists("%d/min" % i):
                 shutil.rmtree("%d/min" % i)
             os.mkdir("%d/min" % i)
             basic = f"SPONGE -default_in_file_prefix {i}/{args.temp}"
             lambda_ = args.l[i]
             basic += f" -mode minimization -lambda_lj {lambda_} -cutoff 8 -write_information_interval 1000"
+            basic += f" -neighbor_list_max_atom_in_grid_numbers 128 -neighbor_list_max_neighbor_numbers 1200"
             basic += _mol2rfe_output_path("min", i, args.temp)
             if i != 0:
-                basic += f" -coordinate_in_file {i-1}/{args.temp}_coordinate.txt"
+                basic += f" -coordinate_in_file 0/pre_equilibrium/{args.temp}_coordinate.txt"
             dt_factor = 1e-2
             inc_rate = 1.5
             if not args.mi:
@@ -109,20 +110,21 @@ the potential still can not be reduced to 0", "ERROR")
                 command += f" -mdin {args.mi}"
                 exit_code = run(command)
 
-def _mol2rfe_pre_equilibrium(args):
+def _mol2rfe_pre_equilibrium(args, iteror):
     """
 
     :param args:
     :return:
     """
     if "pre_equilibrium" in args.do:
-        for i in range(args.nl + 1):
+        for i in iteror:
             if os.path.exists("%d/pre_equilibrium" % i):
                 shutil.rmtree("%d/pre_equilibrium" % i)
             os.mkdir("%d/pre_equilibrium" % i)
             command = f"SPONGE -default_in_file_prefix {i}/{args.temp}"
             lambda_ = args.l[i]
             command += f" -lambda_lj {lambda_} -cutoff 8"
+            command += f" -neighbor_list_max_atom_in_grid_numbers 128 -neighbor_list_max_neighbor_numbers 1200"
             command += _mol2rfe_output_path("pre_equilibrium", i, args.temp)
             command += f" -coordinate_in_file {i}/min/{args.temp}_coordinate.txt"
             if not args.pi:
@@ -153,6 +155,7 @@ def _mol2rfe_equilibrium(args):
             command = f"SPONGE -default_in_file_prefix {i}/{args.temp}"
             lambda_ = args.l[i]
             command += f" -lambda_lj {lambda_} -cutoff 8 -molecule_map_output 0"
+            command += f" -neighbor_list_max_atom_in_grid_numbers 128 -neighbor_list_max_neighbor_numbers 1200"
             command += _mol2rfe_output_path("equilibrium", i, args.temp)
             command += f" -coordinate_in_file {i}/pre_equilibrium/{args.temp}_coordinate.txt"
             command += f" -velocity_in_file {i}/pre_equilibrium/{args.temp}_velocity.txt"
