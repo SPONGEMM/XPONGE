@@ -951,18 +951,21 @@ def get_assignment_from_smiles(smiles):
     return rdmol_to_assign(mol)
 
 
-def get_assignment_from_pdb(filename, determine_bond_order=True, only_residue=""):
+def get_assignment_from_pdb(filename, only_residue="", bond_tolerance=1.0, total_charge=None):
     """
     This **function** gets an Assign instance from a pdb file
 
     :param filename: the name of the input file
-    :param determine_bond_order: whether determine the bond order automatically
     :param only_residue: only get the residue with the name same as ``only_residue``
+    :param bond_tolerance: the parameter to determine the atomic connections. \
+The larger tolerance, the easier to set a bond between two atoms
+    :param total_charge: the total charge of the molecule used when aligning bond orders. \
+If None is given, the total charge will not be checked
     :return: the Assign instance
-    :raise NotImplementedError: it has not been implemented when determine_bond_order is True
     """
     assign = Assign()
     index_atom_map = Xdict()
+    has_conect = False
     with open(filename) as f:
         for line in f:
             if line.startswith("ATOM") or line.startswith("HETATM"):
@@ -979,6 +982,7 @@ def get_assignment_from_pdb(filename, determine_bond_order=True, only_residue=""
                 z = float(line[46:54])
                 assign.Add_Atom(element, x, y, z, atom_name)
             if line.startswith("CONECT"):
+                has_conect = True
                 atom = int(line[6:11])
                 if atom not in index_atom_map.keys():
                     continue
@@ -990,10 +994,14 @@ def get_assignment_from_pdb(filename, determine_bond_order=True, only_residue=""
                         break
                     if bonded_atom in index_atom_map.keys():
                         assign.Add_Bond(index_atom_map[atom], index_atom_map[int(bonded_atom)])
-    if determine_bond_order:
-        success = assign.determine_bond_order()
-        if not success:
-            raise ValueError(f"Failed to determine the bond orders. Reason: {success.reason}")
+    if assign.atom_numbers == 0:
+        raise OSError(f"The file {filename} is not a pdb file")
+    if not has_conect:
+         assign.determine_connectivity(tolerance=bond_tolerance)
+    success = assign.Determine_Bond_Order(total_charge=total_charge)
+    if not success:
+        Xprint(f"The connectivity or the bond orders in {filename} are not reasonable", "ERROR")
+    assign.Determine_Ring_And_Bond_Type()
     return assign
 
 
@@ -1004,6 +1012,8 @@ def get_assignment_from_residuetype(restype):
     :param restype: the ResidueType instance
     :return: the Assign instance
     """
+    if not isinstance(restype, ResidueType):
+        raise OSError(f"{restype} is not a ResidueType instance")
     assign = Assign()
     for atom in restype.atoms:
         assign.Add_Atom(Guess_Element_From_Mass(atom.mass),
@@ -1015,31 +1025,41 @@ def get_assignment_from_residuetype(restype):
             j = restype.atom2index(atomb)
             if i < j:
                 assign.Add_Bond(i, j)
-    assign.determine_bond_order()
+    total_charge = int(round(sum(assign.charge)))
+    success = assign.Determine_Bond_Order(total_charge=total_charge)
+    if not success:
+        Xprint(f"The connectivity, the bond orders or the charges of the ResidueType {restype.name} are not reasonable", "ERROR")
+    assign.Determine_Ring_And_Bond_Type()
     return assign
 
 
-def get_assignment_from_xyz(filename, bond_tolerance=1.0, total_charge=0):
+def get_assignment_from_xyz(filename, bond_tolerance=1.0, total_charge=None):
     """
     This **function** gets an Assign instance from a xyz file
 
     :param filename: the name of the input file
     :param bond_tolerance: the parameter to determine the atomic connections. \
 The larger tolerance, the easier to set a bond between two atoms
-    :param total_charge: the total charge of the molecule
+    :param total_charge: the total charge of the molecule used when aligning bond orders. \
+If None is given, the total charge will not be checked
     :return: the Assign instance
     """
+    assign = None
     with open(filename) as f:
         atom_numbers = int(f.readline())
         assign = Assign()
-        f.readline()
+        assign.name = f.readline().strip()
         for _ in range(atom_numbers):
             atom_name, x, y, z = f.readline().split()
             assign.Add_Atom(atom_name, float(x), float(y), float(z))
         assign.determine_connectivity(tolerance=bond_tolerance)
-        assign.determine_bond_order(total_charge=total_charge)
+        success = assign.Determine_Bond_Order(total_charge=total_charge)
+        if not success:
+            Xprint(f"The connectivity or the bond orders in {filename} are not reasonable", "ERROR")
         assign.Determine_Ring_And_Bond_Type()
-        return assign
+    if assign is None:
+        raise OSError(f"The file {filename} is not a xyz file")
+    return assign
 
 
 def get_assignment_from_mol2(filename, total_charge=None):

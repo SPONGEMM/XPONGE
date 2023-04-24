@@ -598,6 +598,11 @@ def _get_residue_ab(residue_type_a, residue_type_b, residue_a, forcopy, matchmap
     return restype_ab, rbmap
 
 
+def _getNumHs(rdmol, j):
+    """get the number of hydrogens of the j-th atom in an rdkit rdmol instance"""
+    return rdmol.GetAtomWithIdx(j).GetTotalNumHs(includeNeighbors=True)
+
+
 def merge_dual_topology(mol, residue_a, residue_b, assign_a, assign_b,
                         tmcs=60, image_path=None, similarity_limit=0, imcs=None):
     """
@@ -620,17 +625,24 @@ the tanimoto coefficient of the max common structure.
 
     from ...helper.rdkit import assign_to_rdmol
     from rdkit.Chem import rdFMCS as MCS
-    from rdkit.Chem import Draw, AllChem, RemoveHs
+    from rdkit.Chem import Draw, AllChem, RemoveHs, MolFromSmarts
 
     rdmol_a = assign_to_rdmol(assign_a)
     rdmol_b = assign_to_rdmol(assign_b)
 
     if imcs is None:
         Xprint("FINDING MAXIMUM COMMON SUBSTRUCTURE\n")
-        result = MCS.FindMCS([RemoveHs(rdmol_a), RemoveHs(rdmol_b)], completeRingsOnly=True, timeout=tmcs)
+        result = MCS.FindMCS([RemoveHs(rdmol_a), RemoveHs(rdmol_b)], 
+                             completeRingsOnly=True,
+                             bondCompare=MCS.BondCompare.CompareOrderExact,
+                             timeout=tmcs)
         rdmol_mcs = result.queryMol
+        if rdmol_mcs is None:
+            raise OSError("No common substructure found")
         match_a = rdmol_a.GetSubstructMatch(rdmol_mcs)
-        match_b = rdmol_b.GetSubstructMatch(rdmol_mcs)
+        a_hydros = {i: _getNumHs(rdmol_a, j) for i, j in enumerate(match_a)}
+        match_b = sorted(rdmol_b.GetSubstructMatches(rdmol_mcs, uniquify=False), 
+                         key=lambda x: sum(min(_getNumHs(rdmol_b, j), a_hydros[i]) for i,j in enumerate(x)))[-1]
         matchmap = {match_b[j]: match_a[j] for j in range(len(match_a))}
         extra_map = {}
         for j, i in matchmap.items():
@@ -650,9 +662,6 @@ the tanimoto coefficient of the max common structure.
         tanimoto = len(match_a)
         tanimoto /= len(assign_a.atoms) + len(assign_b.atoms) - tanimoto
         Xprint(f"similarity: {tanimoto}")
-        if tanimoto <= similarity_limit:
-            Xprint(f"similarity (={tanimoto}) should be greater than {similarity_limit}", "ERROR")
-            sys.exit(1)
         if image_path:
             draw_a = assign_to_rdmol(assign_a)
             draw_b = assign_to_rdmol(assign_b)
@@ -697,6 +706,12 @@ the tanimoto coefficient of the max common structure.
         tanimoto = len(match_a)
         tanimoto /= len(assign_a.atoms) + len(assign_b.atoms) - tanimoto
         Xprint(f"similarity: {tanimoto}")
+    if tanimoto <= similarity_limit:
+        Xprint(f"similarity (={tanimoto}) should be greater than {similarity_limit}", "ERROR")
+        sys.exit(2)
+    if tanimoto == 1:
+        Xprint("There is no topology difference between the two molecules", "ERROR")
+        sys.exit(3)
     Xprint("ALIGNING TOPOLOGY AND COORDINATE\n")
 
     residue_type_a = residue_a.type

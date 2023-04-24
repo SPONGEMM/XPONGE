@@ -42,6 +42,8 @@ def assign_to_rdmol(assign, ignore_bond_type=False):
         conf.SetAtomPosition(i, assign.coordinate[i])
     mol = mol_a.GetMol()
     mol.AddConformer(conf)
+    for i, atom in enumerate(mol.GetAtoms()):
+        atom.SetFormalCharge(assign.formal_charge[i])
     flags = Chem.rdmolops.SanitizeFlags
     Chem.SanitizeMol(mol, flags.SANITIZE_ALL & ~flags.SANITIZE_PROPERTIES)
     return mol
