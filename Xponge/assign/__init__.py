@@ -3,6 +3,7 @@ This **package** is used to assign the properties for atoms, residues and molecu
 """
 #pylint: disable=cyclic-import
 import heapq
+import io
 from copy import deepcopy
 from collections import OrderedDict
 from collections.abc import Iterable
@@ -951,11 +952,11 @@ def get_assignment_from_smiles(smiles):
     return rdmol_to_assign(mol)
 
 
-def get_assignment_from_pdb(filename, only_residue="", bond_tolerance=1.0, total_charge=None):
+def get_assignment_from_pdb(file, only_residue="", bond_tolerance=1.0, total_charge=None):
     """
     This **function** gets an Assign instance from a pdb file
 
-    :param filename: the name of the input file
+    :param file: the name of the input file or an instance of io.IOBase
     :param only_residue: only get the residue with the name same as ``only_residue``
     :param bond_tolerance: the parameter to determine the atomic connections. \
 The larger tolerance, the easier to set a bond between two atoms
@@ -966,7 +967,9 @@ If None is given, the total charge will not be checked
     assign = Assign()
     index_atom_map = Xdict()
     has_conect = False
-    with open(filename) as f:
+    if not isinstance(file, io.IOBase):
+        file = open(file)
+    with file as f:
         for line in f:
             if line.startswith("ATOM") or line.startswith("HETATM"):
                 if only_residue:
@@ -1033,11 +1036,11 @@ def get_assignment_from_residuetype(restype):
     return assign
 
 
-def get_assignment_from_xyz(filename, bond_tolerance=1.0, total_charge=None):
+def get_assignment_from_xyz(file, bond_tolerance=1.0, total_charge=None):
     """
     This **function** gets an Assign instance from a xyz file
 
-    :param filename: the name of the input file
+    :param file: the name of the input file or an instance of io.IOBase
     :param bond_tolerance: the parameter to determine the atomic connections. \
 The larger tolerance, the easier to set a bond between two atoms
     :param total_charge: the total charge of the molecule used when aligning bond orders. \
@@ -1045,7 +1048,9 @@ If None is given, the total charge will not be checked
     :return: the Assign instance
     """
     assign = None
-    with open(filename) as f:
+    if not isinstance(file, io.IOBase):
+        file = open(file)
+    with file as f:
         atom_numbers = int(f.readline())
         assign = Assign()
         assign.name = f.readline().strip()
@@ -1062,17 +1067,19 @@ If None is given, the total charge will not be checked
     return assign
 
 
-def get_assignment_from_mol2(filename, total_charge=None):
+def get_assignment_from_mol2(file, total_charge=None):
     """
     This **function** gets an Assign instance from a mol2 file
 
-    :param filename: the name of the input file
+    :param file: the name of the input file or an instance of io.IOBase
     :param total_charge: the total charge of the molecule used when aligning bond orders. \
 If "sum" is given, the sum of the partial charges will be used; \
 If None is given, the total charge will not be checked
     :return: the Assign instance
     """
-    with open(filename) as f:
+    if not isinstance(file, io.IOBase):
+        file = open(file)
+    with file as f:
         assign = None
         flag = None
         subflag = None
