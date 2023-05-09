@@ -201,13 +201,12 @@ def _mm_gbsa(subparsers):
                          choices=["build", "min", "pre_equilibrium", "equilibrium", "analysis", "debug"])
 
     mm_gbsa.add_argument("-pdb", required=True, help="the initial conformation given by the pdb file")
-    mm_gbsa.add_argument("-r1", "-residuetype1", required=True,
-                         help="the ligand given by an Xponge ResidueType mol2 file")
-    mm_gbsa.add_argument("-r0", "-residuetype0", nargs="*", default=[],
-                         help="small molecules or non-standard residues that are also in the system")
-    mm_gbsa.add_argument("-ri", "-residue_index", type=int, metavar=0, default=0,
-                         help="the residue index of the ligand")
-
+    mm_gbsa.add_argument("-s1", default="resid 1", metavar='"resid 1"',
+                         help="the MDAnalysis selection of the first part")
+    mm_gbsa.add_argument("-s2", default="not resid 1 and protein", metavar='"not resid 1 and protein"',
+                         help="the MDAnalysis selection of the second part")
+    mm_gbsa.add_argument("-r0", "-residuetypes", nargs="*", default=[],
+                         help="small molecules or non-standard residues in the system given by the Xponge mol2 file(s)")
     mm_gbsa.add_argument("-dohmr", "-do_hydrogen_mass_repartition", action="store_true",
                          help="use the hydrogen mass repartition method")
     mm_gbsa.add_argument("-ff", "-forcefield", help="Use this force field file instead of the default ff14SB and gaff")

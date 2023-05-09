@@ -9,7 +9,7 @@ from collections import OrderedDict
 from collections.abc import Iterable
 from itertools import groupby
 import numpy as np
-from ..helper import AtomType, ResidueType, Xopen, Xdict, set_real_global_variable, \
+from ..helper import AtomType, ResidueType, Residue, Xopen, Xdict, set_real_global_variable, \
     set_global_alternative_names, Guess_Element_From_Mass, Xprint
 
 
@@ -661,7 +661,7 @@ the rule described in the reference (J. Wang et al., J. Am. Chem. Soc, 2001) wil
             for i, ci in enumerate(self.coordinate):
                 for j in range(i + 1, self.atom_numbers):
                     dij = np.linalg.norm(np.array(self.coordinate[j]) - np.array(ci))
-                    rij = self.CONNECTIVITY_RADII[self.atoms[i]] + self.CONNECTIVITY_RADII[self.atoms[j]]
+                    rij = self.CONNECTIVITY_RADII.get(self.atoms[i], 1.25) + self.CONNECTIVITY_RADII.get(self.atoms[j], 1.25)
                     if dij <= 1.5:
                         factor = 1 - 0.15
                     elif dij <= 1.9:
@@ -968,7 +968,10 @@ If None is given, the total charge will not be checked
     index_atom_map = Xdict()
     has_conect = False
     if not isinstance(file, io.IOBase):
+        filename = file
         file = open(file)
+    else:
+        filename = "in-memory string"
     with file as f:
         for line in f:
             if line.startswith("ATOM") or line.startswith("HETATM"):
@@ -1015,7 +1018,7 @@ def get_assignment_from_residuetype(restype):
     :param restype: the ResidueType instance
     :return: the Assign instance
     """
-    if not isinstance(restype, ResidueType):
+    if not isinstance(restype, (ResidueType, Residue)):
         raise OSError(f"{restype} is not a ResidueType instance")
     assign = Assign()
     for atom in restype.atoms:
@@ -1031,7 +1034,7 @@ def get_assignment_from_residuetype(restype):
     total_charge = int(round(sum(assign.charge)))
     success = assign.Determine_Bond_Order(total_charge=total_charge)
     if not success:
-        Xprint(f"The connectivity, the bond orders or the charges of the ResidueType {restype.name} are not reasonable", "ERROR")
+        Xprint(f"The connectivity, the bond orders or the charges of the ResidueType {restype.name} are not reasonable", "WARNING")
     assign.Determine_Ring_And_Bond_Type()
     return assign
 
@@ -1049,7 +1052,10 @@ If None is given, the total charge will not be checked
     """
     assign = None
     if not isinstance(file, io.IOBase):
+        filename = file
         file = open(file)
+    else:
+        filename = "in-memory string"
     with file as f:
         atom_numbers = int(f.readline())
         assign = Assign()
@@ -1078,7 +1084,10 @@ If None is given, the total charge will not be checked
     :return: the Assign instance
     """
     if not isinstance(file, io.IOBase):
+        filename = file
         file = open(file)
+    else:
+        filename = "in-memory string"
     with file as f:
         assign = None
         flag = None

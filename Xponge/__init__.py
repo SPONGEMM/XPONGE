@@ -72,7 +72,7 @@ The atoms in a ``Residue`` or a ``ResidueType`` can be obtained by their names. 
 
 """
 
-__version__ = "1.3.4a1"
+__version__ = "1.3.4b1"
 
 import os
 import time
@@ -109,6 +109,24 @@ def _initialize():
         return towrite
 
     Molecule.Set_Save_SPONGE_Input("residue")(write_residue)
+
+    def write_resname(self):
+        towrite = "%d\n"%(len(self.residues))
+        for res in self.residues:
+            towrite += f"{res.name}\n"
+        return towrite
+
+    def write_atom_name(self):
+        towrite = "%d\n"%(len(self.atoms))
+        for atom in self.atoms:
+            towrite += f"{atom.name}\n"
+        return towrite 
+
+    def write_atom_type_name(self):
+        towrite = "%d\n"%(len(self.atoms))
+        for atom in self.atoms:
+            towrite += f"{atom.type.name}\n"
+        return towrite 
 
     def write_coordinate(self):
         towrite = "%d\n" % (len(self.atoms))
@@ -148,6 +166,9 @@ def _initialize():
         return towrite
 
     Molecule.Set_Save_SPONGE_Input("coordinate")(write_coordinate)
+    Molecule.Set_Save_SPONGE_Input("resname")(write_resname)
+    Molecule.Set_Save_SPONGE_Input("atom_name")(write_atom_name)
+    Molecule.Set_Save_SPONGE_Input("atom_type_name")(write_atom_type_name)
 
     #pylint: disable=unused-argument
     def _do_initial(self, sys_kwarg, ene_kwarg, use_pbc):

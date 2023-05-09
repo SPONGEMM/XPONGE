@@ -10,6 +10,7 @@ import multiprocessing as mpc
 from ..helper import source, GlobalSetting, Xopen, Xprint
 from ..mdrun import run
 from .mol2rfe import *
+from .mmgbsa import *
 
 class TestMyPackage(unittest.TestCase):
     """
@@ -446,7 +447,7 @@ def name2name(args):
         to_ = load_mol2(args.to_file).residues[0]
         to_ = assign.Get_Assignment_From_ResidueType(to_)
     elif args.to_format == "pdb":
-        to_ = assign.Get_Assignment_From_PDB(args.to_file, determine_bond_order=False,
+        to_ = assign.Get_Assignment_From_PDB(args.to_file,
                                              only_residue=args.to_residue)
 
     if args.from_format == "mol2":
@@ -456,7 +457,7 @@ def name2name(args):
         from_ = load_mol2(args.from_file).residues[0]
         from_ = assign.Get_Assignment_From_ResidueType(from_)
     elif args.from_format == "pdb":
-        from_ = assign.Get_Assignment_From_PDB(args.from_file, determine_bond_order=False,
+        from_ = assign.Get_Assignment_From_PDB(args.from_file,
                                                only_residue=args.from_residue)
 
     from_.add_index_to_name()
@@ -551,7 +552,7 @@ def mol2rfe(args):
 
     rmol = load_pdb(args.pdb)
 
-    merged_from, merged_to, _ = Merge_Dual_Topology(rmol, rmol.residues[args.ri],
+    merged_from, merged_to, matchmap = Merge_Dual_Topology(rmol, rmol.residues[args.ri],
                                                     to_res, from_, to_,
                                                     args.tmcs, f"{args.fmcs}",
                                                     args.lmcs, args.imcs)
@@ -572,7 +573,7 @@ def mol2rfe(args):
 
     _mol2rfe_equilibrium(args)
 
-    _mol2rfe_analysis(args, merged_from, merged_to)
+    _mol2rfe_analysis(args, merged_from, merged_to, matchmap, from_, to_)
 
 def mm_gbsa(args):
     """
@@ -581,4 +582,18 @@ def mm_gbsa(args):
     :param args: arguments from argparse
     :return: None
     """
-    raise NotImplementedError
+    if not args.do:
+        args.do = [["build", "min", "pre_equilibrium", "equilibrium", "analysis"]]
+    args.do = args.do[0]
+    if "debug" in args.do:
+        Debug()
+
+    _mmgbsa_build(args)
+
+    _mmgbsa_min(args)
+
+    _mmgbsa_pre_equilibrium(args)
+
+    _mmgbsa_equilibrium(args)
+
+    _mmgbsa_analysis(args)

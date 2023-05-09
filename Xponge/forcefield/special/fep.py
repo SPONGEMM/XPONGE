@@ -709,9 +709,6 @@ the tanimoto coefficient of the max common structure.
     if tanimoto <= similarity_limit:
         Xprint(f"similarity (={tanimoto}) should be greater than {similarity_limit}", "ERROR")
         sys.exit(2)
-    if tanimoto == 1:
-        Xprint("There is no topology difference between the two molecules", "ERROR")
-        sys.exit(3)
     Xprint("ALIGNING TOPOLOGY AND COORDINATE\n")
 
     residue_type_a = residue_a.type

@@ -45,6 +45,7 @@ instead of looking up in radii_dict.
         self.r_max = np.max(self.r) * 2
         self._bad_points = get_fibonacci_grid(n_points, 0, 1)
         self.u = u
+        self.atom_map = {atom.index: i for i, atom in enumerate(u.atoms)}
         self.surface_area = None
         self.surface = None
 
@@ -123,7 +124,7 @@ instead of looking up in radii_dict.
         if self.surface_area is None:
             raise ValueError("You should call main(need_area=True) to get the surface information first")
         atoms = self.u.select_atoms(select)
-        return np.sum([self.surface_area[atom.index] for atom in atoms])
+        return np.sum([self.surface_area[self.atom_map[atom.index]] for atom in atoms])
 
 Xprint("""Reference for sasa:
   Shrake, A; Rupley, JA.

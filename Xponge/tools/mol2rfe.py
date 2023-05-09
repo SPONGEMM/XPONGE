@@ -77,7 +77,7 @@ def _mol2rfe_min(args, iteror):
             os.mkdir("%d/min" % i)
             basic = f"SPONGE -default_in_file_prefix {i}/{args.temp}"
             lambda_ = args.l[i]
-            basic += f" -mode minimization -lambda_lj {lambda_} -cutoff 8 -write_information_interval 1000"
+            basic += f" -mode minimization -lambda_lj {lambda_} -cutoff 8 -molecule_map_output 0"
             basic += f" -neighbor_list_max_atom_in_grid_numbers 128 -neighbor_list_max_neighbor_numbers 1200"
             basic += _mol2rfe_output_path("min", i, args.temp)
             if i != 0:
@@ -109,7 +109,9 @@ the potential still can not be reduced to 0", "ERROR")
             else:
                 command += f" -mdin {args.mi}"
                 exit_code = run(command)
-
+                if exit_code != 0:
+                    Xprint(f"The minimization of lambda {i} exited with code {exit_code}", "ERROR")
+                    sys.exit(exit_code)
 def _mol2rfe_pre_equilibrium(args, iteror):
     """
 
@@ -123,7 +125,7 @@ def _mol2rfe_pre_equilibrium(args, iteror):
             os.mkdir("%d/pre_equilibrium" % i)
             command = f"SPONGE -default_in_file_prefix {i}/{args.temp}"
             lambda_ = args.l[i]
-            command += f" -lambda_lj {lambda_} -cutoff 8"
+            command += f" -lambda_lj {lambda_} -cutoff 8 -molecule_map_output 0"
             command += f" -neighbor_list_max_atom_in_grid_numbers 128 -neighbor_list_max_neighbor_numbers 1200"
             command += _mol2rfe_output_path("pre_equilibrium", i, args.temp)
             command += f" -coordinate_in_file {i}/min/{args.temp}_coordinate.txt"
@@ -164,13 +166,15 @@ def _mol2rfe_equilibrium(args):
                 command += " -barostat andersen_barostat -thermostat middle_langevin"
                 command += " -middle_langevin_gamma 10 -middle_langevin_velocity_max 20"
                 command += f" -write_information_interval 100 -write_restart_file_interval {args.equilibrium_step}"
-                run(command)
+                exit_code = run(command)
             else:
                 command += f" -mdin {args.pi}"
-                run(command)
+                exit_code = run(command)
+            if exit_code != 0:
+                Xprint(f"The equilibrium of lambda {i} exited with code {exit_code}", "ERROR")
+                sys.exit(exit_code)
 
-
-def _mol2rfe_analysis(args, merged_from, merged_to):
+def _mol2rfe_analysis(args, merged_from, merged_to, match_map, from_, to_):
     """
 
     :param args:
@@ -191,6 +195,7 @@ def _mol2rfe_analysis(args, merged_from, merged_to):
         draw_r1_res.name = resname.split("_")[0]
         draw_r2_res.name = resname.split("_")[1]
         to_delete = []
+        name_map = {from_.names[j]: to_.names[i] for i,j in match_map.items()}
         for atom in draw_r1_res.atoms:
             if atom.LJtype == "ZERO_LJ_ATOM":
                 to_delete.append(atom)
@@ -200,8 +205,10 @@ def _mol2rfe_analysis(args, merged_from, merged_to):
         for atom in draw_r2_res.atoms:
             if atom.LJtype == "ZERO_LJ_ATOM":
                 to_delete.append(atom)
-            if atom.name.endswith("R2"):
+            elif atom.name.endswith("R2"):
                 atom.name = atom.name[:-2]
+            else:
+                atom.name = name_map[atom.name]
         for atom in to_delete:
             draw_r2_res.atoms.remove(atom)
         build.save_pdb(draw_r1_mol, "r1.pdb")

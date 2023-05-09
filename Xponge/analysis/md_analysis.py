@@ -66,15 +66,35 @@ class SpongeInputReader(TopologyReaderBase):
         """
         attrs = [topologyattrs.Segids(np.array(['SYSTEM'], dtype=object))]
         nres = 1
+        has_names = False
+        has_type_names = False
         self.filename = self.filename.replace("_mass.txt", "")
+        if os.path.exists(self.filename + "_atom_name.txt"):
+            with util.openany(self.filename + "_atom_name.txt") as fm:
+                natoms = int(fm.readline())
+                names = []
+                has_names = True
+                for i, line in enumerate(fm):
+                    names.append(line.strip())
+                attrs.append(topologyattrs.Atomnames(names))
+        if os.path.exists(self.filename + "_atom_type_name.txt"):
+            with util.openany(self.filename + "_atom_type_name.txt") as fm:
+                natoms = int(fm.readline())
+                names = []
+                has_type_names = True
+                for i, line in enumerate(fm):
+                    names.append(line.strip())
+                attrs.append(topologyattrs.Atomtypes(names))
         if os.path.exists(self.filename + "_mass.txt"):
             with util.openany(self.filename + "_mass.txt") as fm:
                 natoms = int(fm.readline())
                 masses = [float(line.strip()) for line in fm]
                 atom_names = [guess_element_from_mass(mass) for mass in masses]
                 attrs.append(topologyattrs.Masses(masses))
-                attrs.append(topologyattrs.Atomnames(atom_names, guessed=True))
-                attrs.append(topologyattrs.Atomtypes(atom_names, guessed=True))
+                if not has_names:
+                    attrs.append(topologyattrs.Atomnames(atom_names, guessed=True))
+                if not has_type_names:
+                    attrs.append(topologyattrs.Atomtypes(atom_names, guessed=True))
                 attrs.append(topologyattrs.Elements(atom_names, guessed=True))
         if os.path.exists(self.filename + "_charge.txt"):
             with util.openany(self.filename + "_charge.txt") as fm:
@@ -93,6 +113,13 @@ class SpongeInputReader(TopologyReaderBase):
                     res_length = int(line.strip())
                     resid[count:count + res_length] = i
                     count += res_length
+        if os.path.exists(self.filename + "_resname.txt"):
+            with util.openany(self.filename + "_resname.txt") as fm:
+                nres = int(fm.readline())
+                resname = []
+                for i, line in enumerate(fm):
+                    resname.append(line.strip())
+                attrs.append(topologyattrs.Resnames(resname))
         attrs.append(topologyattrs.Resids(np.arange(nres) + 1))
         attrs.append(topologyattrs.Atomids(np.arange(natoms) + 1))
         attrs.append(topologyattrs.Resnums(np.arange(nres) + 1))

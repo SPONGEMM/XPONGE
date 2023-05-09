@@ -45,7 +45,7 @@ def modified_bondi_radii(atom):
             element_a = Guess_Element_From_Mass(atom_a.mass)
             if element_a in ("C", "N"):
                 atom.GB_radii = 1.3
-            elif elementA in ('S', 'O', 'H'):
+            elif element_a in ('S', 'O', 'H'):
                 atom.GB_radii = 0.8
             break
 
