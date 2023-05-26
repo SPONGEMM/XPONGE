@@ -9,8 +9,6 @@ import multiprocessing as mpc
 
 from ..helper import source, GlobalSetting, Xopen, Xprint
 from ..mdrun import run
-from .mol2rfe import *
-from .mmgbsa import *
 
 class TestMyPackage(unittest.TestCase):
     """
@@ -441,7 +439,7 @@ def name2name(args):
     rdktool = source("..helper.rdkit")
 
     if args.to_format == "mol2":
-        to_ = assign.Get_Assignment_From_Mol2(args.to_file)
+        to_ = assign.Get_Assignment_From_Mol2(args.to_file, total_charge="sum")
     elif args.to_format == "gaff_mol2":
         source("..forcefield.amber.gaff")
         to_ = load_mol2(args.to_file).residues[0]
@@ -451,7 +449,7 @@ def name2name(args):
                                              only_residue=args.to_residue)
 
     if args.from_format == "mol2":
-        from_ = assign.Get_Assignment_From_Mol2(args.from_file)
+        from_ = assign.Get_Assignment_From_Mol2(args.from_file, total_charge="sum")
     elif args.from_format == "gaff_mol2":
         source("..forcefield.amber.gaff")
         from_ = load_mol2(args.from_file).residues[0]
@@ -461,15 +459,15 @@ def name2name(args):
                                                only_residue=args.from_residue)
 
     from_.add_index_to_name()
-    rdmol_a = rdktool.assign_to_rdmol(to_, True)
-    rdmol_b = rdktool.assign_to_rdmol(from_, True)
+    rdmol_a = rdktool.assign_to_rdmol(to_, ignore_bond_type=True)
+    rdmol_b = rdktool.assign_to_rdmol(from_, ignore_bond_type=True)
 
-    result = rdFMCS.FindMCS([rdmol_a, rdmol_b], timeout=args.tmcs)
-    rdmol_mcs = Chem.MolFromSmarts(result.smartsString)
+    result = rdFMCS.FindMCS([rdmol_b, rdmol_a], timeout=args.tmcs)
 
-    match_a = rdmol_a.GetSubstructMatch(rdmol_mcs)
-    match_b = rdmol_b.GetSubstructMatch(rdmol_mcs)
+    match_a = rdmol_a.GetSubstructMatch(result.queryMol)
+    match_b = rdmol_b.GetSubstructMatch(result.queryMol)
     matchmap = {from_.names[match_b[j]]: to_.names[match_a[j]] for j in range(len(match_a))}
+
     from_.names = [matchmap.get(name, name) for name in from_.names]
     from_.name = args.out_residue
 
@@ -498,6 +496,9 @@ def mol2rfe(args):
     :param args: arguments from argparse
     :return: None
     """
+    from .mol2rfe import _mol2rfe_build, _mol2rfe_min, _mol2rfe_pre_equilibrium, \
+ _mol2rfe_equilibrium, _mol2rfe_analysis
+
     source("..")
     source("..forcefield.special.fep")
     source("..forcefield.special.min")
@@ -582,6 +583,9 @@ def mm_gbsa(args):
     :param args: arguments from argparse
     :return: None
     """
+    from .mmgbsa import _mmgbsa_build, _mmgbsa_min, _mmgbsa_pre_equilibrium, \
+_mmgbsa_equilibrium, _mmgbsa_analysis
+
     if not args.do:
         args.do = [["build", "min", "pre_equilibrium", "equilibrium", "analysis"]]
     args.do = args.do[0]

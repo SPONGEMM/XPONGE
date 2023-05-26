@@ -1148,6 +1148,9 @@ If None is given, the total charge will not be checked
                     raise NotImplementedError(f"No implemented method to process bond #{words[0]} type {words[3]}")
     if total_charge == "sum":
         total_charge = int(round(sum(assign.charge)))
+    count_h = assign.atoms.count("H")
+    if count_h < len(assign.atoms) // 4:
+        Xprint(f"The number of hydrogen atoms in {filename} is {count_h}, which is less than a quarter of the number of atoms. Xponge.Assign is designed for molecules with explicit hydrogen atoms.", "WARNING")
     success = assign.Determine_Bond_Order(total_charge=total_charge)
     if not success:
         for bond in assign.bonds.values():
@@ -1156,7 +1159,8 @@ If None is given, the total charge will not be checked
         success = assign.Determine_Bond_Order(total_charge=total_charge)
         if not success:
             Xprint(f"The bond orders in {filename} are not reasonable", "ERROR")
-        Xprint(f"The bond orders in {filename} are not reasonable and have been modified", "WARNING")
+        else:
+            Xprint(f"The bond orders in {filename} are not reasonable and have been modified", "WARNING")
     if assign is None:
         raise OSError(f"The file {filename} is not a mol2 file")
 

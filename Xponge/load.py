@@ -478,6 +478,7 @@ def load_pdb(filename, judge_histone=True, position_need="A", ignore_hydrogen=Fa
     current_insertion_code = None
     current_residue_index = None
     current_resname = None
+    chain_id_processed = set()
     current_histone_information = {"DeltaH": False, "EpsilonH": False}
     with open(filename) as f:
         for line in f:
@@ -485,7 +486,7 @@ def load_pdb(filename, judge_histone=True, position_need="A", ignore_hydrogen=Fa
                 resindex = int(line[22:26]) + insertion_count
                 insertion_code = line[26]
                 chain_id = line[21]
-                if not chain_id.strip():
+                if not chain_id.strip() or chain_id in chain_id_processed:
                     chain_id = 0
                 resname = line[17:20].strip()
                 atomname = line[12:16].strip()
@@ -522,6 +523,7 @@ def load_pdb(filename, judge_histone=True, position_need="A", ignore_hydrogen=Fa
                 current_resname = None
                 current_insertion_code = None
                 insertion_count = 0
+                chain_id_processed.add(chain_id)
                 if residue_type_map[-1] in GlobalSetting.PDBResidueNameMap["tail"].keys():
                     residue_type_map[-1] = GlobalSetting.PDBResidueNameMap["tail"][residue_type_map[-1]]
                 _pdb_judge_histone(judge_histone, residue_type_map, current_histone_information)

@@ -22,6 +22,7 @@ def _init():
     @tpacm4_helper.add_rule("NH4")
     def _(i, assign):
         return assign.atoms[i] == "N" and sum(assign.bonds[i].values()) == 4
+
     @tpacm4_helper.add_rule("EST")
     def _(i, assign):
         if assign.atoms[i] != "O":
@@ -33,6 +34,7 @@ def _init():
                 if assign.atoms[k] == "O" and korder == 2:
                     return True
         return False
+
     @tpacm4_helper.add_rule("ACM")
     def _(i, assign):
         if assign.atoms[i] != "N":
@@ -44,9 +46,11 @@ def _init():
                 if assign.atoms[k] == "O" and korder == 2:
                     return True
         return False
+
     @tpacm4_helper.add_rule("")
     def _(i, assign):
         return True
+
     return type_charge_mapper_, string_mapper_
 
 def _ring_process(ring, atom_type_alls, assign, extra_strings):
@@ -174,7 +178,9 @@ def tpacm4(assign, charge):
                 charges.append(type_charge_mapper[temp_atom_type])
                 break
         else:
-            raise KeyError(f"The simple pattern of atom #{atom} can not be found\n")
+            charges.append(0)
+            atom_type_alls.append("XXX")
+            Xprint(f"The pattern of atom #{atom} can not be found. The molecule {assign.name} is not in the training dataset of TPACM4 charge model", "WARNING")
     Xprint(f"The simple patterns are \n{atom_type_alls}", "DEBUG")
     extra_strings = _find_extra_string(atom_type_alls, assign)
     Xprint(f"The extra strings are \n{extra_strings}", "DEBUG")
