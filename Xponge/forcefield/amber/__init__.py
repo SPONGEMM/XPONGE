@@ -2,8 +2,8 @@
 This **package** sets the basic configuration of amber force field
 """
 import os
-from ...helper import set_global_alternative_names, Generate_New_Bonded_Force_Type
-from ... import AtomType, load_parmdat, load_frcmod
+from ...helper import set_global_alternative_names, Generate_New_Bonded_Force_Type, Xdict
+from ... import AtomType, load_parmdat, load_frcmod, Molecule
 
 from ..base import charge_base, mass_base, lj_base, bond_base, angle_base, dihedral_base, nb14_base,\
     virtual_atom_base, exclude_base
@@ -42,6 +42,43 @@ def load_parameters_from_parmdat(filename, prefix=True):
     lj_base.LJType.New_From_String(ljs)
     nb14_base.NB14Type.New_From_String(nb14s)
 
+
+def _amber_write_cmap(self):
+    """
+    This **function** is used to write SPONGE input file
+
+    :param self: the Molecule instance
+    :return: the string to write
+    """
+    bonds = []
+    haved_cmaps = []
+    haved_cmap_index = Xdict()
+    for bond in self.bonded_forces.get("cmap", []):
+        if bond.type not in haved_cmaps:
+            haved_cmap_index[bond.type] = len(haved_cmaps)
+            haved_cmaps.append(bond.type)
+        bonds.append("%d %d %d %d %d %d" % (self.atom_index[bond.atoms[0]]
+                                            , self.atom_index[bond.atoms[1]],
+                                            self.atom_index[bond.atoms[2]],
+                                            self.atom_index[bond.atoms[3]],
+                                            self.atom_index[bond.atoms[4]], haved_cmap_index[bond.type]))
+
+    if bonds:
+        towrite = "%d %d\n" % (len(bonds), len(haved_cmaps))
+        for bondtype in haved_cmaps:
+            towrite += "%d " % bondtype.resolution
+        towrite += "\n"
+        for bondtype in haved_cmaps:
+            for i, pi in enumerate(bondtype.parameters):
+                towrite += "%f " % pi
+                if (i + 1) % bondtype.resolution == 0:
+                    towrite += "\n"
+            towrite += "\n"
+        bonds.sort(key=lambda x: list(map(int, x.split()[:5])))
+        towrite += "\n".join(bonds)
+
+        return towrite
+    return None
 
 def load_parameters_from_frcmod(filename, include_cmap=False, prefix=True):
     """
@@ -87,6 +124,7 @@ def load_parameters_from_frcmod(filename, include_cmap=False, prefix=True):
                 """
                 return [atom_list]
         AmberCMapType.New_From_Dict(cmap)
+        Molecule.Set_Save_SPONGE_Input("cmap")(_amber_write_cmap)
 
 
 set_global_alternative_names()
