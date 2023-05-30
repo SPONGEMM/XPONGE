@@ -5,7 +5,7 @@ import sys
 import os
 import shutil
 
-from .. import Molecule, load, build
+from .. import Molecule, load, build, import_python_script
 from ..analysis import MdoutReader
 from ..helper import Xopen, Xprint
 from ..mdrun import run
@@ -77,14 +77,14 @@ def _mol2rfe_min(args, iteror):
             os.mkdir("%d/min" % i)
             basic = f"SPONGE -default_in_file_prefix {i}/{args.temp}"
             lambda_ = args.l[i]
-            basic += f" -mode minimization -lambda_lj {lambda_} -cutoff 8 -molecule_map_output 0"
-            basic += f" -neighbor_list_max_atom_in_grid_numbers 128 -neighbor_list_max_neighbor_numbers 1200"
+            basic += f" -mode minimization -lambda_lj {lambda_}"
             basic += _mol2rfe_output_path("min", i, args.temp)
-            if i != 0:
+            if i != 0 and 0 in args.l:
                 basic += f" -coordinate_in_file 0/pre_equilibrium/{args.temp}_coordinate.txt"
             dt_factor = 1e-2
             inc_rate = 1.5
             if not args.mi:
+                basic += f" -neighbor_list_max_atom_in_grid_numbers 128 -neighbor_list_max_neighbor_numbers 1200 -cutoff 8"
                 cif = " -minimization_dynamic_dt 1"
                 exit_code = run(f"{basic} {cif} -step_limit {args.min_step} \
 -minimization_dt_factor {dt_factor} -minimization_dt_increasing_rate {inc_rate}")
@@ -112,6 +112,9 @@ the potential still can not be reduced to 0", "ERROR")
                 if exit_code != 0:
                     Xprint(f"The minimization of lambda {i} exited with code {exit_code}", "ERROR")
                     sys.exit(exit_code)
+        if len(iteror) != 1 and args.mpy:
+            import_python_script(args.mpy)
+
 def _mol2rfe_pre_equilibrium(args, iteror):
     """
 
@@ -125,15 +128,15 @@ def _mol2rfe_pre_equilibrium(args, iteror):
             os.mkdir("%d/pre_equilibrium" % i)
             command = f"SPONGE -default_in_file_prefix {i}/{args.temp}"
             lambda_ = args.l[i]
-            command += f" -lambda_lj {lambda_} -cutoff 8 -molecule_map_output 0"
-            command += f" -neighbor_list_max_atom_in_grid_numbers 128 -neighbor_list_max_neighbor_numbers 1200"
+            command += f" -lambda_lj {lambda_}"
             command += _mol2rfe_output_path("pre_equilibrium", i, args.temp)
             command += f" -coordinate_in_file {i}/min/{args.temp}_coordinate.txt"
             if not args.pi:
-                command += f" -mode NPT -step_limit {args.pre_equilibrium_step}"
+                command += f" -neighbor_list_max_atom_in_grid_numbers 128 -neighbor_list_max_neighbor_numbers 1200 -cutoff 8"
+                command += f" -mode NPT -step_limit {args.pre_equilibrium_step if len(iteror) != 1 else args.p1step}"
                 command += f" -dt {args.dt} -constrain_mode SHAKE"
                 command += " -barostat andersen_barostat -thermostat middle_langevin"
-                command += " -middle_langevin_gamma 10 -middle_langevin_velocity_max 20"
+                command += " -middle_langevin_gamma 10 -velocity_max 20 -andersen_barostat_tau 0.1"
                 exit_code = run(command)
             else:
                 command += f" -mdin {args.pi}"
@@ -141,6 +144,8 @@ def _mol2rfe_pre_equilibrium(args, iteror):
             if exit_code != 0:
                 Xprint(f"The pre_equilibrium of lambda {i} exited with code {exit_code}", "ERROR")
                 sys.exit(exit_code)
+        if len(iteror) != 1 and args.ppy:
+            import_python_script(args.ppy)
 
 
 def _mol2rfe_equilibrium(args):
@@ -156,16 +161,16 @@ def _mol2rfe_equilibrium(args):
             os.mkdir("%d/equilibrium" % i)
             command = f"SPONGE -default_in_file_prefix {i}/{args.temp}"
             lambda_ = args.l[i]
-            command += f" -lambda_lj {lambda_} -cutoff 8 -molecule_map_output 0"
-            command += f" -neighbor_list_max_atom_in_grid_numbers 128 -neighbor_list_max_neighbor_numbers 1200"
+            command += f" -lambda_lj {lambda_} -step_limit {args.equilibrium_step} "
             command += _mol2rfe_output_path("equilibrium", i, args.temp)
             command += f" -coordinate_in_file {i}/pre_equilibrium/{args.temp}_coordinate.txt"
             command += f" -velocity_in_file {i}/pre_equilibrium/{args.temp}_velocity.txt"
             if not args.ei:
-                command += f" -mode NPT -step_limit {args.equilibrium_step} -dt {args.dt} -constrain_mode SHAKE"
+                command += f" -mode NPT  -cutoff 8 -dt {args.dt} -constrain_mode SHAKE"
                 command += " -barostat andersen_barostat -thermostat middle_langevin"
-                command += " -middle_langevin_gamma 10 -middle_langevin_velocity_max 20"
-                command += f" -write_information_interval 100 -write_restart_file_interval {args.equilibrium_step}"
+                command += f" -neighbor_list_max_atom_in_grid_numbers 128 -neighbor_list_max_neighbor_numbers 1200"
+                command += " -middle_langevin_gamma 10 -velocity_max 20"
+                command += f" -write_mdout_interval 1000 -write_trajectory_interval 100 -write_restart_file_interval {args.equilibrium_step}"
                 exit_code = run(command)
             else:
                 command += f" -mdin {args.pi}"
@@ -173,6 +178,8 @@ def _mol2rfe_equilibrium(args):
             if exit_code != 0:
                 Xprint(f"The equilibrium of lambda {i} exited with code {exit_code}", "ERROR")
                 sys.exit(exit_code)
+        if len(iteror) != 1 and args.ppy:
+            import_python_script(args.ppy)
 
 def _mol2rfe_analysis(args, merged_from, merged_to, match_map, from_, to_):
     """

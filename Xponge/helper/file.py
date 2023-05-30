@@ -3,9 +3,20 @@
 """
 import io
 import re
+import sys
+from pathlib import Path
+from importlib import import_module
 from . import set_global_alternative_names, Xprint
 
-__all__ = ["file_filter", "pdb_filter"]
+__all__ = ["file_filter", "pdb_filter", "import_python_script"]
+
+def import_python_script(path):
+    if not isinstance(path, Path):
+        path = Path(path)
+    sys.path.append(str(path.parent))
+    if path.suffix != ".py":
+        raise TypeError(f"{path} should be a python script")
+    import_module(path.stem)
 
 def file_filter(infile, outfile, reg_exp, replace_dict):
     """

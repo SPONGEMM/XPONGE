@@ -24,10 +24,14 @@ def ti_analysis(args, merged_from):
     for i in range(args.nl + 1):
         if os.path.exists("%d/ti" % i):
             shutil.rmtree("%d/ti" % i)
+        if os.path.exists("%d/equilibrium/reweighting_factor.txt" % i):
+            weight = np.loadtxt("%d/equilibrium/reweighting_factor.txt" % i)
+        else:
+            weight = np.ones(frame, dtype=float)
+        weight /= np.sum(weight)
         os.mkdir("%d/ti" % i)
         inprefix = f"{i}/{args.temp}"
         command = f"SPONGE_TI -LJ_soft_core_in_file {inprefix}_LJ_soft_core.txt"
-        command += f" -neighbor_list_max_atom_in_grid_numbers 128 -neighbor_list_max_neighbor_numbers 1200"
         command += " -exclude_in_file {0}_exclude.txt -charge_in_file {0}_charge.txt".format(inprefix)
         command += f" -chargeA_in_file 0/{args.temp}_charge.txt"
         command += f" -chargeB_in_file {args.nl}/{args.temp}_charge.txt"
@@ -37,20 +41,20 @@ def ti_analysis(args, merged_from):
         inprefix = f"{i}/ti/{args.temp}"
         command += f" -mdinfo {inprefix}.mdinfo -mdout {inprefix}.mdout"
         inprefix = f"{i}/equilibrium/{args.temp}"
-        command += f" -crd {inprefix}.dat -box {inprefix}.box -TI dh_dlambda.txt"
-        command += f" -atom_numbers {len(merged_from.atoms)}"
-        command += f" -frame_numbers {frame}"
+        command += f" -crd {inprefix}.dat -box {inprefix}.box"
         if not args.ai:
+            command += f" -neighbor_list_max_atom_in_grid_numbers 128 -neighbor_list_max_neighbor_numbers 1200 -cutoff 8"
             run(command)
         else:
             command += f" -mdin {args.ai}"
             run(command)
         temp = MdoutReader(f"{i}/ti/{args.temp}.mdout").dH_dlambda
-        prefix_sum.append(np.cumsum(temp[::]) / (np.arange(frame) + 1))
-        suffix_sum.append(np.cumsum(temp[::-1]) / (np.arange(frame) + 1))
+        prefix_sum.append(np.cumsum(temp[::]) / np.cumsum(weight[::]))
+        suffix_sum.append(np.cumsum(temp[::-1]) / np.cumsum(weight[::-1]))
         ses.append(np.std(temp) / np.sqrt(frame))
+        
     prefix_sum = np.array(prefix_sum)
-    dh_dlambda = np.loadtxt("dh_dlambda.txt")
+    dh_dlambda = prefix_sum[:,-1]
     ses = np.array(ses)
     ses *= ses
     dh = []

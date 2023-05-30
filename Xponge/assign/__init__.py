@@ -1006,7 +1006,7 @@ If None is given, the total charge will not be checked
          assign.determine_connectivity(tolerance=bond_tolerance)
     success = assign.Determine_Bond_Order(total_charge=total_charge)
     if not success:
-        Xprint(f"The connectivity or the bond orders in {filename} are not reasonable", "ERROR")
+        Xprint(f"The connectivity or the bond orders in {filename} are not reasonable", "WARNING")
     assign.Determine_Ring_And_Bond_Type()
     return assign
 
@@ -1066,7 +1066,7 @@ If None is given, the total charge will not be checked
         assign.determine_connectivity(tolerance=bond_tolerance)
         success = assign.Determine_Bond_Order(total_charge=total_charge)
         if not success:
-            Xprint(f"The connectivity or the bond orders in {filename} are not reasonable", "ERROR")
+            Xprint(f"The connectivity or the bond orders in {filename} are not reasonable", "WARNING")
         assign.Determine_Ring_And_Bond_Type()
     if assign is None:
         raise OSError(f"The file {filename} is not a xyz file")
@@ -1158,7 +1158,7 @@ If None is given, the total charge will not be checked
                 bond[j] = -1
         success = assign.Determine_Bond_Order(total_charge=total_charge)
         if not success:
-            Xprint(f"The bond orders in {filename} are not reasonable", "ERROR")
+            Xprint(f"The bond orders in {filename} are not reasonable", "WARNING")
         else:
             Xprint(f"The bond orders in {filename} are not reasonable and have been modified", "WARNING")
     if assign is None:

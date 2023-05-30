@@ -526,11 +526,7 @@ def mol2rfe(args):
         source("..forcefield.amber.ff14sb")
         source("..forcefield.amber.tip3p")
     else:
-        idic, ipy = os.path.split(args.ff)
-        sys.path.append(idic)
-        ipy, isuffix = os.path.splitext(ipy)
-        assert isuffix == ".py", "the input force field file should be an Xponge file written by python"
-        __import__(ipy)
+        import_python_script(args.ff)
 
     if not args.do:
         args.do = [["build", "min", "pre_equilibrium", "equilibrium", "analysis"]]

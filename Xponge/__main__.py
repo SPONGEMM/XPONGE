@@ -171,13 +171,19 @@ instead of the default one")
                          help="the dt used for simulation when mdin is not provided")
     mol2rfe.add_argument("-mstep", "-min_step", dest="min_step", default=5000, type=int,
                          metavar="5000",
-                         help="the minimization step used for simulation when mdin is not provided")
+                         help="the minimization step used for simulation")
+    mol2rfe.add_argument("-mpy", help="the python script to do after minimization")
     mol2rfe.add_argument("-pstep", "-pre_equilibrium_step", dest="pre_equilibrium_step", default=50000, type=int,
                          metavar="50000",
-                         help="the pre-equilibrium step used for simulation when mdin is not provided")
+                         help="the pre-equilibrium step used for simulation")
+    mol2rfe.add_argument("-ppy", help="the python script to do after pre_equilibrium")
+    mol2rfe.add_argument("-p1step", "-first_pre_equilibrium_step", dest="p1step", default=100000, type=int,
+                         metavar="100000",
+                         help="the equilibrium step used for the first lambda simulation")
     mol2rfe.add_argument("-estep", "-equilibrium_step", dest="equilibrium_step", default=500000, type=int,
                          metavar="500000",
-                         help="the equilibrium step used for simulation when mdin is not provided")
+                         help="the equilibrium step used for simulation")
+    mol2rfe.add_argument("-epy", help="the python script to do after equilibrium")
     mol2rfe.add_argument("-thermostat", default="middle_langevin",
                          metavar="middle_langevin", choices=["middle_langevin"],
                          help="the thermostat used for simulation when mdin is not provided")
