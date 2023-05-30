@@ -8,7 +8,7 @@ import MDAnalysis as mda
 import numpy as np
 from tqdm import tqdm
 
-from .. import Molecule, load, build, source
+from .. import Molecule, load, build, source, import_python_script
 from ..analysis import MdoutReader
 from ..analysis.md_analysis import SpongeTrajectoryReader
 from ..analysis.sasa import SASA
@@ -29,11 +29,7 @@ def _mmgbsa_build(args):
                 load.load_mol2(mol2file, as_template=True)
                 gaff.parmchk2_gaff(mol2file, f"{args.temp}_TMP{extrai}.frcmod")
         else:
-            idic, ipy = os.path.split(args.ff)
-            sys.path.append(idic)
-            ipy, isuffix = os.path.splitext(ipy)
-            assert isuffix == ".py", "the input force field file should be an Xponge file written by python"
-            __import__(ipy)
+            import_python_script(args.ff)
         pdb = load.load_pdb(args.pdb)
         if os.path.exists("run"):
             shutil.rmtree("run")
@@ -173,16 +169,7 @@ def _mmgbsa_analysis(args):
         r1.write(f"part1/{args.temp}.dat", "SPONGE_TRAJ", frames="all")
         r2.write(f"part2/{args.temp}.dat", "SPONGE_TRAJ", frames="all")
         complex_.write(f"complex/{args.temp}.dat", "SPONGE_TRAJ", frames="all")
-        """
-        for part in ["part1", "part2", "complex"]:
-            command = f"SPONGE_NOPBC -mode RERUN -default_in_file_prefix {part}/{args.temp} \
--crd {part}/{args.temp}.dat -box run/equilibrium/{args.temp}.box"
-            command += _mmgbsa_output_path(f"{part}", args.temp, False)
-            exit_code = run(command)
-            if exit_code != 0:
-                Xprint(f"The analysis of {part} exited with code {exit_code}", "ERROR")
-                sys.exit(exit_code)
-"""
+
         with open("free_energy.txt", "w") as f:
             complex_ene = MdoutReader("complex/TMP.mdout")
             r1_ene = MdoutReader("part1/TMP.mdout")

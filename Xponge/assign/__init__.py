@@ -580,10 +580,6 @@ connected to two other atoms, "N4" means a nitrogen atom connected to four other
 
         :return: None
         """
-        self.rings = _RING.get_rings(self)
-        _RING.add_rings_basic_marker(self, self.rings)
-        _RING.check_rings_type(self, self.rings)
-
         for atom in range(len(self.atoms)):
             self.atom_marker[atom].clear()
             dlo = 0
@@ -612,6 +608,9 @@ connected to two other atoms, "N4" means a nitrogen atom connected to four other
                         self.Add_Bond_Marker(atom, atom2, "DB", True)
                 else:
                     self.Add_Bond_Marker(atom, atom2, "tb", True)
+        self.rings = _RING.get_rings(self)
+        _RING.add_rings_basic_marker(self, self.rings)
+        _RING.check_rings_type(self, self.rings)
         self.built = True
 
     def determine_atom_type(self, rule):
@@ -1007,7 +1006,6 @@ If None is given, the total charge will not be checked
     success = assign.Determine_Bond_Order(total_charge=total_charge)
     if not success:
         Xprint(f"The connectivity or the bond orders in {filename} are not reasonable", "WARNING")
-    assign.Determine_Ring_And_Bond_Type()
     return assign
 
 
@@ -1035,7 +1033,6 @@ def get_assignment_from_residuetype(restype):
     success = assign.Determine_Bond_Order(total_charge=total_charge)
     if not success:
         Xprint(f"The connectivity, the bond orders or the charges of the ResidueType {restype.name} are not reasonable", "WARNING")
-    assign.Determine_Ring_And_Bond_Type()
     return assign
 
 
@@ -1067,7 +1064,6 @@ If None is given, the total charge will not be checked
         success = assign.Determine_Bond_Order(total_charge=total_charge)
         if not success:
             Xprint(f"The connectivity or the bond orders in {filename} are not reasonable", "WARNING")
-        assign.Determine_Ring_And_Bond_Type()
     if assign is None:
         raise OSError(f"The file {filename} is not a xyz file")
     return assign
@@ -1164,7 +1160,6 @@ If None is given, the total charge will not be checked
     if assign is None:
         raise OSError(f"The file {filename} is not a mol2 file")
 
-    assign.Determine_Ring_And_Bond_Type()
     sum_of_formal_charge = sum(assign.formal_charge)
     sum_of_partial_charge = int(round(sum(assign.charge)))
     if  sum_of_formal_charge != sum_of_partial_charge:
