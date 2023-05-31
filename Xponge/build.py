@@ -106,12 +106,13 @@ def _find_the_force(frc, frc_all_final, cls):
     :param cls:
     :return:
     """
+    frc_all_types = frc.get_all_types()
     for frc_ones in frc_all_final:
         finded = Xdict()
         # 先直接找
         for frc_one in frc_ones:
             tofindname = frc.Get_Type_Name(frc_one)
-            if tofindname in frc.get_all_types():
+            if tofindname in frc_all_types:
                 finded[tofindname] = [frc.get_type(tofindname), frc_one]
                 break
         # 没找到再找通用的
@@ -124,7 +125,7 @@ def _find_the_force(frc, frc_all_final, cls):
                     if pcountx > leastfinded_x:
                         continue
                     tofindname = "-".join(p)
-                    if tofindname in frc.get_all_types():
+                    if tofindname in frc_all_types:
                         finded = {tofindname: [frc.get_type(tofindname), frc_one]}
                         leastfinded_x = pcountx
                         break
@@ -191,32 +192,28 @@ def _modify_linked_atoms(cls):
     atom2_friends = set([atom2])
 
     far = GlobalSetting.farthest_bonded_force
-    temp_atom1_linked = {i: set() for i in range(far, 2, -1)}
-    temp_atom2_linked = {i: set() for i in range(far, 2, -1)}
 
     for i in range(far - 1, 1, -1):
-        for atom in atom1.linked_atoms[i]:
-            atom.Link_Atom(i + 1, atom2)
-            temp_atom2_linked[i + 1].add(atom)
+        for atom in atom1.internal_linked_atoms[i]:
+            atom.Link_Atom(i + 1, atom2, internal=False)
+            atom2.Link_Atom(i + 1, atom, internal=False)
             atom1_friends.add(atom)
-        for atom in atom2.linked_atoms[i]:
-            atom.Link_Atom(i + 1, atom1)
-            temp_atom1_linked[i + 1].add(atom)
+        for atom in atom2.internal_linked_atoms[i]:
+            atom.Link_Atom(i + 1, atom1, internal=False)
+            atom1.Link_Atom(i + 1, atom, internal=False)
             atom2_friends.add(atom)
-    for i in range(far - 1, 1, -1):
-        atom1.linked_atoms[i + 1] |= temp_atom1_linked[i + 1]
-        atom2.linked_atoms[i + 1] |= temp_atom2_linked[i + 1]
 
-    atom1.Link_Atom(2, atom2)
-    atom2.Link_Atom(2, atom1)
+    atom1.Link_Atom(2, atom2, internal=False)
+    atom2.Link_Atom(2, atom1, internal=False)
 
     for i in range(2, far):
         for j in range(2, far + 1 - i):
             for atom1_linked_atom in atom1.linked_atoms[i]:
                 for atom2_linked_atom in atom2.linked_atoms[j]:
                     if atom1_linked_atom not in atom2_friends and atom2_linked_atom not in atom1_friends:
-                        atom1_linked_atom.Link_Atom(i + j, atom2_linked_atom)
-                        atom2_linked_atom.Link_Atom(i + j, atom1_linked_atom)
+                        atom1_linked_atom.Link_Atom(i + j, atom2_linked_atom, internal=False)
+                        atom2_linked_atom.Link_Atom(i + j, atom1_linked_atom, internal=False)
+
     return atom1_friends, atom2_friends
 
 
@@ -247,7 +244,6 @@ def _build_residue_link(cls):
                 backupset = set(backup)
                 if atom1_friends & backupset and backupset & atom2_friends:
                     frc_all.append(backup)
-
         frc_all_final = _get_frc_all_final(frc, frc_all)
         _find_the_force(frc, frc_all_final, cls)
 

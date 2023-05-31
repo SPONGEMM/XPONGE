@@ -753,7 +753,7 @@ The function will receive the assignment as input, and give True or False as out
             from . import tpacm4
             self.charge = tpacm4.tpacm4(self, charge=parameters.get("charge", int(round(sum(self.formal_charge)))))
         else:
-            raise ValueError("methods should be one of the following: 'RESP', 'GASTEIGER'")
+            raise ValueError("methods should be one of the following: 'RESP', 'GASTEIGER', 'TPACM4' (case-insensitive)")
 
     def kekulize(self):
         """

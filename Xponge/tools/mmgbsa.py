@@ -78,11 +78,11 @@ def _mmgbsa_min(args):
             shutil.rmtree("run/min")
         os.mkdir("run/min")
         basic = f"SPONGE -default_in_file_prefix run/{args.temp}"
-        basic += f" -mode minimization -cutoff 8  -molecule_map_output 0"
         basic += _mmgbsa_output_path("run/min", args.temp)
         dt_factor = 1e-2
         inc_rate = 1.5
         if not args.mi:
+            basic += f" -mode minimization -cutoff 8"
             cif = " -minimization_dynamic_dt 1"
             exit_code = run(f"{basic} {cif} -step_limit {args.min_step} \
 -minimization_dt_factor {dt_factor} -minimization_dt_increasing_rate {inc_rate}")
@@ -119,11 +119,11 @@ def _mmgbsa_pre_equilibrium(args):
             shutil.rmtree("run/pre_equilibrium")
         os.mkdir("run/pre_equilibrium")
         command = f"SPONGE -default_in_file_prefix run/{args.temp}"
-        command += f" -cutoff 8 -molecule_map_output 0"
         command += _mmgbsa_output_path("run/pre_equilibrium", args.temp)
         command += f" -coordinate_in_file run/min/{args.temp}_coordinate.txt"
         if not args.pi:
             command += f" -mode NPT -step_limit {args.pre_equilibrium_step}"
+            command += f" -cutoff 8"
             command += f" -dt {args.dt} -constrain_mode SHAKE"
             command += " -barostat andersen_barostat -thermostat middle_langevin"
             command += " -middle_langevin_gamma 10 -middle_langevin_velocity_max 20"
@@ -142,12 +142,11 @@ def _mmgbsa_equilibrium(args):
             os.system("rm -rf run/equilibrium")
         os.mkdir("run/equilibrium")
         command = f"SPONGE -default_in_file_prefix run/{args.temp}"
-        command += f" -cutoff 8 -molecule_map_output 0"
         command += _mmgbsa_output_path("run/equilibrium", args.temp)
         command += f" -coordinate_in_file run/pre_equilibrium/{args.temp}_coordinate.txt"
         command += f" -velocity_in_file run/pre_equilibrium/{args.temp}_velocity.txt"
         if not args.ei:
-            command += f" -mode NPT -step_limit {args.equilibrium_step} -dt {args.dt} -constrain_mode SHAKE"
+            command += f" -mode NPT -step_limit {args.equilibrium_step} -dt {args.dt} -constrain_mode SHAKE  -cutoff 8"
             command += " -barostat andersen_barostat -thermostat middle_langevin"
             command += " -middle_langevin_gamma 10 -middle_langevin_velocity_max 20"
             command += f" -write_information_interval 100 -write_restart_file_interval {args.equilibrium_step}"
@@ -159,10 +158,11 @@ def _mmgbsa_equilibrium(args):
             Xprint(f"The equilibrium exited with code {exit_code}", "ERROR")
             sys.exit(exit_code)
 
-
 def _mmgbsa_analysis(args):
+    """do analysis"""
     if "analysis" in args.do:
-        u = mda.Universe(f"run/{args.temp}_mass.txt", f"run/equilibrium/{args.temp}.dat", box=f"run/equilibrium/{args.temp}.box", format=SpongeTrajectoryReader)
+        u = mda.Universe(f"run/{args.temp}_mass.txt", f"run/equilibrium/{args.temp}.dat",
+                         box=f"run/equilibrium/{args.temp}.box", format=SpongeTrajectoryReader)
         r1 = u.select_atoms(args.s1)
         r2 = u.select_atoms(args.s2)
         complex_ = r1 + r2
@@ -175,5 +175,10 @@ def _mmgbsa_analysis(args):
             r1_ene = MdoutReader("part1/TMP.mdout")
             r2_ene = MdoutReader("part2/TMP.mdout")
             delta_ene = complex_ene.potential - r1_ene.potential - r2_ene.potential
-            f.write(f"{np.mean(delta_ene):.2f} +- {np.std(delta_ene):.2f}")
+            delta_gb = complex_ene.gb - r1_ene.gb - r2_ene.gb
+            delta_lj = complex_ene.LJ - r1_ene.LJ - r2_ene.LJ
+            f.write("total\t\t\tgb\t\t\tLJ\t\t\tCoulomb\n")
+            f.write(f"{np.mean(delta_ene):.2f} +- {np.std(delta_ene):.2f}\t")
+            f.write(f"{np.mean(delta_gb):.2f} +- {np.std(delta_gb):.2f}\t")
+            f.write(f"{np.mean(delta_lj):.2f} +- {np.std(delta_lj):.2f}\t")
 
