@@ -411,7 +411,8 @@ mode = minimization
 minimization_dynamic_dt = 1
 step_limit = {step}
 write_information_interval = {step}
-molecule_map_output  = 1
+molecule_map_output = 1
+dont_check_input = 1
 """)
         towrite = ""
         if extra_commands:

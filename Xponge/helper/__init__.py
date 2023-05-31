@@ -853,7 +853,9 @@ None to use the charge sum of the unomitted atoms
             for atom in self.atoms:
                 atom.copied[forcopy].linked_atoms = {key: set(map(lambda _atom: _atom.copied[forcopy], value)) for
                                                      key, value in atom.linked_atoms.items()}
-
+                atom.copied[forcopy].internal_linked_atoms = {key: set(map(lambda _atom: _atom.copied[forcopy], 
+                                                                           value))
+                                                              for key, value in atom.internal_linked_atoms.items()}
         if not donot_delete:
             for atom in self.atoms:
                 atom.copied.pop(forcopy)
@@ -952,6 +954,8 @@ class Atom(Entity):
         """the residue which the atom belongs to, maybe a Residue instance or a ResidueType instance"""
 
         # 成键信息
+        self.internal_linked_atoms = Xdict({i + 1: set() for i in range(1, GlobalSetting.farthest_bonded_force)},
+                                            not_found_method=not_found_method)
         self.linked_atoms = Xdict({i + 1: set() for i in range(1, GlobalSetting.farthest_bonded_force)},
                                   not_found_method=not_found_method)
         """a dict mapping the type and the atoms linked"""
@@ -983,17 +987,22 @@ class Atom(Entity):
             self.copied[forcopy] = new_atom
         return new_atom
 
-    def link_atom(self, link_type, atom):
+    def link_atom(self, link_type, atom, internal=True):
         """
         This **function** is used to link atoms for building
 
         :param link_type: the type to link
         :param atom: the atom to link
+        :param internal: whether the link in one residue or between residues
         :return: None
         """
         if link_type not in self.linked_atoms.keys():
             self.linked_atoms[link_type] = set()
         self.linked_atoms[link_type].add(atom)
+        if internal:
+            if link_type not in self.internal_linked_atoms.keys():
+                self.internal_linked_atoms[link_type] = set()
+            self.internal_linked_atoms[link_type].add(atom)
 
     def extra_exclude_atom(self, atom):
         """
@@ -1742,8 +1751,7 @@ If None, the information will be deleted between start and end
             new_molecule.Add_Residue(res.deepcopy(forcopy))
 
         for link in self.residue_links:
-            new_link = link.deepcopy(forcopy)
-            new_molecule.add_residue_link(new_link.atom1, new_link.atom2)
+            new_molecule.add_residue_link(link.atom1.copied[forcopy], link.atom2.copied[forcopy])
 
         for res in self.residues:
             for atom in res.atoms:
@@ -1760,10 +1768,13 @@ If None, the information will be deleted between start and end
             for atom in self.atoms:
                 atom.copied[forcopy].linked_atoms = {key: set(map(lambda aton: aton.copied[forcopy], value)) for
                                                      key, value in atom.linked_atoms.items()}
+                atom.copied[forcopy].internal_linked_atoms = {key: set(map(lambda aton: aton.copied[forcopy], value)) for
+                                                              key, value in atom.internal_linked_atoms.items()}
 
         for res in self.residues:
             for atom in res.atoms:
                 atom.copied.pop(forcopy)
+
         return new_molecule
 
     def get_atom_coordinates(self):
