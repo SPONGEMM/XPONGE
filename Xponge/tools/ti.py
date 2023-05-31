@@ -28,10 +28,9 @@ def ti_analysis(args, merged_from):
             weight = np.loadtxt("%d/equilibrium/reweighting_factor.txt" % i)
         else:
             weight = np.ones(frame, dtype=float)
-        weight /= np.sum(weight)
         os.mkdir("%d/ti" % i)
         inprefix = f"{i}/{args.temp}"
-        command = f"SPONGE_TI -LJ_soft_core_in_file {inprefix}_LJ_soft_core.txt"
+        command = f"SPONGE_TI -mass_in_file {i}/{args.temp}_mass.txt -LJ_soft_core_in_file {inprefix}_LJ_soft_core.txt"
         command += " -exclude_in_file {0}_exclude.txt -charge_in_file {0}_charge.txt".format(inprefix)
         command += f" -chargeA_in_file 0/{args.temp}_charge.txt"
         command += f" -chargeB_in_file {args.nl}/{args.temp}_charge.txt"
@@ -49,10 +48,10 @@ def ti_analysis(args, merged_from):
             command += f" -mdin {args.ai}"
             run(command)
         temp = MdoutReader(f"{i}/ti/{args.temp}.mdout").dH_dlambda
+        temp *= weight 
         prefix_sum.append(np.cumsum(temp[::]) / np.cumsum(weight[::]))
         suffix_sum.append(np.cumsum(temp[::-1]) / np.cumsum(weight[::-1]))
-        ses.append(np.std(temp) / np.sqrt(frame))
-        
+        ses.append(np.std(temp) / np.sqrt(np.sum(weight)))
     prefix_sum = np.array(prefix_sum)
     dh_dlambda = prefix_sum[:,-1]
     ses = np.array(ses)

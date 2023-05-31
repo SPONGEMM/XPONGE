@@ -178,8 +178,8 @@ def _mol2rfe_equilibrium(args):
             if exit_code != 0:
                 Xprint(f"The equilibrium of lambda {i} exited with code {exit_code}", "ERROR")
                 sys.exit(exit_code)
-        if len(iteror) != 1 and args.ppy:
-            import_python_script(args.ppy)
+        if args.epy:
+            import_python_script(args.epy)
 
 def _mol2rfe_analysis(args, merged_from, merged_to, match_map, from_, to_):
     """

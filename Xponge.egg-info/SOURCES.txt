@@ -117,6 +117,7 @@ Xponge/forcefield/special/gb.py
 Xponge/forcefield/special/min.py
 Xponge/forcefield/sybyl/__init__.py
 Xponge/helper/__init__.py
+Xponge/helper/file.py
 Xponge/helper/math.py
 Xponge/helper/namespace.py
 Xponge/helper/rdkit.py
