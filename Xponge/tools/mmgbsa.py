@@ -18,6 +18,14 @@ from ..mdrun import run
 __all__ = ["_mmgbsa_build", "_mmgbsa_min", "_mmgbsa_pre_equilibrium", "_mmgbsa_equilibrium",
 "_mmgbsa_analysis"]
 
+def _restrain_process(args):
+    u = mda.Universe(f"run/{args.temp}_mass.txt", f"run/{args.temp}_coordinate.txt")
+    urr = u.select_atoms(args.sr)
+    shutil.copy(f"run/{args.temp}_coordinate.txt", f"run/{args.temp}_restrain_coordinate.txt")
+    id2index_map = {atom.id: str(i) for i, atom in enumerate(u.atoms)}
+    with open(f"run/{args.temp}_restrain_atom_id.txt", "w") as f:
+        f.write("\n".join([id2index_map[atom.id] for atom in urr.atoms]))
+
 def _mmgbsa_build(args):
     """ build the systems"""
     if "build" in args.do:
@@ -34,9 +42,14 @@ def _mmgbsa_build(args):
         if os.path.exists("run"):
             shutil.rmtree("run")
         os.mkdir("run")
+        if args.ivacuum:
+            pdb.vacuum_layer = args.ivacuum
+        Xprint("building system run")
         build.save_mol2(pdb, "run/%s.mol2" % (args.temp))
         build.Save_SPONGE_Input(pdb, "run/%s" % (args.temp))
         u = mda.Universe(f"run/{args.temp}.mol2")
+        if args.sr:
+            _restrain_process(args)
         ur1 = u.select_atoms(args.s1)
         ur2 = u.select_atoms(args.s2)
         ur1.write(f"{args.temp}_r1.mol2")
@@ -52,16 +65,19 @@ def _mmgbsa_build(args):
             shutil.rmtree("complex")
         os.mkdir("complex")
         build.save_mol2(complex_, "complex/%s.mol2" % (args.temp))
+        Xprint("building system complex")
         build.Save_SPONGE_Input(complex_, "complex/%s" % (args.temp))
         if os.path.exists("part1"):
             shutil.rmtree("part1")
         os.mkdir("part1")
         build.save_mol2(r1, "part1/%s.mol2" % (args.temp))
+        Xprint("building system part1")
         build.Save_SPONGE_Input(r1, "part1/%s" % (args.temp))
         if os.path.exists("part2"):
             shutil.rmtree("part2")
         os.mkdir("part2")
         build.save_mol2(r2, "part2/%s.mol2" % (args.temp))
+        Xprint("building system part2")
         build.Save_SPONGE_Input(r2, "part2/%s" % (args.temp))
 
 def _mmgbsa_output_path(subdir, tempname, add_crd=True):
@@ -77,8 +93,10 @@ def _mmgbsa_min(args):
         if os.path.exists("run/min"):
             shutil.rmtree("run/min")
         os.mkdir("run/min")
-        basic = f"SPONGE -default_in_file_prefix run/{args.temp}"
+        basic = f"SPONGE -default_in_file_prefix run/{args.temp} -device {args.device}"
         basic += _mmgbsa_output_path("run/min", args.temp)
+        if args.sr:
+            basic += f" -restrain_atom_id run/{args.temp}_restrain_atom_id.txt -restrain_weight {args.rw}"
         dt_factor = 1e-2
         inc_rate = 1.5
         if not args.mi:
@@ -118,15 +136,21 @@ def _mmgbsa_pre_equilibrium(args):
         if os.path.exists("run/pre_equilibrium"):
             shutil.rmtree("run/pre_equilibrium")
         os.mkdir("run/pre_equilibrium")
-        command = f"SPONGE -default_in_file_prefix run/{args.temp}"
+        command = f"SPONGE -default_in_file_prefix run/{args.temp} -device {args.device}"
         command += _mmgbsa_output_path("run/pre_equilibrium", args.temp)
+        if args.sr:
+            command += f" -restrain_atom_id run/{args.temp}_restrain_atom_id.txt -restrain_weight {args.rw}"
         command += f" -coordinate_in_file run/min/{args.temp}_coordinate.txt"
         if not args.pi:
-            command += f" -mode NPT -step_limit {args.pre_equilibrium_step}"
+            command += f" -step_limit {args.pre_equilibrium_step}"
             command += f" -cutoff 8"
             command += f" -dt {args.dt} -constrain_mode SHAKE"
-            command += " -barostat andersen_barostat -thermostat middle_langevin"
-            command += " -middle_langevin_gamma 10 -middle_langevin_velocity_max 20"
+            command += " -thermostat middle_langevin"
+            if not args.nvt:
+                command += " -mode NPT -barostat andersen_barostat"
+            else:
+                command += " -mode NVT"
+            command += " -middle_langevin_gamma 10 -velocity_max 20"
             exit_code = run(command)
         else:
             command += f" -mdin {args.pi}"
@@ -141,14 +165,20 @@ def _mmgbsa_equilibrium(args):
         if os.path.exists("run/equilibrium"):
             os.system("rm -rf run/equilibrium")
         os.mkdir("run/equilibrium")
-        command = f"SPONGE -default_in_file_prefix run/{args.temp}"
+        command = f"SPONGE -default_in_file_prefix run/{args.temp} -device {args.device}"
         command += _mmgbsa_output_path("run/equilibrium", args.temp)
         command += f" -coordinate_in_file run/pre_equilibrium/{args.temp}_coordinate.txt"
         command += f" -velocity_in_file run/pre_equilibrium/{args.temp}_velocity.txt"
+        if args.sr:
+            command += f" -restrain_atom_id run/{args.temp}_restrain_atom_id.txt -restrain_weight {args.rw}"
         if not args.ei:
-            command += f" -mode NPT -step_limit {args.equilibrium_step} -dt {args.dt} -constrain_mode SHAKE  -cutoff 8"
-            command += " -barostat andersen_barostat -thermostat middle_langevin"
-            command += " -middle_langevin_gamma 10 -middle_langevin_velocity_max 20"
+            command += f" -step_limit {args.equilibrium_step} -dt {args.dt} -constrain_mode SHAKE  -cutoff 8"
+            command += " -thermostat middle_langevin"
+            if not args.nvt:
+                command += " -mode NPT -barostat andersen_barostat"
+            else:
+                command += " -mode NVT"
+            command += " -middle_langevin_gamma 10 -velocity_max 20"
             command += f" -write_information_interval 100 -write_restart_file_interval {args.equilibrium_step}"
             exit_code = run(command)
         else:
@@ -170,6 +200,13 @@ def _mmgbsa_analysis(args):
         r2.write(f"part2/{args.temp}.dat", "SPONGE_TRAJ", frames="all")
         complex_.write(f"complex/{args.temp}.dat", "SPONGE_TRAJ", frames="all")
 
+        for i in ["complex", "part1", "part2"]:
+            exit_code = run(f"SPONGE_NOPBC -mode rerun -crd {i}/TMP.dat -device {args.device} \
+-box {i}/TMP.box -default_in_file_prefix {i}/TMP -mdout {i}/TMP.mdout -mdinfo {i}/TMP.mdinfo \
+-cutoff 999")
+            if exit_code != 0:
+                Xprint(f"The analysis of {i} exited with code {exit_code}", "ERROR")
+                sys.exit(exit_code)
         with open("free_energy.txt", "w") as f:
             complex_ene = MdoutReader("complex/TMP.mdout")
             r1_ene = MdoutReader("part1/TMP.mdout")
@@ -177,8 +214,10 @@ def _mmgbsa_analysis(args):
             delta_ene = complex_ene.potential - r1_ene.potential - r2_ene.potential
             delta_gb = complex_ene.gb - r1_ene.gb - r2_ene.gb
             delta_lj = complex_ene.LJ - r1_ene.LJ - r2_ene.LJ
-            f.write("total\t\t\tgb\t\t\tLJ\t\t\tCoulomb\n")
+            delta_ee = complex_ene.Coulomb - r1_ene.Coulomb - r2_ene.Coulomb
+            f.write("total\t\tgb\t\tLJ\t\tCoulomb\n")
             f.write(f"{np.mean(delta_ene):.2f} +- {np.std(delta_ene):.2f}\t")
             f.write(f"{np.mean(delta_gb):.2f} +- {np.std(delta_gb):.2f}\t")
             f.write(f"{np.mean(delta_lj):.2f} +- {np.std(delta_lj):.2f}\t")
+            f.write(f"{np.mean(delta_ee):.2f} +- {np.std(delta_ee):.2f}\t")
 

@@ -190,7 +190,9 @@ instead of the default one")
     mol2rfe.add_argument("-barostat", default="andersen_barostat",
                          metavar="andersen_barostat", choices=["andersen_barostat"],
                          help="the barostat used for simulation when mdin is not provided")
-
+    mol2rfe.add_argument("-device", default=0, type=int,
+                         metavar="0",
+                         help="the index of the cuda device to use")
     mol2rfe.set_defaults(func=tools.mol2rfe)
 
 
@@ -211,6 +213,8 @@ def _mm_gbsa(subparsers):
                          help="the MDAnalysis selection of the first part")
     mm_gbsa.add_argument("-s2", default="not resid 1 and protein", metavar='"not resid 1 and protein"',
                          help="the MDAnalysis selection of the second part")
+    mm_gbsa.add_argument("-sr", help="the MDAnalysis selection of the restrained part")
+    mm_gbsa.add_argument("-rw", help="the restraint weight", type=float, default=5, metavar="5")
     mm_gbsa.add_argument("-r0", "-residuetypes", nargs="*", default=[],
                          help="small molecules or non-standard residues in the system given by the Xponge mol2 file(s)")
     mm_gbsa.add_argument("-dohmr", "-do_hydrogen_mass_repartition", action="store_true",
@@ -247,6 +251,13 @@ instead of the default one")
     mm_gbsa.add_argument("-barostat", default="andersen_barostat",
                          metavar="andersen_barostat", choices=["andersen_barostat"],
                          help="the barostat used for simulation when mdin is not provided")
+    mm_gbsa.add_argument("-ivacuum", nargs=3, type=float,
+                         metavar="x y z",
+                         help="the input initial vacuum layer thickness in unit of Angstrom")
+    mm_gbsa.add_argument("-device", default=0, type=int,
+                         metavar="0",
+                         help="the index of the cuda device to use")
+    mm_gbsa.add_argument("-nvt", action="store_true", help="use NVT instead of NPT ensemble")
 
     mm_gbsa.set_defaults(func=tools.mm_gbsa)
 

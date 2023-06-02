@@ -72,7 +72,7 @@ The atoms in a ``Residue`` or a ``ResidueType`` can be obtained by their names. 
 
 """
 
-__version__ = "1.3.5"
+__version__ = "1.3.5b1"
 
 import os
 import time
@@ -154,9 +154,9 @@ def _initialize():
         else:
             towrite += "\n".join(["%f %f %f" % (atom.x, atom.y, atom.z) for atom in self.atoms])
         if self.box_length is None:
-            boxlength[0] = maxi[0] - mini[0] + 6
-            boxlength[1] = maxi[1] - mini[1] + 6
-            boxlength[2] = maxi[2] - mini[2] + 6
+            boxlength[0] = maxi[0] - mini[0] + 6 + self.vacuum_layer[0]
+            boxlength[1] = maxi[1] - mini[1] + 6 + self.vacuum_layer[1]
+            boxlength[2] = maxi[2] - mini[2] + 6 + self.vacuum_layer[2]
             self.box_length = [boxlength[0], boxlength[1], boxlength[2]]
         else:
             boxlength[0] = self.box_length[0]

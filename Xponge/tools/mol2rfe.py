@@ -75,7 +75,7 @@ def _mol2rfe_min(args, iteror):
             if os.path.exists("%d/min" % i):
                 shutil.rmtree("%d/min" % i)
             os.mkdir("%d/min" % i)
-            basic = f"SPONGE -default_in_file_prefix {i}/{args.temp}"
+            basic = f"SPONGE -default_in_file_prefix {i}/{args.temp} -device {args.device}"
             lambda_ = args.l[i]
             basic += f" -mode minimization -lambda_lj {lambda_}"
             basic += _mol2rfe_output_path("min", i, args.temp)
@@ -126,7 +126,7 @@ def _mol2rfe_pre_equilibrium(args, iteror):
             if os.path.exists("%d/pre_equilibrium" % i):
                 shutil.rmtree("%d/pre_equilibrium" % i)
             os.mkdir("%d/pre_equilibrium" % i)
-            command = f"SPONGE -default_in_file_prefix {i}/{args.temp}"
+            command = f"SPONGE -default_in_file_prefix {i}/{args.temp} -device {args.device}"
             lambda_ = args.l[i]
             command += f" -lambda_lj {lambda_}"
             command += _mol2rfe_output_path("pre_equilibrium", i, args.temp)
@@ -159,7 +159,7 @@ def _mol2rfe_equilibrium(args):
             if os.path.exists("%d/equilibrium" % i):
                 os.system("rm -rf %d/equilibrium" % i)
             os.mkdir("%d/equilibrium" % i)
-            command = f"SPONGE -default_in_file_prefix {i}/{args.temp}"
+            command = f"SPONGE -default_in_file_prefix {i}/{args.temp} -device {args.device}"
             lambda_ = args.l[i]
             command += f" -lambda_lj {lambda_} -step_limit {args.equilibrium_step} "
             command += _mol2rfe_output_path("equilibrium", i, args.temp)

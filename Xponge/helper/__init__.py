@@ -1383,6 +1383,8 @@ class Molecule():
         """the box length of the molecule"""
         self.box_angle = [90.0, 90.0, 90.0]
         """the box angle of the molecule"""
+        self.vacuum_layer = [0, 0, 0]
+        """the thickness of the vacuum layer when building"""
         self._missing_residues = Xdict(not_found_message="These are no missing residues between {}")
         if isinstance(name, ResidueType):
             new_residue = Residue(name)
