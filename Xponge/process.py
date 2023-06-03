@@ -82,7 +82,7 @@ def impose_angle(molecule, atom1, atom2, atom3, angle):
         atom.z = crd[i][2]
 
 
-def impose_dihedral(molecule, atom1, atom2, atom3, atom4, dihedral):
+def impose_dihedral(molecule, atom1, atom2, atom3, atom4, dihedral, keep_atom3=False):
     """
     This **function** is used to impose the dihedral in ``molecule`` between ``atom1``, ``atom2``, ``atom3`` \
  and ``atom4`` to ``dihedral``.
@@ -97,10 +97,14 @@ def impose_dihedral(molecule, atom1, atom2, atom3, atom4, dihedral):
     :param atom3: the atom to change its coordinate to fit the angle
     :param atom4: the atom to change its coordinate to fit the angle
     :param dihedral: dihedral angle in the unit of rad
+    :param keep_atom3: whether the other atoms linked to atom3 will be rotated
     :return: None
     """
     crd = molecule.get_atom_coordinates()
-    _, atom4_friends = molecule.divide_into_two_parts(atom2, atom3)
+    if not keep_atom3:
+        _, rotate_friends = molecule.divide_into_two_parts(atom2, atom3)
+    else:
+        _, rotate_friends = molecule.divide_into_two_parts(atom3, atom4)
     r12 = crd[molecule.atom_index[atom1]] - crd[molecule.atom_index[atom2]]
     r23 = crd[molecule.atom_index[atom3]] - crd[molecule.atom_index[atom2]]
     r34 = crd[molecule.atom_index[atom3]] - crd[molecule.atom_index[atom4]]
@@ -111,7 +115,7 @@ def impose_dihedral(molecule, atom1, atom2, atom3, atom4, dihedral):
     dihedral0 = np.arccos(cos)
     dihedral0 = np.pi - np.copysign(dihedral0, np.cross(r34xr23, r12xr23).dot(r23))
     delta_angle = dihedral - dihedral0
-    crd[atom4_friends] = np.dot(crd[atom4_friends] - crd[molecule.atom_index[atom3]],
+    crd[rotate_friends] = np.dot(crd[rotate_friends] - crd[molecule.atom_index[atom3]],
                                 get_rotate_matrix(r23, delta_angle)) + crd[molecule.atom_index[atom3]]
     for atom in molecule.atoms:
         i = molecule.atom_index[atom]
