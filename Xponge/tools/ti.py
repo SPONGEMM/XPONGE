@@ -25,7 +25,7 @@ def ti_analysis(args, merged_from):
         if os.path.exists("%d/ti" % i):
             shutil.rmtree("%d/ti" % i)
         if os.path.exists("%d/equilibrium/reweighting_factor.txt" % i):
-            weight = np.loadtxt("%d/equilibrium/reweighting_factor.txt" % i)
+            weight = np.loadtxt("%d/equilibrium/reweighting_factor.txt" % i, dtype=np.float128).reshape(-1)
         else:
             weight = np.ones(frame, dtype=float)
         os.mkdir("%d/ti" % i)
@@ -47,11 +47,14 @@ def ti_analysis(args, merged_from):
         else:
             command += f" -mdin {args.ai}"
             run(command)
-        temp = MdoutReader(f"{i}/ti/{args.temp}.mdout").dH_dlambda
-        temp *= weight 
-        prefix_sum.append(np.cumsum(temp[::]) / np.cumsum(weight[::]))
-        suffix_sum.append(np.cumsum(temp[::-1]) / np.cumsum(weight[::-1]))
-        ses.append(np.std(temp) / np.sqrt(np.sum(weight)))
+        dh_dlambda = MdoutReader(f"{i}/ti/{args.temp}.mdout").dH_dlambda
+        weighted_dh_dlambda = dh_dlambda * weight.astype(np.float64)
+        prefix_sum.append(np.cumsum(weighted_dh_dlambda[::]) / np.cumsum(weight[::]))
+        suffix_sum.append(np.cumsum(weighted_dh_dlambda[::-1]) / np.cumsum(weight[::-1]))
+        efffective_sample_size = np.sum(weight) ** 2 / np.sum(weight * weight)
+        mean = prefix_sum[-1][-1]
+        std = np.sqrt(np.sum(weight * (dh_dlambda - mean) ** 2) / np.sum(weight) / 10)
+        ses.append(std / np.sqrt(efffective_sample_size))
     prefix_sum = np.array(prefix_sum)
     dh_dlambda = prefix_sum[:,-1]
     ses = np.array(ses)

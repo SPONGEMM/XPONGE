@@ -128,13 +128,11 @@ def _mol2rfe_pre_equilibrium(args, iteror):
             os.mkdir("%d/pre_equilibrium" % i)
             command = f"SPONGE -default_in_file_prefix {i}/{args.temp} -device {args.device}"
             lambda_ = args.l[i]
-            command += f" -lambda_lj {lambda_}"
+            command += f" -lambda_lj {lambda_} -step_limit {args.pre_equilibrium_step if len(iteror) != 1 else args.p1step}"
             command += _mol2rfe_output_path("pre_equilibrium", i, args.temp)
             command += f" -coordinate_in_file {i}/min/{args.temp}_coordinate.txt"
             if not args.pi:
-                command += f" -neighbor_list_max_atom_in_grid_numbers 128 -neighbor_list_max_neighbor_numbers 1200 -cutoff 8"
-                command += f" -mode NPT -step_limit {args.pre_equilibrium_step if len(iteror) != 1 else args.p1step}"
-                command += f" -dt {args.dt} -constrain_mode SHAKE"
+                command += f" -mode NPT -cutoff 8 -dt {args.dt} -constrain_mode SHAKE"
                 command += " -barostat andersen_barostat -thermostat middle_langevin"
                 command += " -middle_langevin_gamma 10 -velocity_max 20 -andersen_barostat_tau 0.1"
                 exit_code = run(command)
@@ -165,15 +163,14 @@ def _mol2rfe_equilibrium(args):
             command += _mol2rfe_output_path("equilibrium", i, args.temp)
             command += f" -coordinate_in_file {i}/pre_equilibrium/{args.temp}_coordinate.txt"
             command += f" -velocity_in_file {i}/pre_equilibrium/{args.temp}_velocity.txt"
+            command += f" -write_information_interval 100 -write_restart_file_interval {args.equilibrium_step}"
             if not args.ei:
-                command += f" -mode NPT  -cutoff 8 -dt {args.dt} -constrain_mode SHAKE"
+                command += f" -mode NPT -cutoff 8 -dt {args.dt} -constrain_mode SHAKE"
                 command += " -barostat andersen_barostat -thermostat middle_langevin"
-                command += f" -neighbor_list_max_atom_in_grid_numbers 128 -neighbor_list_max_neighbor_numbers 1200"
                 command += " -middle_langevin_gamma 10 -velocity_max 20"
-                command += f" -write_mdout_interval 1000 -write_trajectory_interval 100 -write_restart_file_interval {args.equilibrium_step}"
                 exit_code = run(command)
             else:
-                command += f" -mdin {args.pi}"
+                command += f" -mdin {args.ei}"
                 exit_code = run(command)
             if exit_code != 0:
                 Xprint(f"The equilibrium of lambda {i} exited with code {exit_code}", "ERROR")
