@@ -20,7 +20,7 @@ def ti_analysis(args, merged_from):
     ses = []
     prefix_sum = []
     suffix_sum = []
-    frame = args.equilibrium_step // 100
+    frame = args.equilibrium_step // args.wi
     for i in range(args.nl + 1):
         if os.path.exists("%d/ti" % i):
             shutil.rmtree("%d/ti" % i)

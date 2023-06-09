@@ -766,6 +766,8 @@ the tanimoto coefficient of the max common structure.
         mol_a.residue_links.add(reslink)
         mol_b.residue_links.add(reslink)
 
+    intramolecule_nb_to_nb14(mol_a, restype_ab)
+    intramolecule_nb_to_nb14(mol_b, restype_ba)
     build.Build_Bonded_Force(mol_a)
     build.Build_Bonded_Force(mol_b)
 

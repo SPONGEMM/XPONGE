@@ -163,7 +163,7 @@ def _mol2rfe_equilibrium(args):
             command += _mol2rfe_output_path("equilibrium", i, args.temp)
             command += f" -coordinate_in_file {i}/pre_equilibrium/{args.temp}_coordinate.txt"
             command += f" -velocity_in_file {i}/pre_equilibrium/{args.temp}_velocity.txt"
-            command += f" -write_information_interval 100 -write_restart_file_interval {args.equilibrium_step}"
+            command += f" -write_information_interval {args.wi} -write_restart_file_interval {args.equilibrium_step}"
             if not args.ei:
                 command += f" -mode NPT -cutoff 8 -dt {args.dt} -constrain_mode SHAKE"
                 command += " -barostat andersen_barostat -thermostat middle_langevin"
@@ -220,5 +220,6 @@ def _mol2rfe_analysis(args, merged_from, merged_to, match_map, from_, to_):
         if args.method == "TI":
             from .ti import ti_analysis
             ti_analysis(args, merged_from)
-        elif args.method == "FEP_BAR":
-            raise NotImplementedError
+        elif args.method == "MBAR":
+            from .mbar import mbar_analysis
+            mbar_analysis(args, merged_from)

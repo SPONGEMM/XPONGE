@@ -156,7 +156,7 @@ instead of the default one")
 instead of the default one")
     mol2rfe.add_argument("-ei", "-equilibrium_mdin", help="Use this equilibrium mdin file instead of the default one")
     mol2rfe.add_argument("-ai", "-analysis_mdin", help="Use this analysis mdin file instead of the default one")
-    mol2rfe.add_argument("-method", default="TI", choices=["TI"], help="the method to calculate the free energy")
+    mol2rfe.add_argument("-method", default="TI", choices=["TI", "MBAR"], help="the method to analyze the free energy")
     mol2rfe.add_argument("-temp", default="TMP", metavar="TMP", help="the temporary file name prefix")
 
     mol2rfe.add_argument("-tmcs", default=60, type=int, metavar="60",
@@ -184,6 +184,8 @@ instead of the default one")
                          metavar="500000",
                          help="the equilibrium step used for simulation")
     mol2rfe.add_argument("-epy", help="the python script to do after equilibrium")
+    mol2rfe.add_argument("-wi", default=100, metavar="100", type=int,
+                         help="the writing information interval for equilibrium simulations")
     mol2rfe.add_argument("-thermostat", default="middle_langevin",
                          metavar="middle_langevin", choices=["middle_langevin"],
                          help="the thermostat used for simulation when mdin is not provided")
