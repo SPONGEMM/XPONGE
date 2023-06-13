@@ -9,17 +9,6 @@ from ..mdrun import run
 from ..helper import Xopen
 from ..analysis import MdoutReader
 
-def _get_observe_sits_atoms(args, merged_from, ofile):
-    count = 0
-    for i, r in enumerate(merged_from.residues):
-        if i == args.ri:
-            count = [str(i) for i in range(count, count + len(r.atoms))]
-            break
-        else:
-            count += len(r.atoms)
-    with open(ofile, "w") as f:
-        f.write("\n".join(count))
-
 def _rerun_ith_traj_with_jth_forcefield(args, i, j):
     """rerun the i-th trajecotry using the j-th forcefield"""
     if os.path.exists("%d/mbar/%d"%(i, j)):
@@ -28,20 +17,14 @@ def _rerun_ith_traj_with_jth_forcefield(args, i, j):
     lambda_ = args.l[j]
     command = f"SPONGE -mode rerun -default_in_file_prefix {j}/{args.temp} "
     command += f" -crd {i}/equilibrium/{args.temp}.dat -box {i}/equilibrium/{args.temp}.box -lambda_lj {lambda_} "
-    command += " -SITS_atom_in_file sits_atom_in_file.txt -SITS_cross_enhancing_factor 1 -SITS_mode observation "
-    command += f" -mdinfo {i}/mbar/{j}/{args.temp}.mdinfo -mdout {i}/mbar/{j}/{args.temp}.mdout"
+    command += f" -mdinfo {i}/mbar/{j}/{args.temp}.mdinfo -mdout {i}/mbar/{j}/{args.temp}.mdout -PME_print_detail 1"
     if not args.ai:
-        command += f" -neighbor_list_max_atom_in_grid_numbers 128 -neighbor_list_max_neighbor_numbers 1200 -cutoff 8"
+        command += f" -cutoff 8"
         exit_code = run(command)
     else:
         command += f" -mdin {args.ai}"
         exit_code = run(command)
     assert exit_code == 0, f"Wrong for rerun Trajectory {i} using Forcefiled {j}"
-
-def _get_neighbors_of_i(args, i, n_neighbor=1)
-    """get the neighbor lambda of the i-th trajecotry""" 
-    for j in range(min(0, i - n_neighbor), max(args.nl + 1, i + n_neighbor), 1):
-        yield j
 
 def mbar_analysis(args, merged_from):
     """
@@ -50,18 +33,42 @@ def mbar_analysis(args, merged_from):
     :param args: the arguments from the command line
     :return: None
     """
-    _get_observe_sits_atoms(args, merged_from, "sits_atom_in_file.txt")
+    beta = 4184 / 300 / 8.314
     frame = args.equilibrium_step // args.wi
-    enes = np.zeros((args.nl, args.nl, frame))
-    for i in range(args.nl + 1):
+    n_lambda = args.nl + 1
+    enes = np.zeros((n_lambda, n_lambda, frame))
+    bias = np.zeros((n_lambda, frame))
+    for i in range(n_lambda):
         if os.path.exists("%d/mbar" % i):
             shutil.rmtree("%d/mbar" % i)
         if os.path.exists("%d/equilibrium/reweighting_factor.txt" % i):
-            weight = np.loadtxt("%d/equilibrium/reweighting_factor.txt" % i, dtype=np.float128).reshape(-1)
+            weight = np.loadtxt("%d/equilibrium/reweighting_factor.txt" % i, dtype=np.longfloat).reshape(-1)
         else:
             weight = np.ones(frame, dtype=float)
+        bias[i][:] = np.log(weight) / beta
         os.mkdir("%d/mbar" % i)
-        for j in _get_neighbors_of_i(args, i):
+        for j in range(0, n_lambda):
             _rerun_ith_traj_with_jth_forcefield(args, i, j)
-            enes[i][j][:] = MdoutReader(f"{i}/mbar/{j}/{args.temp}.mdout").SITS_AA_kAB
-    
+            mdout = MdoutReader(f"{i}/mbar/{j}/{args.temp}.mdout")
+            enes[i][j][:] = mdout.potential
+    bias = bias.reshape(n_lambda, 1, frame)
+    enes -= np.min(enes - bias, axis=1, keepdims=True)
+    f = np.zeros(n_lambda)
+    last_f = np.ones(n_lambda)
+    while np.any(np.abs(last_f - f) > 0.001):
+        last_f = f
+        sum_j = np.sum(np.exp(-beta * (enes - bias - f.reshape(1, -1, 1))), axis=1, keepdims=True)
+        f = -np.log(np.sum(np.exp(-beta * enes)/ sum_j, axis=(0, 2))) / beta
+        f -= np.min(f)
+    theta_i = -beta * np.diagonal(enes)
+    sigma_ij = np.zeros(args.nl)
+    sigma_i0 = np.zeros(args.nl)
+    factor = np.array([[1, -1], [-1, 1]])
+    for i in range(args.nl):
+        sigma_ij[i] = np.sqrt(np.sum(factor * np.cov(theta_i[i], theta_i[i+1])))
+        sigma_i0[i] = np.sqrt(np.sum(factor * np.cov(theta_i[0], theta_i[i+1])))
+    fw = Xopen("free_energy.txt", "w")
+    fw.write("lambda_state\tFE(i+1)-FE(i)[kcal/mol]\tFE(i+1)-FE(0)[kcal/mol]\n")
+    fw.write("\n".join(
+        [f"{i}\t\t{f[i+1]-f[i]:.2f} +- {sigma_ij[i]:.2f}\t\t{f[i+1]-f[0]:.2f} +- {sigma_i0[i]:.2f}" for i in range(args.nl)]))
+    fw.close()

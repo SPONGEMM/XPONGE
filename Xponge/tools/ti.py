@@ -25,7 +25,7 @@ def ti_analysis(args, merged_from):
         if os.path.exists("%d/ti" % i):
             shutil.rmtree("%d/ti" % i)
         if os.path.exists("%d/equilibrium/reweighting_factor.txt" % i):
-            weight = np.loadtxt("%d/equilibrium/reweighting_factor.txt" % i, dtype=np.float128).reshape(-1)
+            weight = np.loadtxt("%d/equilibrium/reweighting_factor.txt" % i, dtype=np.longdouble).reshape(-1)
         else:
             weight = np.ones(frame, dtype=float)
         os.mkdir("%d/ti" % i)

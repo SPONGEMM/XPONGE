@@ -429,7 +429,7 @@ def intramolecule_nb_to_nb14(mol_a, perturbating_residues):
                     if atom_a1 == atom_a2:
                         continue
                     if atom_a2 not in a_exclude[atom_a1]:
-                        temp_a, temp_b = nb14_extra_base.Get_NB14EXTRA_AB(atom_a1, atom_a2)
+                        temp_a, temp_b = nb14_extra_base.get_nb14_extra_lj(atom_a1, atom_a2)
                         new_force = nb14_extra_base.NB14Type.entity([atom_a1, atom_a2],
                                                                     nb14_extra_base.NB14Type.get_type("UNKNOWNS"))
                         new_force.A = temp_a
@@ -766,8 +766,6 @@ the tanimoto coefficient of the max common structure.
         mol_a.residue_links.add(reslink)
         mol_b.residue_links.add(reslink)
 
-    intramolecule_nb_to_nb14(mol_a, restype_ab)
-    intramolecule_nb_to_nb14(mol_b, restype_ba)
     build.Build_Bonded_Force(mol_a)
     build.Build_Bonded_Force(mol_b)
 
