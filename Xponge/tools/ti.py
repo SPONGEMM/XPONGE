@@ -10,7 +10,7 @@ from ..helper import Xopen
 from ..analysis import MdoutReader
 
 
-def ti_analysis(args, merged_from):
+def ti_analysis(args):
     """
     This **function** is used to do the ti analysis
 
@@ -42,7 +42,8 @@ def ti_analysis(args, merged_from):
         inprefix = f"{i}/equilibrium/{args.temp}"
         command += f" -crd {inprefix}.dat -box {inprefix}.box"
         if not args.ai:
-            command += f" -neighbor_list_max_atom_in_grid_numbers 128 -neighbor_list_max_neighbor_numbers 1200 -cutoff 8"
+            command += " -neighbor_list_max_atom_in_grid_numbers 128"
+            command += " -neighbor_list_max_neighbor_numbers 1200 -cutoff 8"
             run(command)
         else:
             command += f" -mdin {args.ai}"

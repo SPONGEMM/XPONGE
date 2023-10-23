@@ -232,7 +232,7 @@ def h_mass_repartition(molecules, repartition_mass=1.1, repartition_rate=3, excl
         for atom in res.atoms:
             if atom.mass <= repartition_mass:
                 connect_atoms = res.type.connectivity[res.type.name2atom(atom.name)]
-                assert len(connect_atoms) == 1, "{atom.name} has more than 1 bond, which is not allowed in mass repartition"
+                assert len(connect_atoms) == 1, "The atom to repartition mass can have at most 1 bond"
                 origin_mass = atom.mass
                 atom.mass *= repartition_rate
                 delta_mass = atom.mass - origin_mass

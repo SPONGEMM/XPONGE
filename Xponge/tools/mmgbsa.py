@@ -6,13 +6,11 @@ import os
 import shutil
 import MDAnalysis as mda
 import numpy as np
-from tqdm import tqdm
 
-from .. import Molecule, load, build, source, import_python_script
+from .. import load, build, source, import_python_script
 from ..analysis import MdoutReader
 from ..analysis.md_analysis import SpongeTrajectoryReader
-from ..analysis.sasa import SASA
-from ..helper import Xopen, Xprint
+from ..helper import Xprint
 from ..mdrun import run
 
 __all__ = ["_mmgbsa_build", "_mmgbsa_min", "_mmgbsa_pre_equilibrium", "_mmgbsa_equilibrium",
@@ -100,7 +98,7 @@ def _mmgbsa_min(args):
         dt_factor = 1e-2
         inc_rate = 1.5
         if not args.mi:
-            basic += f" -mode minimization -cutoff 8"
+            basic += " -mode minimization -cutoff 8"
             cif = " -minimization_dynamic_dt 1"
             exit_code = run(f"{basic} {cif} -step_limit {args.min_step} \
 -minimization_dt_factor {dt_factor} -minimization_dt_increasing_rate {inc_rate}")
@@ -143,7 +141,7 @@ def _mmgbsa_pre_equilibrium(args):
         command += f" -coordinate_in_file run/min/{args.temp}_coordinate.txt"
         if not args.pi:
             command += f" -step_limit {args.pre_equilibrium_step}"
-            command += f" -cutoff 8"
+            command += " -cutoff 8"
             command += f" -dt {args.dt} -constrain_mode SHAKE"
             command += " -thermostat middle_langevin"
             if not args.nvt:
@@ -220,4 +218,3 @@ def _mmgbsa_analysis(args):
             f.write(f"{np.mean(delta_gb):.2f} +- {np.std(delta_gb):.2f}\t")
             f.write(f"{np.mean(delta_lj):.2f} +- {np.std(delta_lj):.2f}\t")
             f.write(f"{np.mean(delta_ee):.2f} +- {np.std(delta_ee):.2f}\t")
-

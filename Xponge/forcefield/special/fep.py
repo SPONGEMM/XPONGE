@@ -598,7 +598,7 @@ def _get_residue_ab(residue_type_a, residue_type_b, residue_a, forcopy, matchmap
     return restype_ab, rbmap
 
 
-def _getNumHs(rdmol, j):
+def _nhydrogen(rdmol, j):
     """get the number of hydrogens of the j-th atom in an rdkit rdmol instance"""
     return rdmol.GetAtomWithIdx(j).GetTotalNumHs(includeNeighbors=True)
 
@@ -625,14 +625,14 @@ the tanimoto coefficient of the max common structure.
 
     from ...helper.rdkit import assign_to_rdmol
     from rdkit.Chem import rdFMCS as MCS
-    from rdkit.Chem import Draw, AllChem, RemoveHs, MolFromSmarts
+    from rdkit.Chem import Draw, AllChem, RemoveHs
 
     rdmol_a = assign_to_rdmol(assign_a)
     rdmol_b = assign_to_rdmol(assign_b)
 
     if imcs is None:
         Xprint("FINDING MAXIMUM COMMON SUBSTRUCTURE\n")
-        result = MCS.FindMCS([RemoveHs(rdmol_a), RemoveHs(rdmol_b)], 
+        result = MCS.FindMCS([RemoveHs(rdmol_a), RemoveHs(rdmol_b)],
                              completeRingsOnly=True,
                              bondCompare=MCS.BondCompare.CompareOrderExact,
                              timeout=tmcs)
@@ -640,9 +640,9 @@ the tanimoto coefficient of the max common structure.
         if rdmol_mcs is None:
             raise OSError("No common substructure found")
         match_a = rdmol_a.GetSubstructMatch(rdmol_mcs)
-        a_hydros = {i: _getNumHs(rdmol_a, j) for i, j in enumerate(match_a)}
-        match_b = sorted(rdmol_b.GetSubstructMatches(rdmol_mcs, uniquify=False), 
-                         key=lambda x: sum(min(_getNumHs(rdmol_b, j), a_hydros[i]) for i,j in enumerate(x)))[-1]
+        a_hydros = {i: _nhydrogen(rdmol_a, j) for i, j in enumerate(match_a)}
+        match_b = sorted(rdmol_b.GetSubstructMatches(rdmol_mcs, uniquify=False),
+                         key=lambda x: sum(min(_nhydrogen(rdmol_b, j), a_hydros[i]) for i,j in enumerate(x)))[-1]
         matchmap = {match_b[j]: match_a[j] for j in range(len(match_a))}
         extra_map = {}
         for j, i in matchmap.items():

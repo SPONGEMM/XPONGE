@@ -765,17 +765,16 @@ None to use the charge sum of the unomitted atoms
         if not isinstance(atoms, Iterable):
             atoms = [atoms]
         atoms = set(getattr(self, atom) if isinstance(atom, str) else atom for atom in atoms)
-
-        charges = np.array([atom.charge for atom in self.atoms])
-        positive_charge = np.sum(charges[charges > 0])
-        negative_charge = np.sum(charges[charges < 0])
         if charge is None:
-            charge = positive_charge + negative_charge - np.sum([atom.charge for atom in atoms])
-        factor = (charge - positive_charge - negative_charge) / (positive_charge - negative_charge)
+            charge = np.sum([atom.charge for atom in self.atoms]) - np.sum([atom.charge for atom in atoms])
         for atom in atoms:
             self.atoms.remove(atom)
             atom.residue = None
             self.connectivity.pop(atom)
+        charges = np.array([atom.charge for atom in self.atoms])
+        positive_charge = np.sum(charges[charges > 0])
+        negative_charge = np.sum(charges[charges < 0])
+        factor = (charge - positive_charge - negative_charge) / (positive_charge - negative_charge)
         self._name2atom.clear()
         self._atom2name.clear()
         self._atom2index.clear()
@@ -786,7 +785,10 @@ None to use the charge sum of the unomitted atoms
             self._atom2index[atom] = index
             self._name2index[atom.name] = index
             self.connectivity[atom] -= atoms
-            self.charge += np.sign(self.charge) * factor
+            if atom.charge > 0:
+                atom.charge *= 1 + factor
+            else:
+                atom.charge *= 1 - factor
 
     def add_connectivity(self, atom0, atom1):
         """
@@ -853,7 +855,7 @@ None to use the charge sum of the unomitted atoms
             for atom in self.atoms:
                 atom.copied[forcopy].linked_atoms = {key: set(map(lambda _atom: _atom.copied[forcopy], value)) for
                                                      key, value in atom.linked_atoms.items()}
-                atom.copied[forcopy].internal_linked_atoms = {key: set(map(lambda _atom: _atom.copied[forcopy], 
+                atom.copied[forcopy].internal_linked_atoms = {key: set(map(lambda _atom: _atom.copied[forcopy],
                                                                            value))
                                                               for key, value in atom.internal_linked_atoms.items()}
         if not donot_delete:

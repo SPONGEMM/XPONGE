@@ -433,7 +433,6 @@ def name2name(args):
     :param args: arguments from argparse
     :return: None
     """
-    from rdkit import Chem
     from rdkit.Chem import rdFMCS
     source("..")
     rdktool = source("..helper.rdkit")

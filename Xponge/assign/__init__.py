@@ -660,7 +660,8 @@ the rule described in the reference (J. Wang et al., J. Am. Chem. Soc, 2001) wil
             for i, ci in enumerate(self.coordinate):
                 for j in range(i + 1, self.atom_numbers):
                     dij = np.linalg.norm(np.array(self.coordinate[j]) - np.array(ci))
-                    rij = self.CONNECTIVITY_RADII.get(self.atoms[i], 1.25) + self.CONNECTIVITY_RADII.get(self.atoms[j], 1.25)
+                    rij = self.CONNECTIVITY_RADII.get(self.atoms[i], 1.25) + \
+                         self.CONNECTIVITY_RADII.get(self.atoms[j], 1.25)
                     if dij <= 1.5:
                         factor = 1 - 0.15
                     elif dij <= 1.9:
@@ -1002,7 +1003,7 @@ If None is given, the total charge will not be checked
     if assign.atom_numbers == 0:
         raise OSError(f"The file {filename} is not a pdb file")
     if not has_conect:
-         assign.determine_connectivity(tolerance=bond_tolerance)
+        assign.determine_connectivity(tolerance=bond_tolerance)
     success = assign.Determine_Bond_Order(total_charge=total_charge)
     if not success:
         Xprint(f"The connectivity or the bond orders in {filename} are not reasonable", "WARNING")
@@ -1032,7 +1033,8 @@ def get_assignment_from_residuetype(restype):
     total_charge = int(round(sum(assign.charge)))
     success = assign.Determine_Bond_Order(total_charge=total_charge)
     if not success:
-        Xprint(f"The connectivity, the bond orders or the charges of the ResidueType {restype.name} are not reasonable", "WARNING")
+        Xprint(f"The connectivity, the bond orders or the charges of the ResidueType {restype.name} are not reasonable",
+            "WARNING")
     return assign
 
 
@@ -1089,7 +1091,6 @@ If None is given, the total charge will not be checked
         flag = None
         subflag = None
         real_index = Xdict(not_found_message="Atom #{} not found")
-        need_bond_order = False
         for line in f:
             if not line.strip():
                 continue
@@ -1130,15 +1131,12 @@ If None is given, the total charge will not be checked
                 if words[3] in "123456789":
                     assign.Add_Bond(atom1 , atom2, int(words[3]))
                 elif words[3] == "ar":
-                    need_bond_order = True
                     assign.Add_Bond(atom1, atom2, -1)
                     assign.add_bond_marker(atom1, atom2, "mol2_ar")
                 elif words[3] == "am":
-                    need_bond_order = True
                     assign.Add_Bond(atom1, atom2, -1)
                     assign.add_bond_marker(atom1, atom2, "mol2_am")
                 elif words[3] == "un":
-                    need_bond_order = True
                     assign.Add_Bond(atom1, atom2, -1)
                 else:
                     raise NotImplementedError(f"No implemented method to process bond #{words[0]} type {words[3]}")
@@ -1146,7 +1144,9 @@ If None is given, the total charge will not be checked
         total_charge = int(round(sum(assign.charge)))
     count_h = assign.atoms.count("H")
     if count_h < len(assign.atoms) // 4:
-        Xprint(f"The number of hydrogen atoms in {filename} is {count_h}, which is less than a quarter of the number of atoms. Xponge.Assign is designed for molecules with explicit hydrogen atoms.", "WARNING")
+        Xprint(f"The number of hydrogen atoms in {filename} is {count_h}, \
+which is less than a quarter of the number of atoms. \
+Xponge.Assign is designed for molecules with explicit hydrogen atoms.", "WARNING")
     success = assign.Determine_Bond_Order(total_charge=total_charge)
     if not success:
         for bond in assign.bonds.values():

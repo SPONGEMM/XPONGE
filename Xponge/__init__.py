@@ -72,7 +72,7 @@ The atoms in a ``Residue`` or a ``ResidueType`` can be obtained by their names. 
 
 """
 
-__version__ = "1.4.0a2"
+__version__ = "1.4.0a3"
 
 import os
 import time
@@ -121,13 +121,13 @@ def _initialize():
         towrite = "%d\n"%(len(self.atoms))
         for atom in self.atoms:
             towrite += f"{atom.name}\n"
-        return towrite 
+        return towrite
 
     def write_atom_type_name(self):
         towrite = "%d\n"%(len(self.atoms))
         for atom in self.atoms:
             towrite += f"{atom.type.name}\n"
-        return towrite 
+        return towrite
 
     def write_coordinate(self):
         towrite = "%d\n" % (len(self.atoms))

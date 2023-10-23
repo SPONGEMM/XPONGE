@@ -125,6 +125,7 @@ Xponge/mdrun/BIN_PATH.dat
 Xponge/mdrun/__init__.py
 Xponge/mdrun/__main__.py
 Xponge/tools/__init__.py
+Xponge/tools/mbar.py
 Xponge/tools/mmgbsa.py
 Xponge/tools/mol2rfe.py
 Xponge/tools/ti.py

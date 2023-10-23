@@ -84,7 +84,8 @@ def _mol2rfe_min(args, iteror):
             dt_factor = 1e-2
             inc_rate = 1.5
             if not args.mi:
-                basic += f" -neighbor_list_max_atom_in_grid_numbers 128 -neighbor_list_max_neighbor_numbers 1200 -cutoff 8"
+                basic += " -neighbor_list_max_atom_in_grid_numbers 128"
+                basic += " -neighbor_list_max_neighbor_numbers 1200 -cutoff 8"
                 cif = " -minimization_dynamic_dt 1"
                 exit_code = run(f"{basic} {cif} -step_limit {args.min_step} \
 -minimization_dt_factor {dt_factor} -minimization_dt_increasing_rate {inc_rate}")
@@ -219,7 +220,7 @@ def _mol2rfe_analysis(args, merged_from, merged_to, match_map, from_, to_):
         build.save_pdb(draw_r2_mol, "r2.pdb")
         if args.method == "TI":
             from .ti import ti_analysis
-            ti_analysis(args, merged_from)
+            ti_analysis(args)
         elif args.method == "MBAR":
             from .mbar import mbar_analysis
-            mbar_analysis(args, merged_from)
+            mbar_analysis(args)

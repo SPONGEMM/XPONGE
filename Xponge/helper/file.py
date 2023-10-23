@@ -6,7 +6,7 @@ import re
 import sys
 from pathlib import Path
 from importlib import import_module
-from . import set_global_alternative_names, Xprint
+from . import set_global_alternative_names
 
 __all__ = ["file_filter", "pdb_filter", "import_python_script"]
 
@@ -24,17 +24,14 @@ def file_filter(infile, outfile, reg_exp, replace_dict):
 
         :param infile: the input file or filename
         :param outfile: the output file or filename
-        :param reg_exp: a list of regular expressions, if a line matches any of the regular expressions, the line will be kept.
+        :param reg_exp: a list of regular expressions. Lines which match any regular expressions will be kept.
         :param replace_dict: a dict of regular expressions and the replacement
     """
     if not isinstance(reg_exp, list):
         raise TypeError('reg_exp should be a list of regular expressions')
     if not isinstance(replace_dict, dict):
         raise TypeError('replace_dict should be a dict of regular expressions and the replacement')
-    if isinstance(infile, io.IOBase):
-        filename = "in-memory string"
-    else:
-        filename = infile
+    if not isinstance(infile, io.IOBase):
         infile = open(infile, "r")
     lines = ""
     with infile as f:
@@ -83,7 +80,7 @@ def pdb_filter(infile, outfile, heads, hetero_residues, rename_ions=None):
             rname = a
         else:
             raise ValueError("The ion name in a pdb file should not be longer than 3 characters")
-        replace_dict["(^HETATM [ 0-9]{4} )(%s)(.)(%s)"%(aname, rname)] = f"\g<1>{b:4s}\g<3>{b:3s}"
+        replace_dict["(^HETATM [ 0-9]{4} )(%s)(.)(%s)"%(aname, rname)] = r"\g<1>" + f"{b:4s}" + r"\g<3>" + f"{b:3s}"
     reg_exp = []
     for head in heads:
         reg_exp.append(f"^{head}")
