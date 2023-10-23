@@ -164,6 +164,12 @@ def _initialize():
             boxlength[2] = self.box_length[2]
         towrite += "\n%f %f %f %f %f %f" % (
             boxlength[0], boxlength[1], boxlength[2], boxlength[3], boxlength[4], boxlength[5])
+        Xprint("""Reference for Xponge:
+  Xia, Y., Gao, Y. Q.
+    Xponge: A Python package to perform pre- and post-processing of molecular simulations
+    Journal of Open Source Software, 2022 7(77) 4467
+    DOI: 10.21105/joss.04467
+""")
         return towrite
 
     Molecule.Set_Save_SPONGE_Input("coordinate")(write_coordinate)
@@ -188,13 +194,6 @@ def _initialize():
             sys_kwarg["pbc_box"].append(box_length)
 
     Molecule.Set_MindSponge_Todo("coordinate")(_do_initial)
-
-    Xprint("""Reference for Xponge:
-  Xia, Y., Gao, Y. Q.
-    Xponge: A Python package to perform pre- and post-processing of molecular simulations
-    Journal of Open Source Software, 2022 7(77) 4467
-    DOI: 10.21105/joss.04467
-""")
 
 
 _initialize()

@@ -4,7 +4,6 @@ This **module** defines the terminal commands
 import argparse
 from . import tools
 
-
 def _mytest(subparsers):
     """
 
@@ -15,10 +14,10 @@ def _mytest(subparsers):
     mytest.add_argument("-o", metavar="test", default="test", help="the prefix for the output files")
     mytest.add_argument("-v", "--verbose", metavar="-1", default=-1, type=int,
                         help="the verbose level for output, 1 or -1")
-    mytest.add_argument("-d", "--do", metavar="todo", nargs="*", action="append",
-                        default=None, choices=["all", "base", "assign", "charmm27", "lattice", "fep", "sasa"],
+    mytest.add_argument("-d", "--do", metavar="todo",
+                        default="base",
                         help="the unit tests need to do")
-    mytest.set_defaults(func=tools.test)
+    mytest.set_defaults(func=tools.mytest)
 
 
 def _converter(subparsers):
