@@ -39,15 +39,13 @@ test
 
 .. code-block::
 
-    usage: Xponge test [-h] [-o test] [-v -1] [-d [todo [todo ...]]]
+    usage: Xponge test [-h] [-o test] [-v -1] [-d todo]
 
-    optional arguments:
-      -h, --help            show this help message and exit
-      -o test               the prefix for the output files
-      -v -1, --verbose -1   the verbose level for output, 1 or -1
-      -d [todo [todo ...]], --do [todo [todo ...]]
-                            the unit tests need to do, should be 'all', or one or
-                            more of 'base', 'assign', 'charmm27'
+    options:
+      -h, --help           show this help message and exit
+      -o test              the prefix for the output files
+      -v -1, --verbose -1  the verbose level for output, 1 or -1
+      -d todo, --do todo   the unit tests need to do
 
 Here are the list all the tests you can do:
 
