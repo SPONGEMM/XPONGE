@@ -164,6 +164,10 @@ def _(i, assign):
 def _(i, assign):
     return assign.atoms[i] == "Si"
 
+@bo.add_rule("B")
+def _(i, assign):
+    return assign.atoms[i] == "B"
+
 class BondOrderAssignment:
     """
     This **class** includes the functions to assign bond orders
@@ -205,6 +209,7 @@ The function will receive the assignment as input, and give True or False as out
         "So3": OrderedDict({6: 0}),
         "Sx4": OrderedDict({4: 4, 5: 2, 6:0}),
         "Si": OrderedDict({4: 0}),
+        "B": OrderedDict({3: 0}),
     })
     atomic_formal_valence = Xdict({
         "H": {1: 0},
@@ -218,6 +223,7 @@ The function will receive the assignment as input, and give True or False as out
         "P": {3: 0, 4: 1, 2: -1, 5: 0, 7: 0},
         "S": {1: -1, 2: 0, 3: 1, 4: 0, 6: 0},
         "Si": {4: 0},
+        "B": {3: 0}
     })
     failure = ReasonedBool(False, "the calculation can not converge")
     def __init__(self, original_penalties, max_step, max_stat, assign, total_charge=0, extra_criteria=None):

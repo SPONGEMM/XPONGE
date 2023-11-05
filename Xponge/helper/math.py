@@ -119,4 +119,28 @@ def guess_element_from_mass(mass):
                 break
     return elements[index]
 
+def get_basis_vectors_from_length_and_angle(a, b, c, alpha, beta, gamma, angle_in_degree=True):
+    """
+    This **function** is used to get the basis vectors from the cell lengths and cell angles.
+
+    :param a: the length of the first basis vector
+    :param b: the length of the second basis vector
+    :param c: the length of the third basis vector
+    :param alpha: the angle between the second and the third basis vectors
+    :param beta: the angle between the first and the third basis vectors
+    :param gamma: the angle between the first and the second basis vectors
+    :param angle_in_degree: whether the unit of the angles is degree, True for default.
+    :return: a 3x3 numpy array, and every row is one basis vector
+    """
+    if angle_in_degree:
+        alpha, beta, gamma = np.radians(alpha), np.radians(beta), np.radians(gamma)
+    basis = np.zeros((3, 3))
+    basis[0] = [a, 0, 0]
+    basis[1] = [b * np.cos(gamma), b * np.sin(gamma), 0]
+    basis[2, 0] = c * np.cos(beta)
+    basis[2, 1] = c * (np.cos(alpha) - np.cos(beta) * np.cos(gamma)) / np.sin(gamma)
+    basis[2, 2] = np.sqrt(c**2 - basis[2, 0]**2 - basis[2, 1]**2)
+    return basis
+
+
 set_global_alternative_names()

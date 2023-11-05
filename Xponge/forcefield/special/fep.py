@@ -501,16 +501,7 @@ def _correct_residueb_coordinates(residue_a, residue_b, matchmap):
 def _get_extra_atoms_and_rbmap(restype_ab, residue_type_a, residue_type_b, residue_a,
                                forcopy, matchmap, match_a, match_b):
     """
-
-    :param restype_ab:
-    :param residue_type_a:
-    :param residue_type_b:
-    :param residue_a:
-    :param forcopy:
-    :param matchmap:
-    :param match_a:
-    :param match_b:
-    :return:
+        get the extra atoms of the residue and the map from the mixed residue to residue b
     """
     extra_a = []
     extra_b = []
@@ -555,15 +546,7 @@ def _link_restypeb_atoms(residue_type_b, forcopy, matchmap):
 
 def _get_residue_ab(residue_type_a, residue_type_b, residue_a, forcopy, matchmap, match_a, match_b):
     """
-
-    :param residue_type_a:
-    :param residue_type_b:
-    :param residue_a:
-    :param forcopy:
-    :param matchmap:
-    :param match_a:
-    :param match_b:
-    :return:
+        get the mixed residue type
     """
     restype_ab = residue_type_a.deepcopy(residue_type_a.name + "_" + residue_type_b.name, forcopy)
 
@@ -590,11 +573,6 @@ def _get_residue_ab(residue_type_a, residue_type_b, residue_a, forcopy, matchmap
 
     _link_restypeb_atoms(residue_type_b, forcopy, matchmap)
 
-    for atom in residue_type_a.atoms:
-        atom.copied.pop(forcopy)
-
-    for atom in residue_type_b.atoms:
-        atom.copied.pop(forcopy)
     return restype_ab, rbmap
 
 
@@ -754,18 +732,33 @@ the tanimoto coefficient of the max common structure.
     mol_a = Molecule(mol.name + "A")
     mol_b = Molecule(mol.name + "B")
 
-    for res in mol.residues:
+    ri = 0
+    res2index = Xdict()
+    for i, res in enumerate(mol.residues):
+        res2index[res] = i
         if res == residue_a:
             mol_a.Add_Residue(restype_ab)
             mol_b.Add_Residue(restype_ba)
+            ri = i
         else:
-            mol_a.Add_Residue(res)
-            mol_b.Add_Residue(res)
+            mol_a.Add_Residue(res.deepcopy())
+            mol_b.Add_Residue(res.deepcopy())
 
     for reslink in mol.residue_links:
-        mol_a.residue_links.add(reslink)
-        mol_b.residue_links.add(reslink)
-
+        atom1 = reslink.atom1
+        atom2 = reslink.atom2
+        new_atom1_a = mol_a.residues[res2index[atom1.residue]].name2atom(atom1.name)
+        new_atom1_b = mol_b.residues[res2index[atom1.residue]].name2atom(atom1.name)
+        new_atom2_a = mol_a.residues[res2index[atom2.residue]].name2atom(atom2.name)
+        new_atom2_b = mol_b.residues[res2index[atom2.residue]].name2atom(atom2.name)
+        if new_atom1_a.residue == residue_a:
+            new_atom1_a = mol_a.residues[ri].name2atom(new_atom1_a.name)
+            new_atom1_b = mol_b.residues[ri].name2atom(new_atom1_b.name)
+        if new_atom2_a.residue == residue_a:
+            new_atom2_a = mol_a.residues[ri].name2atom(new_atom2_a.name)
+            new_atom2_b = mol_b.residues[ri].name2atom(new_atom2_b.name)
+        mol_a.add_residue_link(new_atom1_a, new_atom2_a)
+        mol_b.add_residue_link(new_atom1_b, new_atom2_b)
     build.Build_Bonded_Force(mol_a)
     build.Build_Bonded_Force(mol_b)
 

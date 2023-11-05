@@ -305,7 +305,7 @@ def _new_rule(element):
 
 def _init():
     """initialize the module"""
-    for i in ["C", "O", "N", "H", "F", "Cl", "Br", "I"]:
+    for i in ["C", "O", "N", "H", "F", "Cl", "Br", "I", "B", "Si"]:
         _new_rule(i)
 
 _init()

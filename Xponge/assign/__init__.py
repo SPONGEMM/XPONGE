@@ -4,13 +4,15 @@ This **package** is used to assign the properties for atoms, residues and molecu
 #pylint: disable=cyclic-import
 import heapq
 import io
+import re
 from copy import deepcopy
 from collections import OrderedDict
 from collections.abc import Iterable
 from itertools import groupby
 import numpy as np
 from ..helper import AtomType, ResidueType, Residue, Xopen, Xdict, set_real_global_variable, \
-    set_global_alternative_names, Guess_Element_From_Mass, Xprint
+    set_global_alternative_names, Guess_Element_From_Mass, Xprint, \
+    get_basis_vectors_from_length_and_angle
 
 
 __all__ = ["Assign", "get_assignment_from_pdb", "get_assignment_from_mol2", "get_assignment_from_pubchem",
@@ -1166,5 +1168,122 @@ Xponge.Assign is designed for molecules with explicit hydrogen atoms.", "WARNING
         Xprint(f"For {filename}, the sum of formal charges ({sum_of_formal_charge}) \
 != the sum of partial charges ({sum_of_partial_charge})", "WARNING")
     return assign
+
+def _cif_find_box_information(key, contents, filename):
+    """
+        Read one line of the box information from the CIF file
+    """
+    pattern = "_" + key + r"\s+(\d+\.\d+)"
+    match = re.search(pattern, contents)
+    if not match:
+        raise ValueError(f"There is no {key} found in {filename}")
+    return float(match.group(1))
+
+def _cif_get_loop_with_keyword(key, contents):
+    """
+        Read the loop_ block with the provided keyword
+    """
+    if key not in contents:
+        return None
+    pattern = r"^loop_\s*\n((_[^\n]*\n)*_" + key + r"\s*\n(_[^\n]*\n)*)(([^_][^\n]*\n)*)"
+    match = re.search(pattern, contents, flags=re.MULTILINE | re.DOTALL)
+    keys = match.group(1).split()
+    values = Xdict({key : [] for key in keys})
+    valuelines = match.group(4).replace("loop_", "").strip().split("\n")
+    for value in valuelines:
+        for i, v in enumerate(value.split()):
+            values[keys[i]].append(v)
+    return len(valuelines), values
+
+def _get_cif_float(string, hint, filename):
+    """
+        convert a string in cif to float
+    """
+    string = string.strip()
+    if string == "." or string == "?":
+        raise ValueError(f"{hint} in {filename} is {string}, which is not right")
+    if "(" in string:
+        return float(string.split("(")[0])
+    return float(string)
+
+def get_assignment_from_cif(file, total_charge=0):
+    """
+    This **function** gets an Assign instance and a preprocessed lattice information from a cif file
+
+    :param file: the name of the input file or an instance of io.IOBase
+    :param total_charge: the total charge of the molecule used when aligning bond orders. 0 for default.
+    :return: the Assign instance and a dict which stores the preprocessed lattice information
+    """
+    assign = None
+    lattice_info = Xdict()
+    if not isinstance(file, io.IOBase):
+        filename = file
+        file = open(file)
+    else:
+        filename = "in-memory string"
+    with file as f:
+        contents = f.read()
+        matches = re.findall(r"^data_.+$", contents, flags=re.MULTILINE)
+        if len(matches) == 0:
+            raise ValueError(f"There is no data block found in {filename}")
+        if len(matches) > 1:
+            raise NotImplementedError("The support for CIF files with more than one data block is not implemented now")
+        assign = Assign(name=matches[0][5:])
+        symops = re.findall(r"(_symmetry_equiv_pos_as_xyz|_space_group_symop_operation_xyz)\s+(.+?)(?!\_)\n_\S+",
+            contents, flags=re.DOTALL)
+        la = _cif_find_box_information("cell_length_a", contents, filename)
+        lb = _cif_find_box_information("cell_length_b", contents, filename)
+        lc = _cif_find_box_information("cell_length_c", contents, filename)
+        alpha = _cif_find_box_information("cell_angle_alpha", contents, filename)
+        beta = _cif_find_box_information("cell_angle_beta", contents, filename)
+        gamma = _cif_find_box_information("cell_angle_gamma", contents, filename)
+        basis = get_basis_vectors_from_length_and_angle(la, lb, lc, alpha, beta, gamma)
+        n_atom, atom_info = _cif_get_loop_with_keyword("atom_site_type_symbol", contents)
+        if not atom_info:
+            raise ValueError(f"There is no atom information found in {filename}")
+        name_map = Xdict(not_found_message="No atom named {}, but found in bond information")
+        for i in range(n_atom):
+            if "_atom_site_type_symbol" not in atom_info:
+                raise ValueError(f"There is no atom element information found in {filename}")
+            element = atom_info["_atom_site_type_symbol"][i]
+            if "_atom_site_type_symbol" not in atom_info:
+                raise ValueError(f"There is no atom name information found in {filename}")
+            name = atom_info["_atom_site_label"][i]
+            name_map[name] = i
+            x = None
+            y = None
+            z = None
+            if "_atom_site_Cartn_x" in atom_info:
+                if "_atom_site_Cartn_y" not in atom_info or "_atom_site_Cartn_z" not in atom_info:
+                    raise ValueError(f"There is no correct atom position found in {filename}")
+                x = _get_cif_float(atom_info["_atom_site_Cartn_x"][i], "_atom_site_Cartn_x", filename)
+                y = _get_cif_float(atom_info["_atom_site_Cartn_y"][i], "_atom_site_Cartn_y", filename)
+                z = _get_cif_float(atom_info["_atom_site_Cartn_z"][i], "_atom_site_Cartn_z", filename)
+            if "_atom_site_fract_x" in atom_info:
+                if "_atom_site_fract_y" not in atom_info or "_atom_site_fract_z" not in atom_info:
+                    raise ValueError(f"There is no correct atom position found in {filename}")
+                fx = _get_cif_float(atom_info["_atom_site_fract_x"][i], "_atom_site_fract_x", filename)
+                fy = _get_cif_float(atom_info["_atom_site_fract_y"][i], "_atom_site_fract_y", filename)
+                fz = _get_cif_float(atom_info["_atom_site_fract_z"][i], "_atom_site_fract_z", filename)
+                x = fx * basis[0][0] + fy * basis[1][0] + fz * basis[2][0]
+                y = fx * basis[0][1] + fy * basis[1][1] + fz * basis[2][1]
+                z = fx * basis[0][2] + fy * basis[1][2] + fz * basis[2][2]
+            if x is None or y is None or z is None:
+                raise ValueError(f"There is no atom position found in {filename}")
+            assign.add_atom(element, x, y, z, name=name)
+        n_bond, bond_info = _cif_get_loop_with_keyword("geom_bond_atom_site_label_1", contents)
+        if bond_info:
+            if "_geom_bond_atom_site_label_2" not in bond_info:
+                raise ValueError(f"There is no correct bond information found in {filename}")
+            for i in range(n_bond):
+                atom1 = name_map[bond_info["_geom_bond_atom_site_label_1"][i]]
+                atom2 = name_map[bond_info["_geom_bond_atom_site_label_2"][i]]
+                assign.add_bond(atom1, atom2, -1)
+    success = assign.Determine_Bond_Order(total_charge=total_charge)
+    if not success:
+         Xprint(f"The bond orders in {filename} are not reasonable", "WARNING")
+    if assign is None:
+        raise OSError(f"The file {filename} is not a mol2 file")
+    return assign, lattice_info
 
 set_global_alternative_names()

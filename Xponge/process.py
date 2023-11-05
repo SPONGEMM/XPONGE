@@ -3,6 +3,7 @@ This **module** is used to process topology and conformations
 """
 import os.path
 from abc import ABC, abstractmethod
+from itertools import product
 
 import numpy as np
 from .helper import get_rotate_matrix, ResidueType, Molecule, Residue, set_global_alternative_names, Xdict, \
@@ -124,42 +125,70 @@ def impose_dihedral(molecule, atom1, atom2, atom3, atom4, dihedral, keep_atom3=F
         atom.z = crd[i][2]
 
 
-def _add_solvent_box(molecule, new_molecule, molmin, molmax, solshape, distance, tolerance, solcrd):
+def _add_inner_solvents(molecule, new_molecule, molcrd, molmin, molmax, solshape, solcrd, n_solvent):
     """
-
-    :param molecule:
-    :param new_molecule:
-    :param molmin:
-    :param molmax:
-    :param solshape:
-    :param distance:
-    :param tolerance:
-    :param solcrd:
-    :return:
+        add the solvents around the molecule
     """
-    x0 = molmin[0] - solshape[0] - distance[0]
-    while x0 < molmax[0] + distance[3] + solshape[0]:
-        y0 = molmin[1] - solshape[1] - distance[1]
-        while y0 < molmax[1] + distance[4] + solshape[1]:
-            z0 = molmin[2] - solshape[2] - distance[2]
-            while z0 < molmax[2] + distance[5] + solshape[2]:
-                if (molmax[0] + tolerance + solshape[0] > x0 > molmin[0] - tolerance - solshape[0] and
-                        molmax[1] + tolerance + solshape[1] > y0 > molmin[1] - tolerance - solshape[1] and
-                        molmax[2] + tolerance + solshape[2] > z0 > molmin[2] - tolerance - solshape[2]):
-                    z0 += solshape[2]
-                    continue
-                for atom in new_molecule.atoms:
-                    i = new_molecule.atom_index[atom]
-                    atom.x = solcrd[i][0] + x0
-                    atom.y = solcrd[i][1] + y0
-                    atom.z = solcrd[i][2] + z0
-                molecule |= new_molecule
-                z0 += solshape[2]
-            y0 += solshape[1]
-        x0 += solshape[0]
+    n_grid = np.floor((molmax - molmin) / solshape).astype(np.int32)
+    if np.prod(n_grid) == 0:
+        return 0
+    grids = np.ones(n_grid, dtype=np.int32)
+    for crd in molcrd:
+        index = np.floor((crd - molmin) / solshape).astype(np.int32)
+        for i, j, k in product([-1, 0, 1], [-1, 0, 1], [-1, 0, 1]):
+            indexi = max(min(index[0] + i, n_grid[0] - 1), 0)
+            indexj = max(min(index[1] + j, n_grid[1] - 1), 0)
+            indexk = max(min(index[2] + k, n_grid[2] - 1), 0)
+            grids[indexi][indexj][indexk] = 0
+    n_add = np.sum(grids)
+    if n_solvent is not None and n_solvent < n_add:
+        Xprint(f"The parameter 'n_solvent' is too small. At least {n_add} solvents \
+are required to fully solvate the molecule. This parameter will be ignored.", "WARNING")
+    for i, j, k in product(np.arange(n_grid[0]), np.arange(n_grid[1]), np.arange(n_grid[2])):
+        if grids[i][j][k] == 0:
+            continue
+        for atom in new_molecule.atoms:
+            atom_crd = solcrd[new_molecule.atom_index[atom]]
+            atom.x = atom_crd[0] + i * solshape[0] + molmin[0]
+            atom.y = atom_crd[1] + j * solshape[1] + molmin[1]
+            atom.z = atom_crd[2] + k * solshape[2] + molmin[2]
+        molecule |= new_molecule
+    return n_add
 
 
-def add_solvent_box(molecule, solvent, distance, tolerance=3):
+def _add_outer_solvents(molecule, new_molecule, molmin, molmax,
+    solshape, solcrd, solbox, n_solvent, n_added):
+    """
+        add the solvents at a distance from the molecule
+    """
+    boxmin = molmin - np.array(solbox[:3])
+    n_grid = np.ceil((molmax + np.array(solbox[3:]) - boxmin) / solshape).astype(np.int32)
+    grids = np.ones(n_grid, dtype=np.int32)
+    in_min = np.floor((molmin - boxmin) / solshape).astype(np.int32)
+    in_max = np.ceil((molmax - boxmin) / solshape).astype(np.int32)
+    grids[in_min[0]:in_max[0], in_min[1]:in_max[1], in_min[2]:in_max[2]] = 0
+    n_add = np.sum(grids) + n_added
+    if n_solvent is not None and n_solvent > n_add:
+        Xprint(f"The parameter 'n_solvent' is too big. The box can accommodate up to {n_add} solvents.\
+ This parameter will be ignored.", "WARNING")
+    if n_solvent is not None:
+        ones_indices = np.argwhere(grids == 1)
+        random_indices = np.random.choice(len(ones_indices), n_solvent - n_added, replace=False)
+        random_ones_indices = ones_indices[random_indices]
+        grids[tuple(random_ones_indices.T)] = 0
+    for i, j, k in product(np.arange(n_grid[0]), np.arange(n_grid[1]), np.arange(n_grid[2])):
+        if grids[i][j][k] == 0:
+            continue
+        for atom in new_molecule.atoms:
+            atom_crd = solcrd[new_molecule.atom_index[atom]]
+            atom.x = atom_crd[0] + i * solshape[0] + boxmin[0]
+            atom.y = atom_crd[1] + j * solshape[1] + boxmin[1]
+            atom.z = atom_crd[2] + k * solshape[2] + boxmin[2]
+        molecule |= new_molecule
+    return molecule
+
+
+def add_solvent_box(molecule, solvent, distance, tolerance=3, n_solvent=None):
     """
     This **function** adds a box full of solvents to a molecule.
     This will be performed in place for a Molecule and out of place for a ResidueType.
@@ -170,6 +199,7 @@ def add_solvent_box(molecule, solvent, distance, tolerance=3):
  This can be an ``int`` or a ``float``, and it can be also a list of them with the length 3 or 6, \
  which represents the 3 or 6 directions respectively.
     :param tolerance: the distance between two molecules. 3 for default.
+    :param n_solvent: the number of solvent molecules.
     :return: the Molecule instance
     """
     if isinstance(distance, (float, int)):
@@ -206,8 +236,9 @@ def add_solvent_box(molecule, solvent, distance, tolerance=3):
     solmax = np.max(solcrd, axis=0)
     solshape = solmax - solmin + tolerance
 
-    _add_solvent_box(molecule, new_molecule, molmin, molmax, solshape, distance, tolerance, solcrd)
-    return molecule
+    n_added = _add_inner_solvents(molecule, new_molecule, molcrd, molmin, molmax, solshape, solcrd, n_solvent)
+    return _add_outer_solvents(molecule, new_molecule, molmin, molmax, solshape, solcrd, distance, n_solvent, n_added)
+
 
 def h_mass_repartition(molecules, repartition_mass=1.1, repartition_rate=3, exclude_residue_name="WAT"):
     """
