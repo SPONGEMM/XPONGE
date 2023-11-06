@@ -129,3 +129,5 @@ Xponge/tools/mbar.py
 Xponge/tools/mmgbsa.py
 Xponge/tools/mol2rfe.py
 Xponge/tools/ti.py
+Xponge/tools/unittests/__init__.py
+Xponge/tools/unittests/base.py

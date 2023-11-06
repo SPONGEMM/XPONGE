@@ -366,7 +366,8 @@ def _pdb_judge_histone(judge_histone, residue_type_map, current_histone_informat
                 residue_type_map[-1] = GlobalSetting.HISMap["HIS"][residue_type_map[-1]]["HID"]
         else:
             residue_type_map[-1] = GlobalSetting.HISMap["HIS"][residue_type_map[-1]]["HIE"]
-        current_histone_information = {"DeltaH": False, "EpsilonH": False}
+        current_histone_information["DeltaH"] = False
+        current_histone_information["EpsilonH"] = False
 
 
 def _pdb_read_sequences(line, sequences):
@@ -449,7 +450,6 @@ def _pdb_connects(mol, connects, atom_map):
             if atom > to_connect or atom_.residue == to_connect_.residue or mol.get_residue_link(atom_, to_connect_):
                 continue
             mol.add_residue_link(atom_, to_connect_)
-            print(atom_, atom, to_connect_, to_connect)
 
 
 def load_pdb(filename, judge_histone=True, position_need="A", ignore_hydrogen=False,
