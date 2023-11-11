@@ -811,7 +811,7 @@ the marker "ar" will be added to the aromatic bond.
                 atom_name = self.atoms[i]
                 self.names[i] = atom_name
         for i, atom in enumerate(self.atoms):
-            towrite += "ATOM  %5d %4s %3s %1s%4d    %8.3f%8.3f%8.3f%17s%2s\n" % (i + 1,
+            towrite += "ATOM  %5d %4s %3s %1s%4d    %8.3f%8.3f%8.3f%22s%2s\n" % (i + 1,
                                                                                  self.names[i],
                                                                                  self.name,
                                                                                  " ", 1,
@@ -977,10 +977,11 @@ If None is given, the total charge will not be checked
     with file as f:
         for line in f:
             if line.startswith("ATOM") or line.startswith("HETATM"):
+                resname = line[17:20].strip()
                 if only_residue:
-                    resname = line[17:20].strip()
                     if resname != only_residue:
                         continue
+                assign.name = resname
                 index = int(line[6:11])
                 index_atom_map[index] = assign.atom_numbers
                 atom_name = line[12:16].strip()
@@ -1200,7 +1201,7 @@ def _get_cif_float(string, hint, filename):
         convert a string in cif to float
     """
     string = string.strip()
-    if string == "." or string == "?":
+    if string in (".", "?"):
         raise ValueError(f"{hint} in {filename} is {string}, which is not right")
     if "(" in string:
         return float(string.split("(")[0])
@@ -1231,6 +1232,7 @@ def get_assignment_from_cif(file, total_charge=0):
         assign = Assign(name=matches[0][5:])
         symops = re.findall(r"(_symmetry_equiv_pos_as_xyz|_space_group_symop_operation_xyz)\s+(.+?)(?!\_)\n_\S+",
             contents, flags=re.DOTALL)
+        lattice["symops"] = symops
         la = _cif_find_box_information("cell_length_a", contents, filename)
         lb = _cif_find_box_information("cell_length_b", contents, filename)
         lc = _cif_find_box_information("cell_length_c", contents, filename)
@@ -1246,7 +1248,7 @@ def get_assignment_from_cif(file, total_charge=0):
             if "_atom_site_type_symbol" not in atom_info:
                 raise ValueError(f"There is no atom element information found in {filename}")
             element = atom_info["_atom_site_type_symbol"][i]
-            if "_atom_site_type_symbol" not in atom_info:
+            if "_atom_site_label" not in atom_info:
                 raise ValueError(f"There is no atom name information found in {filename}")
             name = atom_info["_atom_site_label"][i]
             name_map[name] = i
@@ -1281,7 +1283,7 @@ def get_assignment_from_cif(file, total_charge=0):
                 assign.add_bond(atom1, atom2, -1)
     success = assign.Determine_Bond_Order(total_charge=total_charge)
     if not success:
-         Xprint(f"The bond orders in {filename} are not reasonable", "WARNING")
+        Xprint(f"The bond orders in {filename} are not reasonable", "WARNING")
     if assign is None:
         raise OSError(f"The file {filename} is not a mol2 file")
     return assign, lattice_info

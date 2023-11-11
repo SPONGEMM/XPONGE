@@ -3,6 +3,8 @@
 """
 import sys
 import os
+import pathlib
+import re
 import logging
 import importlib.util as iu
 import unittest
@@ -27,9 +29,10 @@ def _find_tests(todo):
     file_list = os.listdir(module_dir)
     tests = []
     for file_name in file_list:
-        if file_name.endswith(".py") and file_name != "__init__.py":
+        result = re.search(r"test_\d_(.+)\.py", file_name)
+        if result:
             file_path = os.path.join(module_dir, file_name)
-            module_name = file_name[:-3]
+            module_name = result.group(1)
             if todo == "all":
                 tests.append(module_name)
             elif todo == module_name:
@@ -43,21 +46,22 @@ def _find_tests(todo):
 def _run_one_test(case, args):
     """ Run one test"""
     for handle in GlobalSetting.logger.handlers:
-        handle.setLevel(999)
+        handle.setLevel("CRITICAL")
     log_file = f'{case.__name__}.log'
     file_handler = logging.FileHandler(log_file, mode="w")
     file_handler.set_name("temp")
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s \n %(message)s')
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s\n%(message)s')
     file_handler.setFormatter(formatter)
     file_handler.setLevel(args.verbose)
     GlobalSetting.logger.addHandler(file_handler)
     runner = XpongeTestRunner()
-    runner.run(unittest.FunctionTestCase(case))
+    result = runner.run(unittest.FunctionTestCase(case))
     for handler in GlobalSetting.logger.handlers:
         if handler.get_name() == "temp":
             GlobalSetting.logger.removeHandler(handler)
         else:
             handler.setLevel(args.verbose)
+    return result
 
 def mytest(args):
     """
@@ -70,11 +74,23 @@ def mytest(args):
     tests = _find_tests(args.do)
     if args.do != "all":
         Xprint(f"{len(tests)} test case(s) for {args.do}")
+        failures = []
+        errors = []
         for case in tests:
-            _run_one_test(case, args)
+            result = _run_one_test(case, args)
+            if result.failures:
+                failures.append(case.__name__[5:])
+            if result.errors:
+                errors.append(case.__name__[5:])
+        if failures:
+            Xprint(f"\nFailed function(s): {', '.join(failures)}")
+        if errors:
+            Xprint(f"\nError function(s): {', '.join(errors)}")
+        if not failures and not errors:
+            Xprint("")
     else:
         Xprint(f"{len(tests)} test script(s)\n{'='*30}")
         for case in tests:
-            os.mkdir(f"{case}")
-            os.system(f"cd {case} & {sys.argv[0]} test -d {case}")
-            Xprint("\n" + "-"*30)
+            pathlib.Path(f"{case}").mkdir(exist_ok=True)
+            os.system(f"cd {case} & {sys.argv[0]} test -d {case} -v {args.verbose}")
+            Xprint("-"*30)

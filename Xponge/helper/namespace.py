@@ -40,7 +40,8 @@ def source(module, into_global=True, reload_module=False):
 
 # for the special alternative name
 SPECIAL_STRINGS = {"Pdb": "PDB", "Sponge": "SPONGE", "Nb14": "NB14", "Lj": "LJ", "Gb": "GB", "Mindsponge": "MindSponge",
-                   "Residuetype": "ResidueType", "Pubchem": "PubChem", "Resp": "RESP", "Name2atom": "Name2Atom", "Cif": "CIF"}
+                   "Residuetype": "ResidueType", "Pubchem": "PubChem", "Resp": "RESP", "Name2atom": "Name2Atom",
+                   "Cif": "CIF"}
 
 
 def set_real_global_variable(name, value):

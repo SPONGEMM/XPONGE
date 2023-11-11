@@ -11,9 +11,9 @@ def _mytest(subparsers):
     :return:
     """
     mytest = subparsers.add_parser("test", help="test the basic function of Xponge")
-    mytest.add_argument("-o", metavar="test", default="test", help="the prefix for the output files")
-    mytest.add_argument("-v", "--verbose", metavar="-1", default=-1, type=int,
-                        help="the verbose level for output, 1 or -1")
+    mytest.add_argument("-v", "--verbose", metavar="INFO", default="INFO",
+                        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+                        help="the verbose level for output, 0")
     mytest.add_argument("-d", "--do", metavar="todo",
                         default="base",
                         help="the unit tests need to do")
