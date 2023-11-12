@@ -49,7 +49,7 @@ def run(args):
 
     cmd = os.path.join(that_path, args[1])
     if not (os.path.exists(cmd) or os.path.exists(cmd + ".exe")):
-        t = os.system(args[1] + " -v")
+        t = os.system(args[1] + f" -v > {os.devnull}")
         if t != 0:
             Xprint("No MD Engine found.\n" +
                   f"  There is no executable program named '{args[1]}' in '{that_path}' or PATH\n" +

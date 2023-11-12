@@ -1,5 +1,5 @@
 """
-    This **package** includes unittests of the basic functions
+    This **module** includes unittests of the basic functions
 """
 __all__ = ["test_import",
            "test_assign",

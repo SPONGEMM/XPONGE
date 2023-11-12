@@ -4,6 +4,17 @@ This **module** is used to provide basic common math functions
 import numpy as np
 from .namespace import  set_global_alternative_names
 
+ELEMENTS = ["X", "H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne",
+            "Na", "Mg", "Al", "Si", "P", "S", "Cl", "Ar", "K", "Ca", "Sc",
+            "Ti", "V", "Cr", "Mn", "Fe", "Co", "Ni", "Cu", "Zn", "Ga", "Ge",
+            "As", "Se", "Br", "Kr", "Rb", "Sr", "Y", "Zr", "Nb", "Mo", "Tc",
+            "Ru", "Rh", "Pd", "Ag", "Cd", "In", "Sn", "Sb", "Te", "I", "Xe",
+            "Cs", "Ba", "La", "Ce", "Pr", "Nd", "Pm", "Sm", "Eu", "Gd", "Tb",
+            "Dy", "Ho", "Er", "Tm", "Yb", "Lu", "Hf", "Ta", "W", "Re", "Os",
+            "Ir", "Pt", "Au", "Hg", "Tl", "Pb", "Bi", "Po", "At", "Rn", "Fr",
+            "Ra", "Ac", "Th", "Pa", "U", "Np", "Pu", "Am", "Cm", "Bk", "Cf",
+            "Es", "Fm", "Md", "No", "Lr", "Rf", "Db", "Sg", "Bh", "Hs", "Mt",
+            "Ds", "Rg"]
 
 def get_rotate_matrix(r0, angle):
     """
@@ -75,17 +86,6 @@ def guess_element_from_mass(mass):
     :param mass: an int or a float, the mass
     :return: the element name
     """
-    elements = ["X", "H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne",
-                "Na", "Mg", "Al", "Si", "P", "S", "Cl", "Ar", "K", "Ca", "Sc",
-                "Ti", "V", "Cr", "Mn", "Fe", "Co", "Ni", "Cu", "Zn", "Ga", "Ge",
-                "As", "Se", "Br", "Kr", "Rb", "Sr", "Y", "Zr", "Nb", "Mo", "Tc",
-                "Ru", "Rh", "Pd", "Ag", "Cd", "In", "Sn", "Sb", "Te", "I", "Xe",
-                "Cs", "Ba", "La", "Ce", "Pr", "Nd", "Pm", "Sm", "Eu", "Gd", "Tb",
-                "Dy", "Ho", "Er", "Tm", "Yb", "Lu", "Hf", "Ta", "W", "Re", "Os",
-                "Ir", "Pt", "Au", "Hg", "Tl", "Pb", "Bi", "Po", "At", "Rn", "Fr",
-                "Ra", "Ac", "Th", "Pa", "U", "Np", "Pu", "Am", "Cm", "Bk", "Cf",
-                "Es", "Fm", "Md", "No", "Lr", "Rf", "Db", "Sg", "Bh", "Hs", "Mt",
-                "Ds", "Rg"]
     masses = [0.00000, 1.00794, 4.00260, 6.941, 9.012182, 10.811,
               12.0107, 14.0067, 15.9994, 18.9984032, 20.1797,
               22.989770, 24.3050, 26.981538, 28.0855, 30.973761,
@@ -117,7 +117,7 @@ def guess_element_from_mass(mass):
             if abs(mass - masses[j]) < 0.65:
                 index = j
                 break
-    return elements[index]
+    return ELEMENTS[index]
 
 def get_basis_vectors_from_length_and_angle(a, b, c, alpha, beta, gamma, angle_in_degree=True):
     """

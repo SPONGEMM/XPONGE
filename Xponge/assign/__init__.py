@@ -519,35 +519,24 @@ connected to two other atoms, "N4" means a nitrogen atom connected to four other
         :param atom: the index of the atom to delete
         :return: None
         """
-        assert 0 <= atom < self.atom_numbers
-        self.built = False
-        self.element_details.pop(atom)
+        if atom < 0 or atom >= self.atom_numbers:
+            raise ValueError(f"the index of the atom to delete should be in the range of\
+0 ~ {self.atom_numbers}, but {atom} got")
+        self.atom_numbers -= 1
         self.atoms.pop(atom)
         self.names.pop(atom)
+        self.formal_charge.pop(atom)
+        self.element_details.pop(atom)
         self.coordinate = np.delete(self.coordinate, atom, 0)
         self.charge = np.delete(self.charge, atom, 0)
-        self.formal_charge.pop(atom)
-        self.atom_numbers -= 1
-        bond = self.bonds.pop(atom)
+        self.built = False
+        #move forward keys of Xdict
         for btom in range(atom + 1, self.atom_numbers + 1):
-            self.bonds[btom - 1] = self.bonds[btom]
-            self.atom_types[btom - 1] = self.atom_types[btom]
-        self.bonds.pop(self.atom_numbers)
-        self.atom_types.pop(self.atom_numbers)
-        for btom in range(self.atom_numbers):
-            self.bond_marker[btom] = Xdict()
-            self.atom_marker[btom] = Xdict()
-        new_bonds = deepcopy(self.bonds)
-        for btom, bond in new_bonds.items():
-            for ctom in bond:
-                if ctom > atom:
-                    self.bonds[btom].pop(ctom, None)
-                    self.bonds[btom][ctom-1] = new_bonds[btom][ctom]
-                    self.bond_marker[btom][ctom-1] = set([])
-                elif ctom == atom:
-                    self.bonds[btom].pop(ctom)
-                else:
-                    self.bond_marker[btom][ctom] = set([])
+            self.bonds[btom - 1] = self.bonds.pop(btom)
+            self.atom_types[btom - 1] = self.atom_types.pop(btom)
+        for btom, bond in self.bonds.items():
+            self.bonds[btom] = Xdict({key - 1 if key > btom else key : value
+                for key, value in bond.items() if key != btom})
 
     def delete_bond(self, atom1, atom2):
         """
@@ -560,8 +549,6 @@ connected to two other atoms, "N4" means a nitrogen atom connected to four other
         self.built = False
         self.bonds[atom1].pop(atom2, None)
         self.bonds[atom2].pop(atom1, None)
-        self.bond_marker[atom1].pop(atom2, None)
-        self.bond_marker[atom2].pop(atom1, None)
 
     def determine_equal_atoms(self):
         """

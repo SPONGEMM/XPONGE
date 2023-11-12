@@ -68,10 +68,7 @@ def lorentz_berthelot_for_b(epsilon1, rmin1, epsilon2, rmin2):
 
 def _find_ab_lj(ljtypes, stat=True):
     """
-
-    :param ljtypes:
-    :param stat:
-    :return:
+        find the lj parameter A and B for ljtypes
     """
     coefficients_a = []
     coefficients_b = []
@@ -103,11 +100,7 @@ def _find_ab_lj(ljtypes, stat=True):
 
 def _get_checks(ljtypes, coefficients_a, coefficients_b):
     """
-
-    :param ljtypes:
-    :param coefficients_a:
-    :param coefficients_b:
-    :return:
+        get the check string of AB to reduce the numbers
     """
     checks = Xdict()
     count = 0

@@ -188,7 +188,7 @@ def _add_outer_solvents(molecule, new_molecule, molmin, molmax,
     return molecule
 
 
-def add_solvent_box(molecule, solvent, distance, tolerance=3, n_solvent=None):
+def add_solvent_box(molecule, solvent, distance, tolerance=2.5, n_solvent=None):
     """
     This **function** adds a box full of solvents to a molecule.
     This will be performed in place for a Molecule and out of place for a ResidueType.
@@ -198,7 +198,7 @@ def add_solvent_box(molecule, solvent, distance, tolerance=3, n_solvent=None):
     :param distance: the distance between the ``molecule`` and the box in the unit of Angstrom. \
  This can be an ``int`` or a ``float``, and it can be also a list of them with the length 3 or 6, \
  which represents the 3 or 6 directions respectively.
-    :param tolerance: the distance between two molecules. 3 for default.
+    :param tolerance: the distance between two molecules. 2.5 for default.
     :param n_solvent: the number of solvent molecules.
     :return: the Molecule instance
     """

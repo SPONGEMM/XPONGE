@@ -1077,9 +1077,12 @@ class Residue(Entity):
         This **function** is used to change the type of the residue to a new type
         **New From 1.2.6.8**
 
+        .. WARNING::
+            This will not change the residue link between the residue
+
         :param new_type: the instance or the name of the new residue type
         :param add_missing_atoms: whether to add missing atoms after deleting the terminal atoms
-        :return: 1 for success, 0 for failure
+        :return: None
         """
         if isinstance(new_type, str):
             new_type = ResidueType.get_type(new_type)
@@ -1104,7 +1107,6 @@ class Residue(Entity):
         self.name = new_type.name
         if add_missing_atoms:
             self.add_missing_atoms()
-        return 1
 
     def unterminal(self, add_missing_atoms=False):
         """
@@ -1117,7 +1119,7 @@ class Residue(Entity):
         if self.type.name in GlobalSetting.PDBResidueNameMap["save"]:
             new_type = GlobalSetting.PDBResidueNameMap["save"][self.type.name]
         else:
-            return 0
+            return ReasonedBool(False, f"The residue type {self.type.name} is not a terminal residue")
         return self.set_type(new_type, add_missing_atoms)
 
     def name2atom(self, name):
@@ -1311,12 +1313,9 @@ class ResidueLink:
         :param key: "atom" or "residue", to specify the key
         :return: the hash value
         """
-        if key == "atom":
-            tohash = [f"{one}-{other}", f"{other}-{one}"]
-        elif key == "residue":
-            tohash = [f"{one}-{other}", f"{other}-{one}"]
-        else:
+        if key not in ("atom", "residue"):
             raise ValueError(f'key should be "atom" or "residue", but got {key}')
+        tohash = [f"{one}-{other}", f"{other}-{one}"]
         tohash.sort()
         return hash(tohash[0])
 
@@ -1371,7 +1370,7 @@ class Molecule():
             It may not be initialized. Maybe it will become a property in the next version to avoid mistakes.
 
         """
-        self.atom_index = []
+        self.atom_index = Xdict()
         """the atom index"""
         self.residue_links = set()
         """the residue links in the molecule"""
@@ -1487,11 +1486,7 @@ class Molecule():
     @staticmethod
     def _set_friends_in_different_residue(molecule, atom1, atom2):
         """
-
-        :param molecule:
-        :param atom1:
-        :param atom2:
-        :return:
+            find friend atoms in different residues for atom1 and atom2
         """
         if molecule.atom_index[atom1.residue.atoms[0]] < molecule.atom_index[atom1.residue.atoms[1]]:
             res_index = molecule.atom_index[atom1.residue.atoms[-1]]
@@ -1506,17 +1501,7 @@ class Molecule():
     @staticmethod
     def _get_head_and_tail(head, tail, molecule, typeatom1, typeatom2, restype, toset, atom1_friends, resatom_):
         """
-
-        :param head:
-        :param tail:
-        :param molecule:
-        :param typeatom1:
-        :param typeatom2:
-        :param restype:
-        :param toset:
-        :param atom1_friends:
-        :param resatom_:
-        :return:
+            get the head and tail of the molecule
         """
         assert typeatom2 in restype.connectivity[typeatom1]
         to_search = set(restype.connectivity[typeatom1])
@@ -1782,17 +1767,24 @@ If None, the information will be deleted between start and end
 
         return new_molecule
 
+    def get_atoms(self):
+        """
+        This **function** is used to get the atoms in the molecule.
+        The return value will also be stored in the attribute atom.
+
+        :return: a list of atoms
+        """
+        self.atoms = [atom for res in self.residues for atom in res.atoms]
+        self.atom_index = {atom: i for i, atom in enumerate(self.atoms)}
+        return self.atoms
+
     def get_atom_coordinates(self):
         """
         This **function** is used to get the atom coordinates
 
         :return: a numpy array, the coordinates of atoms
         """
-        self.atoms = []
-        for res in self.residues:
-            self.atoms.extend(res.atoms)
-
-        self.atom_index = {self.atoms[i]: i for i in range(len(self.atoms))}
+        self.get_atoms()
         return np.array([[atom.x, atom.y, atom.z] for atom in self.atoms])
 
     def divide_into_two_parts(self, atom1, atom2):
@@ -1898,17 +1890,11 @@ If None, the information will be deleted between start and end
 
 def _link_residue_process_coordinate(molecule, atom1, atom2):
     """
-
-    :param molecule:
-    :param atom1:
-    :param atom2:
-    :return:
+        This function is used to process the coordinates of the atoms when linking two Xponge.AbstractMolecule
     """
-    molecule.atoms = [atom for residue in molecule.residues for atom in residue.atoms]
-    molecule.atom_index = {atom: i for i, atom in enumerate(molecule.atoms)}
+    crd = molecule.get_atom_coordinates()
     res_a = atom1.residue
     res_b = atom2.residue
-    crd = molecule.get_atom_coordinates()
     atom1_friends, atom2_friends = molecule.divide_into_two_parts(atom1, atom2)
     crd[atom2_friends] += 2000
 
@@ -2059,7 +2045,7 @@ def _mul(self, other, deepcopy):
     if isinstance(other, int):
         if other < 1:
             raise ValueError("multiple should be not less than 1")
-        if isinstance(self, ResidueType) or deepcopy:
+        if isinstance(self, ResidueType) or not deepcopy:
             t = self
         else:
             t = self.deepcopy()

@@ -45,11 +45,13 @@ def file_filter(infile, outfile, reg_exp, replace_dict):
                     lines += line
                     break
     if not isinstance(outfile, io.IOBase):
-        outfile = open(outfile, "w")
-    with outfile as f:
-        f.write(lines)
+        with open(outfile, "w") as f:
+            f.write(lines)
+    else:
+        outfile.write(lines)
 
-def pdb_filter(infile, outfile, heads, hetero_residues, rename_ions=None):
+
+def pdb_filter(infile, outfile, heads, hetero_residues, chains=None, rename_ions=None):
     """
         This **function** finds the lines in pdb which meets the need
 
@@ -57,6 +59,7 @@ def pdb_filter(infile, outfile, heads, hetero_residues, rename_ions=None):
         :param outfile: the output file or filename
         :param head: a list of heads which will be included
         :param hetero_residues: a list of hetero residue names which will be included
+        :param chains: a list of the code for the chains you need. None for all (default).
         :param rename_ions: a dict to rename the ions
     """
     if not isinstance(heads, list):
@@ -83,7 +86,18 @@ def pdb_filter(infile, outfile, heads, hetero_residues, rename_ions=None):
         replace_dict["(^HETATM [ 0-9]{4} )(%s)(.)(%s)"%(aname, rname)] = r"\g<1>" + f"{b:4s}" + r"\g<3>" + f"{b:3s}"
     reg_exp = []
     for head in heads:
-        reg_exp.append(f"^{head}")
+        if head == "ATOM" and chains is not None:
+            for chain in chains:
+                reg_exp.append("^ATOM.{17}%s"%chain)
+        elif head == "SEQRES" and chains is not None:
+            for chain in chains:
+                reg_exp.append("^SEQRES.{5}%s"%chain)
+        elif head == "TER" and chains is not None:
+            reg_exp.append(r"^TER\s*$")
+            for chain in chains:
+                reg_exp.append("^TER.{18}%s"%chain)
+        else:
+            reg_exp.append(f"^{head}")
     for hetres in hetero_residues:
         if len(hetres) == 1:
             hetres = f"{hetres}  | {hetres} |  {hetres}"
