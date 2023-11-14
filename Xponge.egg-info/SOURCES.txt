@@ -130,4 +130,10 @@ Xponge/tools/mmgbsa.py
 Xponge/tools/mol2rfe.py
 Xponge/tools/ti.py
 Xponge/tools/unittests/__init__.py
-Xponge/tools/unittests/base.py
+Xponge/tools/unittests/test_0_base.py
+Xponge/tools/unittests/test_1_assign.py
+Xponge/tools/unittests/test_1_helper.py
+Xponge/tools/unittests/test_1_io.py
+Xponge/tools/unittests/test_1_process.py
+Xponge/tools/unittests/test_2_ff14sb.py
+Xponge/tools/unittests/test_2_ffbase.py

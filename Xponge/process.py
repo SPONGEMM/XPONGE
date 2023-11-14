@@ -8,6 +8,7 @@ from itertools import product
 import numpy as np
 from .helper import get_rotate_matrix, ResidueType, Molecule, Residue, set_global_alternative_names, Xdict, \
     GlobalSetting, Xopen, Xprint
+from .helper.math import get_basis_vectors_from_length_and_angle
 from .build import save_sponge_input
 from .load import load_coordinate
 from .forcefield.special.min import save_min_bonded_parameters, do_not_save_min_bonded_parameters
@@ -688,7 +689,7 @@ class Lattice:
     :param cell_length: the length of the unit cell. [1,1,1] for default.
     :param cell_angle: the angle of the unit cell. [90,90,90] for default.
     :param basis_position: a list of lists, every sublist has 3 numbers for coordinates.
-    :param spacing: a list with 3 numbers, the spacing distance in x, y, z directions.
+    :param spacing: a list with 3 numbers, the spacing distance in three cell basis vectors.
     """
     styles = Xdict(not_found_message="There is no lattice style named {}")
 
@@ -734,18 +735,8 @@ class Lattice:
     @staticmethod
     def _judge_region(x1, y1, z1, x2, y2, z2, region, mol, basis_mol, res_len):
         """
-
-        :param x1:
-        :param y1:
-        :param z1:
-        :param x2:
-        :param y2:
-        :param z2:
-        :param region:
-        :param mol:
-        :param basis_mol:
-        :param res_len:
-        :return:
+            judge whether (x2, y2, z2) in the region. 
+            If so, the basis mol will be added to mol, and coordinates will be modified
         """
         if (x2, y2, z2) in region:
             mol |= basis_mol
@@ -769,51 +760,42 @@ class Lattice:
         if not mol:
             mol = Molecule("unnamed")
         mol.box_length = [box.x_high - box.x_low, box.y_high - box.y_low, box.z_high - box.z_low]
-        cell_angle = self.cell_angle * np.pi / 180.0
-        c0, c1, c2 = np.cos(cell_angle)
-        _, _, s2 = np.sin(cell_angle)
         basis_mol = self.basis_molecule
         res_len = -1
         if isinstance(basis_mol, Molecule):
-            basis_mol.atoms = [atom for residue in basis_mol.residues for atom in residue.atoms]
+            basis_mol.get_atoms()
             res_len = -len(basis_mol.residues)
-        dl1x = self.scale * (self.cell_length[0] + self.spacing[0])
-
-        dl2x = self.scale * (self.cell_length[1] + self.spacing[1])
-        dl2y = dl2x * s2
-        dl2x *= c2
-
-        dl3x = self.scale * (self.cell_length[2] + self.spacing[2])
-        dl3y = dl3x * (c0 - c2 * c1) / s2
-        dl3z = dl3x * np.sqrt(1 - c2 * c2 - c1 * c1 - c0 * c0 + 2 * c0 * c1 * c2) / s2
-        dl3x *= c1
-        bps = np.array([[dl1x * basis[0] + dl2x * basis[1] + dl3x * basis[2],
-                         dl2y * basis[1] + dl3y * basis[2], dl3z * basis[2]] for basis in self.basis_position])
-        x_init = 0
-        y_init = 0
+        bvs = get_basis_vectors_from_length_and_angle(self.cell_length[0] + self.spacing[0],
+                                                      self.cell_length[1] + self.spacing[1],
+                                                      self.cell_length[2] + self.spacing[2],
+                                                      self.cell_angle[0], self.cell_angle[1],
+                                                      self.cell_angle[2]) * self.scale
+        bps = np.array([[bvs[0][0] * basis[0] + bvs[1][0] * basis[1] + bvs[2][0] * basis[2],
+                         bvs[0][1] * basis[1] + bvs[1][1] * basis[2],  bvs[2][2] * basis[2]]
+                         for basis in self.basis_position])
+        x_init = box.x_low + self.origin[0]
+        y_init = box.y_low + self.origin[1]
         z0 = box.z_low + self.origin[2]
-        x1 = basis_mol.atoms[0].x
-        y1 = basis_mol.atoms[0].y
-        z1 = basis_mol.atoms[0].z
+        x1, y1, z1 = np.min([[atom.x, atom.y, atom.z] for atom in basis_mol.atoms], axis=0)
         while z0 < box.z_high:
-            y0 = box.y_low + self.origin[1] + y_init
+            y0 = y_init
             while y0 < box.y_high:
-                x0 = box.x_low + self.origin[0] + x_init
+                x0 = x_init
                 while x0 < box.x_high:
                     for basis in bps:
                         x2 = basis[0] + x0
                         y2 = basis[1] + y0
                         z2 = basis[2] + z0
                         self._judge_region(x1, y1, z1, x2, y2, z2, region, mol, basis_mol, res_len)
-                    x0 += dl1x
-                x_init += dl2x
-                x_init %= dl1x
-                y0 += dl2y
-            x_init += dl3x
-            x_init %= dl1x
-            y_init += dl3y
-            y_init %= dl2y
-            z0 += dl3z
+                    x0 += bvs[0][0]
+                x_init += bvs[1][0]
+                x_init %= bvs[0][0]
+                y0 += bvs[1][1]
+            x_init += bvs[2][0]
+            x_init %= bvs[0][0]
+            y_init += bvs[2][1]
+            y_init %= bvs[1][1]
+            z0 += bvs[2][2]
         return mol
 
 

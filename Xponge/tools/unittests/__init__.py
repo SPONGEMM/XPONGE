@@ -27,6 +27,7 @@ def _find_tests(todo):
     """ find all tests in the folder"""
     module_dir = os.path.dirname(os.path.abspath(__file__))
     file_list = os.listdir(module_dir)
+    file_list.sort()
     tests = []
     for file_name in file_list:
         result = re.search(r"test_\d_(.+)\.py", file_name)
@@ -34,7 +35,7 @@ def _find_tests(todo):
             file_path = os.path.join(module_dir, file_name)
             module_name = result.group(1)
             if todo == "all":
-                tests.append(module_name)
+                tests.append([module_name, file_path])
             elif todo == module_name:
                 spec = iu.spec_from_file_location(module_name, file_path)
                 module = iu.module_from_spec(spec)
@@ -43,7 +44,21 @@ def _find_tests(todo):
                     tests.append(getattr(module, case))
     return tests
 
-def _run_one_test(case, args):
+def _check_test_file(f):
+    """ check the cases in the test file """
+    if not os.path.exists(f):
+        raise ValueError(f"{f} does not exist")
+    result = re.search(r"test_\d_(.+)\.py", f)
+    module_name = result.group(1)
+    spec = iu.spec_from_file_location(module_name, f)
+    module = iu.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    tests = []
+    for case in module.__all__:
+        tests.append(getattr(module, case))
+    return tests, module_name
+
+def _run_one_test(case, verbose):
     """ Run one test"""
     for handle in GlobalSetting.logger.handlers:
         handle.setLevel("CRITICAL")
@@ -52,7 +67,7 @@ def _run_one_test(case, args):
     file_handler.set_name("temp")
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s\n%(message)s')
     file_handler.setFormatter(formatter)
-    file_handler.setLevel(args.verbose)
+    file_handler.setLevel(verbose)
     GlobalSetting.logger.addHandler(file_handler)
     runner = XpongeTestRunner()
     result = runner.run(unittest.FunctionTestCase(case))
@@ -60,8 +75,26 @@ def _run_one_test(case, args):
         if handler.get_name() == "temp":
             GlobalSetting.logger.removeHandler(handler)
         else:
-            handler.setLevel(args.verbose)
+            handler.setLevel(verbose)
     return result
+
+def _run_several_tests(tests, name, args):
+    """run several tests"""
+    Xprint(f"{len(tests)} test case(s) for {name}")
+    failures = []
+    errors = []
+    for case in tests:
+        result = _run_one_test(case, args)
+        if result.failures:
+            failures.append(case.__name__[5:])
+        if result.errors:
+            errors.append(case.__name__[5:])
+    if failures:
+        Xprint(f"\nFailed function(s): {', '.join(failures)}")
+    if errors:
+        Xprint(f"\nError function(s): {', '.join(errors)}")
+    if not failures and not errors:
+        Xprint("")
 
 def mytest(args):
     """
@@ -71,26 +104,16 @@ def mytest(args):
     :return: None
     """
     GlobalSetting.logger.setLevel(args.verbose)
-    tests = _find_tests(args.do)
-    if args.do != "all":
-        Xprint(f"{len(tests)} test case(s) for {args.do}")
-        failures = []
-        errors = []
-        for case in tests:
-            result = _run_one_test(case, args)
-            if result.failures:
-                failures.append(case.__name__[5:])
-            if result.errors:
-                errors.append(case.__name__[5:])
-        if failures:
-            Xprint(f"\nFailed function(s): {', '.join(failures)}")
-        if errors:
-            Xprint(f"\nError function(s): {', '.join(errors)}")
-        if not failures and not errors:
-            Xprint("")
+    if args.file:
+        tests, name = _check_test_file(args.file)
+        _run_several_tests(tests, name, args.verbose)
+    elif args.do != "all":
+        tests = _find_tests(args.do)
+        _run_several_tests(tests, args.do, args.verbose)
     else:
+        tests = _find_tests(args.do)
         Xprint(f"{len(tests)} test script(s)\n{'='*30}")
-        for case in tests:
+        for case, f in tests:
             pathlib.Path(f"{case}").mkdir(exist_ok=True)
-            os.system(f"cd {case} & {sys.argv[0]} test -d {case} -v {args.verbose}")
+            os.system(f"cd {case} && {sys.argv[0]} test -f {f} -v {args.verbose}")
             Xprint("-"*30)

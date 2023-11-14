@@ -17,6 +17,8 @@ def _mytest(subparsers):
     mytest.add_argument("-d", "--do", metavar="todo",
                         default="base",
                         help="the unit tests need to do")
+    mytest.add_argument("-f", "--file", metavar="file",
+                        help="the unit test file. If set, argument -d/--do will be suppressed")
     mytest.set_defaults(func=tools.mytest)
 
 

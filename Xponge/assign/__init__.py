@@ -16,7 +16,8 @@ from ..helper import AtomType, ResidueType, Residue, Xopen, Xdict, set_real_glob
 
 
 __all__ = ["Assign", "get_assignment_from_pdb", "get_assignment_from_mol2", "get_assignment_from_pubchem",
-           "get_assignment_from_residuetype", "get_assignment_from_xyz", "get_assignment_from_smiles"]
+           "get_assignment_from_residuetype", "get_assignment_from_xyz", "get_assignment_from_smiles",
+           "get_assignment_from_cif"]
 
 
 class AssignRule:
@@ -569,6 +570,8 @@ connected to two other atoms, "N4" means a nitrogen atom connected to four other
 
         :return: None
         """
+        if not self.check_connectivity():
+            Xprint("The atoms in the assignment are not all in a connected graph", "ERROR")
         for atom in range(len(self.atoms)):
             self.atom_marker[atom].clear()
             dlo = 0
@@ -688,6 +691,22 @@ The function will receive the assignment as input, and give True or False as out
         from .bond_order import BondOrderAssignment
         bo_assign = BondOrderAssignment(penalty_scores, max_step, max_stat, self, total_charge, extra_criteria)
         return bo_assign.main()
+
+    def check_connectivity(self):
+        """
+            This **function** checks whether all atoms are connected in one graph
+
+            :return: True or False
+        """
+        visited = set()
+        stack = [next(iter(self.bonds))]
+        while stack:
+            node = stack.pop()
+            if node not in visited:
+                visited.add(node)
+                stack.extend(self.bonds.get(node, {}))
+        return len(visited) == self.atom_numbers
+
 
     def to_residuetype(self, name, charge=None):
         """
@@ -1194,6 +1213,16 @@ def _get_cif_float(string, hint, filename):
         return float(string.split("(")[0])
     return float(string)
 
+def _parse_cif_symops(symops, lattice_info):
+    """
+        parse the symmetry operations in the file as basis_position
+    """
+    if set(symops) - set("+-,xyz0123456789\n"):
+        raise ValueError("the symmetry operator strings can only be simple math expression of x, y, z")
+    symops = symops.replace("x", "1").replace("y", "1").replace("z", "1")
+    lattice_info["basis_position"] = [[eval(op) for op in symop.split(",")] #pylint:disable=eval-used
+                                        for symop in symops.split("\n")]
+
 def get_assignment_from_cif(file, total_charge=0):
     """
     This **function** gets an Assign instance and a preprocessed lattice information from a cif file
@@ -1203,7 +1232,7 @@ def get_assignment_from_cif(file, total_charge=0):
     :return: the Assign instance and a dict which stores the preprocessed lattice information
     """
     assign = None
-    lattice_info = Xdict()
+    lattice_info = Xdict({"scale": 1, "style": "custom"})
     if not isinstance(file, io.IOBase):
         filename = file
         file = open(file)
@@ -1219,13 +1248,16 @@ def get_assignment_from_cif(file, total_charge=0):
         assign = Assign(name=matches[0][5:])
         symops = re.findall(r"(_symmetry_equiv_pos_as_xyz|_space_group_symop_operation_xyz)\s+(.+?)(?!\_)\n_\S+",
             contents, flags=re.DOTALL)
-        lattice["symops"] = symops
+        if symops:
+            _parse_cif_symops(symops[0][1], lattice_info)
         la = _cif_find_box_information("cell_length_a", contents, filename)
         lb = _cif_find_box_information("cell_length_b", contents, filename)
         lc = _cif_find_box_information("cell_length_c", contents, filename)
+        lattice_info["cell_length"] = [la, lb, lc]
         alpha = _cif_find_box_information("cell_angle_alpha", contents, filename)
         beta = _cif_find_box_information("cell_angle_beta", contents, filename)
         gamma = _cif_find_box_information("cell_angle_gamma", contents, filename)
+        lattice_info["cell_angle"] = [alpha, beta, gamma]
         basis = get_basis_vectors_from_length_and_angle(la, lb, lc, alpha, beta, gamma)
         n_atom, atom_info = _cif_get_loop_with_keyword("atom_site_type_symbol", contents)
         if not atom_info:
