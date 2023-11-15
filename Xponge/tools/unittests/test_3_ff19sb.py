@@ -1,19 +1,20 @@
 """
-    This **module** includes unittests of the Xponge.forcefield.amber.ff14sb
+    This **module** includes unittests of the Xponge.forcefield.amber.ff19sb
 """
 import os
 import re
 
-__all__ = ["test_ff14sb"]
+__all__ = ["test_ff19sb"]
 
 def _check_one_energy(amber_mdout, amber_name, sponge_out):
     """check one energy term"""
     import matplotlib.pyplot as plt
     import numpy as np
+    sponge_out = sponge_out[10:]
     with open(amber_mdout) as f:
         t = f.read()
         matches = re.findall(rf"{amber_name}\s*=\s*(\d*.\d*)", t)
-        matches = np.array([float(match) for match in matches[1:-2]])
+        matches = np.array([float(match) for match in matches[11:-2]])
     unit = "kcal/mol"
     if abs(np.mean(matches)) > 1000:
         unit = "Mcal/mol"
@@ -30,29 +31,28 @@ def _check_one_energy(amber_mdout, amber_name, sponge_out):
     plt.savefig(f"{amber_name}.png")
     plt.clf()
 
-def test_ff14sb():
+def test_ff19sb():
     """
         test the single point energy for residues
     """
     import Xponge
-    import Xponge.forcefield.amber.ff14sb
+    import Xponge.forcefield.amber.ff19sb
     import Xponge.forcefield.amber.tip3p
     from Xponge.analysis import MdoutReader
     from Xponge.mdrun import run
-
 
     s = "ALA ARG ASN ASP CYS CYX GLN GLU GLY HID HIE HIP ILE LEU " + \
         "LYS MET PHE PRO SER THR TRP TYR VAL HIS"
 
     with open("leaprc", "w") as f:
-        f.write(f"""source leaprc.protein.ff14SB
+        f.write(f"""source leaprc.protein.ff19SB
 source leaprc.water.tip3p
 t = sequence {{ACE {s} NME}}
 solvatebox t WAT 10
 saveamberparm t t.parm7 t.rst7
 quit""")
     with open("mdin", "w") as f:
-        f.write(f"""test ff14SB
+        f.write(f"""test ff19SB
 &cntrl
   nstlim = 20000
   ntt = 3
@@ -74,8 +74,8 @@ quit""")
         mol += Xponge.ResidueType.get_type(res)
     mol += Xponge.ResidueType.get_type("NME")
     Xponge.add_solvent_box(mol, Xponge.ResidueType.get_type("WAT"), 20, n_solvent=n_solvent)
-    Xponge.save_sponge_input(mol, "ff14sb")
-    assert run("SPONGE -mode rerun -default_in_file_prefix ff14sb " + \
+    Xponge.save_sponge_input(mol, "ff19sb")
+    assert run("SPONGE -mode rerun -default_in_file_prefix ff19sb " + \
                f"-cutoff 8 -crd amber.dat -box amber.box > rerun.out ") == 0
 
     t = MdoutReader("mdout.txt")
@@ -87,5 +87,5 @@ quit""")
     _check_one_energy("mdout", " EELEC", t.PME)
     _check_one_energy("mdout", " 1-4 NB", t.nb14_LJ)
     _check_one_energy("mdout", " 1-4 EEL", t.nb14_EE)
-
+    _check_one_energy("mdout", " CMAP", t.cmap)
 

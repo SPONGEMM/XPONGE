@@ -926,10 +926,6 @@ class Entity(ABC):
         unit_transfer(self)
 
 
-def not_found_method(key):
-    return {}
-
-
 class Atom(Entity):
     """
     This **class** is a subclass of Entity, for atoms
@@ -957,10 +953,8 @@ class Atom(Entity):
         """the residue which the atom belongs to, maybe a Residue instance or a ResidueType instance"""
 
         # 成键信息
-        self.internal_linked_atoms = Xdict({i + 1: set() for i in range(1, GlobalSetting.farthest_bonded_force)},
-                                            not_found_method=not_found_method)
-        self.linked_atoms = Xdict({i + 1: set() for i in range(1, GlobalSetting.farthest_bonded_force)},
-                                  not_found_method=not_found_method)
+        """a dict mapping the type and the atoms linked"""
+        self.linked_atoms = Xdict({i + 1: set() for i in range(1, GlobalSetting.farthest_bonded_force)})
         """a dict mapping the type and the atoms linked"""
         self.linked_atoms["extra_excluded_atoms"] = set()
 
@@ -990,22 +984,17 @@ class Atom(Entity):
             self.copied[forcopy] = new_atom
         return new_atom
 
-    def link_atom(self, link_type, atom, internal=True):
+    def link_atom(self, link_type, atom):
         """
         This **function** is used to link atoms for building
 
         :param link_type: the type to link
         :param atom: the atom to link
-        :param internal: whether the link in one residue or between residues
         :return: None
         """
-        if link_type not in self.linked_atoms.keys():
+        if link_type not in self.linked_atoms:
             self.linked_atoms[link_type] = set()
         self.linked_atoms[link_type].add(atom)
-        if internal:
-            if link_type not in self.internal_linked_atoms.keys():
-                self.internal_linked_atoms[link_type] = set()
-            self.internal_linked_atoms[link_type].add(atom)
 
     def extra_exclude_atom(self, atom):
         """
@@ -1375,7 +1364,8 @@ class Molecule():
         self.residue_links = set()
         """the residue links in the molecule"""
         self._residue_links_map = Xdict(atom=Xdict(), residue=Xdict(),
-                                        not_found_message='key should be "atom" or "residue", but got {}')
+                                        satom=Xdict(), not_found_message='key should be "atom", "satom", \
+"residue "or "sresidue", but got {}')
 
         self.bonded_forces = Xdict()
         """the bonded forces after building"""
@@ -1585,7 +1575,15 @@ in this Molecule
         reslink = ResidueLink(atom1, atom2)
         self.residue_links.add(reslink)
         self._residue_links_map["atom"][reslink.tohash] = reslink
+        if reslink.residue_tohash in self._residue_links_map["residue"]:
+            raise ValueError("There can only be at most one residue link between two residues")
         self._residue_links_map["residue"][reslink.residue_tohash] = reslink
+        if atom1 in self._residue_links_map["satom"]:
+            raise ValueError(f"There can only be at most one residue link for one atom {atom1}")
+        self._residue_links_map["satom"][atom1] = reslink
+        if atom2 in self._residue_links_map["satom"]:
+            raise ValueError(f"There can only be at most one residue link for one atom {atom2}")
+        self._residue_links_map["satom"][atom2] = reslink
 
     def get_residue_link(self, one, other, key="atom"):
         """
@@ -1613,6 +1611,8 @@ in this Molecule
         self.residue_links.remove(reslink)
         self._residue_links_map["atom"].pop(reslink.tohash)
         self._residue_links_map["residue"].pop(reslink.residue_tohash)
+        self._residue_links_map["satom"].pop(reslink.atom1)
+        self._residue_links_map["satom"].pop(reslink.atom2)
 
     def add_missing_atoms(self):
         """
@@ -2111,6 +2111,7 @@ def generate_new_bonded_force_type(type_name, atoms, properties, is_compulsory, 
         """
         This **class** is a subclass of Type, for bonded force types
         """
+        far = 0
         _name = type_name
         topology_like = temp
         compulsory = is_compulsory
@@ -2196,8 +2197,10 @@ def generate_new_bonded_force_type(type_name, atoms, properties, is_compulsory, 
     GlobalSetting.BondedForces.append(BondedForceType)
     GlobalSetting.BondedForcesMap[getattr(BondedForceType, "_name")] = BondedForceType
     for i in atoms.split("-"):
-        if int(i) > GlobalSetting.farthest_bonded_force:
-            GlobalSetting.farthest_bonded_force = int(i)
+        if int(i) > BondedForceType.far:
+            BondedForceType.far = int(i)
+    if BondedForceType.far > GlobalSetting.farthest_bonded_force:
+        GlobalSetting.farthest_bonded_force = BondedForceType.far
 
     return BondedForceType
 

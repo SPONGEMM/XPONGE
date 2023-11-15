@@ -183,71 +183,70 @@ def _build_residue(cls):
             cls.bonded_forces[frc_name][-1].contents = frc_entity.contents
 
 
-def _modify_linked_atoms(cls):
+def _build_reslink_preprosess(mol):
+    """ modify the linkage according to residue links """
+    for link in mol.residue_links:
+        atom1, atom2 = link.atom1, link.atom2
+        atom1_friends, atom2_friends = set([atom1]), set([atom2])
+        b1, b2 = Xdict(not_found_method=lambda x: set()), Xdict(not_found_method=lambda x: set())
+        far = GlobalSetting.farthest_bonded_force
+        for i in range(far - 1, 1, -1):
+            for atom in atom1.linked_atoms[i]:
+                atom.Link_Atom(i + 1, atom2)
+                b2[i+1].add(atom)
+                atom1_friends.add(atom)
+            for atom in atom2.linked_atoms[i]:
+                atom.Link_Atom(i + 1, atom1)
+                b1[i+1].add(atom)
+                atom2_friends.add(atom)
+
+        for i, atoms in b1.items():
+            for atom in atoms:
+                atom1.Link_Atom(i, atom)
+
+        for i, atoms in b2.items():
+            for atom in atoms:
+                atom2.Link_Atom(i, atom)
+
+        atom1.Link_Atom(2, atom2)
+        atom2.Link_Atom(2, atom1)
+
+        for i in range(2, far):
+            for j in range(2, far + 1 - i):
+                for atom1_linked_atom in atom1.linked_atoms[i]:
+                    for atom2_linked_atom in atom2.linked_atoms[j]:
+                        if atom1_linked_atom not in atom2_friends and atom2_linked_atom not in atom1_friends:
+                            atom1_linked_atom.Link_Atom(i + j, atom2_linked_atom)
+                            atom2_linked_atom.Link_Atom(i + j, atom1_linked_atom)
+
+def _build_residue_link(cls, checked):
     """
-
-    :param cls:
-    :return:
+        build bonded force for residue link
     """
-    atom1 = cls.atom1
-    atom2 = cls.atom2
-
-    atom1_friends = set([atom1])
-    atom2_friends = set([atom2])
-
-    far = GlobalSetting.farthest_bonded_force
-
-    for i in range(far - 1, 1, -1):
-        for atom in atom1.internal_linked_atoms[i]:
-            atom.Link_Atom(i + 1, atom2, internal=False)
-            atom2.Link_Atom(i + 1, atom, internal=False)
-            atom1_friends.add(atom)
-        for atom in atom2.internal_linked_atoms[i]:
-            atom.Link_Atom(i + 1, atom1, internal=False)
-            atom1.Link_Atom(i + 1, atom, internal=False)
-            atom2_friends.add(atom)
-
-    atom1.Link_Atom(2, atom2, internal=False)
-    atom2.Link_Atom(2, atom1, internal=False)
-
-    for i in range(2, far):
-        for j in range(2, far + 1 - i):
-            for atom1_linked_atom in atom1.linked_atoms[i]:
-                for atom2_linked_atom in atom2.linked_atoms[j]:
-                    if atom1_linked_atom not in atom2_friends and atom2_linked_atom not in atom1_friends:
-                        atom1_linked_atom.Link_Atom(i + j, atom2_linked_atom, internal=False)
-                        atom2_linked_atom.Link_Atom(i + j, atom1_linked_atom, internal=False)
-
-    return atom1_friends, atom2_friends
-
-
-def _build_residue_link(cls):
-    """
-
-    :param cls:
-    :return:
-    """
-    atom1_friends, atom2_friends = _modify_linked_atoms(cls)
-    atom12_friends = atom1_friends | atom2_friends
     for frc in GlobalSetting.BondedForces:
+        far = frc.far
+        atom1_friends = { atom for i in range(2, far + 1) for atom in cls.atom1.linked_atoms[i]}
+        atom2_friends = { atom for i in range(2, far + 1) for atom in cls.atom2.linked_atoms[i]}
+        atom12_friends = atom1_friends | atom2_friends
         if len(frc.get_all_types()) < 2:
             continue
         top = frc.topology_like
         top_matrix = frc.topology_matrix
         frc_all = []
-
         for atom0 in atom12_friends:
             backups = {i: [] for i in range(len(top))}
             backups[0].append([atom0])
             for i, d in enumerate(top):
                 if i == 0:
                     continue
-                for atom1 in atom0.linked_atoms[d]:
+                for atom1 in atom12_friends:
                     _check_backup(backups, atom1, top_matrix, i, d)
             for backup in backups[len(top) - 1]:
-                backupset = set(backup)
-                if atom1_friends & backupset and backupset & atom2_friends:
+                backupset = {atom.residue for atom in backup}
+                backuphash = "-".join([repr(atom) for atom in backup])
+                if len(backupset) > 1 and backuphash not in checked[frc]:
                     frc_all.append(backup)
+                    checked[frc].add(backuphash) 
         frc_all_final = _get_frc_all_final(frc, frc_all)
         _find_the_force(frc, frc_all_final, cls)
 
@@ -258,21 +257,21 @@ def _build_molecule(cls):
     :param cls:
     :return:
     """
+    checked = {frc: set() for frc in GlobalSetting.BondedForces}
+    cls.get_atoms()
     for res in cls.residues:
         if not res.type.built:
             build_bonded_force(res.type)
-        build_bonded_force(res)
+        _build_residue(res)
+    _build_reslink_preprosess(cls)
     for link in cls.residue_links:
-        build_bonded_force(link)
+        _build_residue_link(link, checked)
 
-    cls.atoms = []
     cls.bonded_forces = {frc.get_class_name(): [] for frc in GlobalSetting.BondedForces}
-    for res in cls.residues:
-        cls.atoms.extend(res.atoms)
-        for key in cls.bonded_forces:
+    for key in cls.bonded_forces:
+        for res in cls.residues:
             cls.bonded_forces[key].extend(res.bonded_forces.get(key, []))
-    for link in cls.residue_links:
-        for key in cls.bonded_forces:
+        for link in cls.residue_links:
             cls.bonded_forces[key].extend(link.bonded_forces.get(key, []))
 
     cls.atom_index = {cls.atoms[i]: i for i in range(len(cls.atoms))}
@@ -301,15 +300,6 @@ def build_bonded_force(cls):
     if isinstance(cls, ResidueType):
         _build_residue_type(cls)
         cls.built = True
-
-    elif isinstance(cls, Residue):
-        _build_residue(cls)
-        cls.built = True
-
-    elif isinstance(cls, ResidueLink):
-        _build_residue_link(cls)
-        cls.built = True
-
     elif isinstance(cls, Molecule):
         _build_molecule(cls)
         cls.built = True
