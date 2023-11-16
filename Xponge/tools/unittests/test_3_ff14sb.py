@@ -54,7 +54,7 @@ solvatebox t WAT 10
 saveamberparm t t.parm7 t.rst7
 quit""")
     with open("mdin", "w") as f:
-        f.write(f"""test ff14SB
+        f.write("""test ff14SB
 &cntrl
   nstlim = 1000
   ntt = 3
@@ -78,7 +78,7 @@ quit""")
     Xponge.add_solvent_box(mol, Xponge.ResidueType.get_type("WAT"), 20, n_solvent=n_solvent)
     Xponge.save_sponge_input(mol, "ff14sb")
     assert run("SPONGE -mode rerun -default_in_file_prefix ff14sb " + \
-               f"-cutoff 8 -crd amber.dat -box amber.box > rerun.out ") == 0
+               "-cutoff 8 -crd amber.dat -box amber.box > rerun.out ") == 0
 
     t = MdoutReader("mdout.txt")
     _check_one_energy("mdout", " EPtot", t.potential)
@@ -89,5 +89,3 @@ quit""")
     _check_one_energy("mdout", " EELEC", t.PME)
     _check_one_energy("mdout", " 1-4 NB", t.nb14_LJ)
     _check_one_energy("mdout", " 1-4 EEL", t.nb14_EE)
-
-

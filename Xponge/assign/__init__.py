@@ -1217,7 +1217,7 @@ def _parse_cif_symops(symops, lattice_info):
     """
         parse the symmetry operations in the file as basis_position
     """
-    if set(symops) - set("+-,xyz0123456789\n"):
+    if set(symops) - set("+-,xyz0123456789\n /"):
         raise ValueError("the symmetry operator strings can only be simple math expression of x, y, z")
     symops = symops.replace("x", "1").replace("y", "1").replace("z", "1")
     lattice_info["basis_position"] = [[eval(op) for op in symop.split(",")] #pylint:disable=eval-used

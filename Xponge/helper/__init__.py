@@ -953,7 +953,6 @@ class Atom(Entity):
         """the residue which the atom belongs to, maybe a Residue instance or a ResidueType instance"""
 
         # 成键信息
-        """a dict mapping the type and the atoms linked"""
         self.linked_atoms = Xdict({i + 1: set() for i in range(1, GlobalSetting.farthest_bonded_force)})
         """a dict mapping the type and the atoms linked"""
         self.linked_atoms["extra_excluded_atoms"] = set()

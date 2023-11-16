@@ -5,7 +5,7 @@ import os
 from itertools import product
 from warnings import warn
 from . import assign
-from .helper import AbstractMolecule, ResidueType, Molecule, Residue, ResidueLink, GlobalSetting, Xopen, Xdict, \
+from .helper import AbstractMolecule, ResidueType, Molecule, Residue, GlobalSetting, Xopen, Xdict, \
     set_global_alternative_names
 
 
@@ -183,41 +183,39 @@ def _build_residue(cls):
             cls.bonded_forces[frc_name][-1].contents = frc_entity.contents
 
 
-def _build_reslink_preprosess(mol):
+def _build_reslink_preprosess(atom1, atom2):
     """ modify the linkage according to residue links """
-    for link in mol.residue_links:
-        atom1, atom2 = link.atom1, link.atom2
-        atom1_friends, atom2_friends = set([atom1]), set([atom2])
-        b1, b2 = Xdict(not_found_method=lambda x: set()), Xdict(not_found_method=lambda x: set())
-        far = GlobalSetting.farthest_bonded_force
-        for i in range(far - 1, 1, -1):
-            for atom in atom1.linked_atoms[i]:
-                atom.Link_Atom(i + 1, atom2)
-                b2[i+1].add(atom)
-                atom1_friends.add(atom)
-            for atom in atom2.linked_atoms[i]:
-                atom.Link_Atom(i + 1, atom1)
-                b1[i+1].add(atom)
-                atom2_friends.add(atom)
+    atom1_friends, atom2_friends = set([atom1]), set([atom2])
+    b1, b2 = Xdict(not_found_method=lambda x: set()), Xdict(not_found_method=lambda x: set())
+    far = GlobalSetting.farthest_bonded_force
+    for i in range(far - 1, 1, -1):
+        for atom in atom1.linked_atoms[i]:
+            atom.Link_Atom(i + 1, atom2)
+            b2[i+1].add(atom)
+            atom1_friends.add(atom)
+        for atom in atom2.linked_atoms[i]:
+            atom.Link_Atom(i + 1, atom1)
+            b1[i+1].add(atom)
+            atom2_friends.add(atom)
 
-        for i, atoms in b1.items():
-            for atom in atoms:
-                atom1.Link_Atom(i, atom)
+    for i, atoms in b1.items():
+        for atom in atoms:
+            atom1.Link_Atom(i, atom)
 
-        for i, atoms in b2.items():
-            for atom in atoms:
-                atom2.Link_Atom(i, atom)
+    for i, atoms in b2.items():
+        for atom in atoms:
+            atom2.Link_Atom(i, atom)
 
-        atom1.Link_Atom(2, atom2)
-        atom2.Link_Atom(2, atom1)
+    atom1.Link_Atom(2, atom2)
+    atom2.Link_Atom(2, atom1)
 
-        for i in range(2, far):
-            for j in range(2, far + 1 - i):
-                for atom1_linked_atom in atom1.linked_atoms[i]:
-                    for atom2_linked_atom in atom2.linked_atoms[j]:
-                        if atom1_linked_atom not in atom2_friends and atom2_linked_atom not in atom1_friends:
-                            atom1_linked_atom.Link_Atom(i + j, atom2_linked_atom)
-                            atom2_linked_atom.Link_Atom(i + j, atom1_linked_atom)
+    for i in range(2, far):
+        for j in range(2, far + 1 - i):
+            for atom1_linked_atom in atom1.linked_atoms[i]:
+                for atom2_linked_atom in atom2.linked_atoms[j]:
+                    if atom1_linked_atom not in atom2_friends and atom2_linked_atom not in atom1_friends:
+                        atom1_linked_atom.Link_Atom(i + j, atom2_linked_atom)
+                        atom2_linked_atom.Link_Atom(i + j, atom1_linked_atom)
 
 def _build_residue_link(cls, checked):
     """
@@ -246,7 +244,7 @@ def _build_residue_link(cls, checked):
                 backuphash = "-".join([repr(atom) for atom in backup])
                 if len(backupset) > 1 and backuphash not in checked[frc]:
                     frc_all.append(backup)
-                    checked[frc].add(backuphash) 
+                    checked[frc].add(backuphash)
         frc_all_final = _get_frc_all_final(frc, frc_all)
         _find_the_force(frc, frc_all_final, cls)
 
@@ -263,7 +261,9 @@ def _build_molecule(cls):
         if not res.type.built:
             build_bonded_force(res.type)
         _build_residue(res)
-    _build_reslink_preprosess(cls)
+    for link in cls.residue_links:
+        atom1, atom2 = link.atom1, link.atom2
+        _build_reslink_preprosess(atom1, atom2)
     for link in cls.residue_links:
         _build_residue_link(link, checked)
 

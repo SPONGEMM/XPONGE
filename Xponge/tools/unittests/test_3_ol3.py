@@ -49,12 +49,11 @@ def test_ol3():
         f.write(f"""source leaprc.RNA.OL3
 source leaprc.water.tip3p
 t = sequence {{A5 {s} U3}}
-setbox t vdw
-addions t NA 8
+solvatebox t WAT 10
 saveamberparm t t.parm7 t.rst7
 quit""")
     with open("mdin", "w") as f:
-        f.write(f"""test bsc1
+        f.write("""test bsc1
 &cntrl
   nstlim = 1000
   ntt = 3
@@ -66,7 +65,7 @@ quit""")
     assert os.system("tleap > tleap.out 2> tleap.out") == 0
     assert run("SPONGE -mode minimization -amber_parm7 t.parm7 -amber_rst7 t.rst7 -rst min.rst7 \
 -step_limit 2000 -cutoff 8 -minimization_dt_factor 5e-3 > min.out") == 0
-    assert os.system("pmemd.cuda -i mdin -p t.parm7 -c min.rst7 -x amber.nc -O -AllowSmallBox > pmemd.out 2> pmemd.out") == 0
+    assert os.system("pmemd.cuda -i mdin -p t.parm7 -c min.rst7 -x amber.nc > pmemd.out 2> pmemd.out") == 0
     assert os.system("Xponge converter -p t.parm7 -c amber.nc -o amber.dat -of sponge_traj") == 0
 
     with open("t.parm7") as f:
@@ -75,10 +74,10 @@ quit""")
     for res in s.split():
         mol += Xponge.ResidueType.get_type(res)
     mol += Xponge.ResidueType.get_type("U3")
-    mol += Xponge.ResidueType.get_type("NA") * 8
+    Xponge.add_solvent_box(mol, Xponge.ResidueType.get_type("WAT"), 20, n_solvent=n_solvent)
     Xponge.save_sponge_input(mol, "ol3")
     assert run("SPONGE -mode rerun -default_in_file_prefix ol3 " + \
-               f"-cutoff 8 -crd amber.dat -box amber.box > rerun.out ") == 0
+               "-cutoff 8 -crd amber.dat -box amber.box > rerun.out ") == 0
 
     t = MdoutReader("mdout.txt")
     _check_one_energy("mdout", " EPtot", t.potential)
@@ -89,5 +88,3 @@ quit""")
     _check_one_energy("mdout", " EELEC", t.PME)
     _check_one_energy("mdout", " 1-4 NB", t.nb14_LJ)
     _check_one_energy("mdout", " 1-4 EEL", t.nb14_EE)
-
-

@@ -174,7 +174,7 @@ def _add_outer_solvents(molecule, new_molecule, molmin, molmax,
         Xprint(f"The parameter 'n_solvent' is too big. The box can accommodate up to {n_add} solvents.\
  This parameter will be ignored.", "WARNING")
     if n_solvent is not None:
-        ones_indices = np.argwhere(grids == 1) 
+        ones_indices = np.argwhere(grids == 1)
         random_indices = np.random.choice(len(ones_indices), n_solvent - n_added, replace=False)
         random_ones_indices = ones_indices[random_indices]
         grids[:, :, :] = 0
