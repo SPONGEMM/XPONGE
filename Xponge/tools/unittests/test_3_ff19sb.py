@@ -10,20 +10,21 @@ def _check_one_energy(amber_mdout, amber_name, sponge_out):
     """check one energy term"""
     import matplotlib.pyplot as plt
     import numpy as np
-    sponge_out = sponge_out[10:]
+    sponge_out = sponge_out[:-1]
     with open(amber_mdout) as f:
         t = f.read()
         matches = re.findall(rf"{amber_name}\s*=\s*(\d*.\d*)", t)
-        matches = np.array([float(match) for match in matches[11:-2]])
+        matches = np.array([float(match) for match in matches[2:-2]])
     unit = "kcal/mol"
     if abs(np.mean(matches)) > 1000:
         unit = "Mcal/mol"
         matches /= 1000
         sponge_out /= 1000
     k, b = np.polyfit(matches, sponge_out, 1)
+    r = np.corrcoef(matches, sponge_out)[0][1]
     plt.plot([np.min(matches), np.max(matches)],
              [k * np.min(matches) + b, k * np.max(matches) + b],
-             label=f"y={k:.3f}x{b:+.3f}")
+             label=f"y={k:.3f}x{b:+.3f},r={r:.3f}")
     plt.plot(matches, sponge_out, "o")
     plt.xlabel(f"Result from AMBER [{unit}]")
     plt.ylabel(f"Result from SPONGE [{unit}]")
@@ -54,11 +55,11 @@ quit""")
     with open("mdin", "w") as f:
         f.write(f"""test ff19SB
 &cntrl
-  nstlim = 20000
+  nstlim = 1000
   ntt = 3
-  temp0 = 350
-  ntwx = 100
-  ntpr = 100
+  temp0 = 300
+  ntwx = 1
+  ntpr = 1
 /
 """)
     assert os.system("tleap > tleap.out 2> tleap.out") == 0

@@ -1,10 +1,10 @@
 """
-    This **module** includes unittests of the Xponge.forcefield.amber.ff14sb
+    This **module** includes unittests of the Xponge.forcefield.amber.ol3
 """
 import os
 import re
 
-__all__ = ["test_ff14sb"]
+__all__ = ["test_ol3"]
 
 def _check_one_energy(amber_mdout, amber_name, sponge_out):
     """check one energy term"""
@@ -32,29 +32,29 @@ def _check_one_energy(amber_mdout, amber_name, sponge_out):
     plt.savefig(f"{amber_name}.png")
     plt.clf()
 
-def test_ff14sb():
+def test_ol3():
     """
         test the single point energy for residues
     """
     import Xponge
-    import Xponge.forcefield.amber.ff14sb
+    import Xponge.forcefield.amber.ol3
     import Xponge.forcefield.amber.tip3p
     from Xponge.analysis import MdoutReader
     from Xponge.mdrun import run
 
 
-    s = "ALA ARG ASN ASP CYS CYX GLN GLU GLY HID HIE HIP ILE LEU " + \
-        "LYS MET PHE PRO SER THR TRP TYR VAL HIS"
+    s = "A U C G C U A"
 
     with open("leaprc", "w") as f:
-        f.write(f"""source leaprc.protein.ff14SB
+        f.write(f"""source leaprc.RNA.OL3
 source leaprc.water.tip3p
-t = sequence {{ACE {s} NME}}
-solvatebox t WAT 10
+t = sequence {{A5 {s} U3}}
+setbox t vdw
+addions t NA 8
 saveamberparm t t.parm7 t.rst7
 quit""")
     with open("mdin", "w") as f:
-        f.write(f"""test ff14SB
+        f.write(f"""test bsc1
 &cntrl
   nstlim = 1000
   ntt = 3
@@ -65,19 +65,19 @@ quit""")
 """)
     assert os.system("tleap > tleap.out 2> tleap.out") == 0
     assert run("SPONGE -mode minimization -amber_parm7 t.parm7 -amber_rst7 t.rst7 -rst min.rst7 \
--step_limit 2000 -minimization_dt_factor 5e-3 > min.out") == 0
-    assert os.system("pmemd.cuda -i mdin -p t.parm7 -c min.rst7 -x amber.nc -O > pmemd.out 2> pmemd.out") == 0
+-step_limit 2000 -cutoff 8 -minimization_dt_factor 5e-3 > min.out") == 0
+    assert os.system("pmemd.cuda -i mdin -p t.parm7 -c min.rst7 -x amber.nc -O -AllowSmallBox > pmemd.out 2> pmemd.out") == 0
     assert os.system("Xponge converter -p t.parm7 -c amber.nc -o amber.dat -of sponge_traj") == 0
 
     with open("t.parm7") as f:
         n_solvent = f.read().count("WAT ")
-    mol = Xponge.ResidueType.get_type("ACE")
+    mol = Xponge.ResidueType.get_type("A5")
     for res in s.split():
         mol += Xponge.ResidueType.get_type(res)
-    mol += Xponge.ResidueType.get_type("NME")
-    Xponge.add_solvent_box(mol, Xponge.ResidueType.get_type("WAT"), 20, n_solvent=n_solvent)
-    Xponge.save_sponge_input(mol, "ff14sb")
-    assert run("SPONGE -mode rerun -default_in_file_prefix ff14sb " + \
+    mol += Xponge.ResidueType.get_type("U3")
+    mol += Xponge.ResidueType.get_type("NA") * 8
+    Xponge.save_sponge_input(mol, "ol3")
+    assert run("SPONGE -mode rerun -default_in_file_prefix ol3 " + \
                f"-cutoff 8 -crd amber.dat -box amber.box > rerun.out ") == 0
 
     t = MdoutReader("mdout.txt")

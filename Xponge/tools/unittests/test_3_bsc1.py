@@ -1,10 +1,10 @@
 """
-    This **module** includes unittests of the Xponge.forcefield.amber.ff14sb
+    This **module** includes unittests of the Xponge.forcefield.amber.bsc1
 """
 import os
 import re
 
-__all__ = ["test_ff14sb"]
+__all__ = ["test_bsc1"]
 
 def _check_one_energy(amber_mdout, amber_name, sponge_out):
     """check one energy term"""
@@ -32,29 +32,28 @@ def _check_one_energy(amber_mdout, amber_name, sponge_out):
     plt.savefig(f"{amber_name}.png")
     plt.clf()
 
-def test_ff14sb():
+def test_bsc1():
     """
         test the single point energy for residues
     """
     import Xponge
-    import Xponge.forcefield.amber.ff14sb
+    import Xponge.forcefield.amber.bsc1
     import Xponge.forcefield.amber.tip3p
     from Xponge.analysis import MdoutReader
     from Xponge.mdrun import run
 
 
-    s = "ALA ARG ASN ASP CYS CYX GLN GLU GLY HID HIE HIP ILE LEU " + \
-        "LYS MET PHE PRO SER THR TRP TYR VAL HIS"
+    s = "DA DT DC DG DC DT DA"
 
     with open("leaprc", "w") as f:
-        f.write(f"""source leaprc.protein.ff14SB
+        f.write(f"""source leaprc.DNA.bsc1
 source leaprc.water.tip3p
-t = sequence {{ACE {s} NME}}
+t = sequence {{DA5 {s} DA3}}
 solvatebox t WAT 10
 saveamberparm t t.parm7 t.rst7
 quit""")
     with open("mdin", "w") as f:
-        f.write(f"""test ff14SB
+        f.write(f"""test bsc1
 &cntrl
   nstlim = 1000
   ntt = 3
@@ -71,13 +70,13 @@ quit""")
 
     with open("t.parm7") as f:
         n_solvent = f.read().count("WAT ")
-    mol = Xponge.ResidueType.get_type("ACE")
+    mol = Xponge.ResidueType.get_type("DA5")
     for res in s.split():
         mol += Xponge.ResidueType.get_type(res)
-    mol += Xponge.ResidueType.get_type("NME")
+    mol += Xponge.ResidueType.get_type("DA3")
     Xponge.add_solvent_box(mol, Xponge.ResidueType.get_type("WAT"), 20, n_solvent=n_solvent)
-    Xponge.save_sponge_input(mol, "ff14sb")
-    assert run("SPONGE -mode rerun -default_in_file_prefix ff14sb " + \
+    Xponge.save_sponge_input(mol, "bsc1")
+    assert run("SPONGE -mode rerun -default_in_file_prefix bsc1 " + \
                f"-cutoff 8 -crd amber.dat -box amber.box > rerun.out ") == 0
 
     t = MdoutReader("mdout.txt")
