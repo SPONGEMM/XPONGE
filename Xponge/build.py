@@ -573,11 +573,10 @@ def save_pdb(cls, filename=None):
                 atom.x, atom.y, atom.z, " ", " ")
             if atom == atom.residue.atoms[-1] and resid in ter_res:
                 towrite += "TER\n"
-                temp = resid
-                if temp - real_chain_residue0 != 1 or temp + 1 in ter_res:
-                    chain_residue0 = resid
+                if resid - real_chain_residue0 != 1 or resid + 1 in ter_res:
                     real_chain_residue0 = chain_residue0
                 else:
+                    chain_residue0 = resid
                     real_chain_residue0 = resid
         if not filename:
             filename = cls.name + ".pdb"

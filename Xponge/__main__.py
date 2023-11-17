@@ -11,6 +11,10 @@ def _mytest(subparsers):
     :return:
     """
     mytest = subparsers.add_parser("test", help="test the basic function of Xponge")
+    mytest.add_argument("-p", "--purpose", metavar="programmatic", default="programmatic",
+                        choices=["programmatic", "academic"],
+                        help="the purpose of the unittests. a test with programmatic purpose will \
+only test the program, and a test with academic purpose will do more to exam the system")
     mytest.add_argument("-v", "--verbose", metavar="INFO", default="INFO",
                         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
                         help="the verbose level for output, 0")

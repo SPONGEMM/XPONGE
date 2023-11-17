@@ -12,8 +12,9 @@ from ...helper import Xdict, Xopen, Xprint, GlobalSetting, source
 
 CATEGORY = Xdict({'0': "base",
                   '1': "building",
-                  '2': "forcefield loading",
-                  '3': "forcefield using"},
+                  '2': "forcefield_loading",
+                  '3': "forcefield_using",
+                  '4': "MD_efficiency"},
                   not_found_message="{} is not a valid unittest category")
 
 class XpongeTestRunner(unittest.TextTestRunner):
@@ -114,11 +115,14 @@ def mytest(args):
     :return: None
     """
     GlobalSetting.logger.setLevel(args.verbose)
+    GlobalSetting.purpose = args.purpose
     if args.file:
         tests, name, category = _check_test_file(args.file)
         _run_several_tests(tests, name, args.verbose, category)
     elif args.do != "all":
         tests = _find_tests(args.do)
+        if not tests:
+            raise ValueError(f"No test named {args.do} found")
         _run_several_tests(tests[0], args.do, args.verbose, tests[1])
     else:
         tests = _find_tests(args.do)
@@ -126,5 +130,5 @@ def mytest(args):
         for case, f, index in tests:
             folder = pathlib.Path(f"{CATEGORY[index]}") / f"{case}"
             folder.mkdir(exist_ok=True, parents=True)
-            os.system(f"cd {folder} && {sys.argv[0]} test -f {f} -v {args.verbose}")
+            os.system(f"cd {folder} && {sys.argv[0]} test -f {f} -v {args.verbose} -p {args.purpose}")
             Xprint("-"*30)
