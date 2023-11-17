@@ -1,11 +1,11 @@
 """
-    This **module** gives the unit tests of the speed of SPONGE NVT simulation
+    This **module** gives the unit tests of the speed of SPONGE NPT simulation
 """
 
-__all__ = ["test_nvt"]
+__all__ = ["test_npt"]
 
-def test_nvt():
-    """ test the speed of NVT simulation """
+def test_npt():
+    """ test the speed of NPT simulation """
     import os
     import Xponge
     import Xponge.forcefield.amber.tip3p
@@ -9237,15 +9237,15 @@ END
 """)
 
     wats = Xponge.load_pdb(pdb)
-    wats.box_length = [43.368080, 40.426720, 39.411995]
+    wats.box_length =  [47.3620000,  44.3950000,  43.4300000]
     Xponge.save_pdb(wats, "WATS.pdb")
     Xponge.save_sponge_input(wats, "WATS")
     step_limit = 50000
     if Xponge.GlobalSetting.purpose == "academic":
         step_limit = 500000
-    #for reference: v1.2.6 - 243.755905 ns/day at 3050 Ti Desktop
-    assert run(f"SPONGE -mode NVT -thermostat middle_langevin -default_in_file_prefix WATS \
--step_limit {step_limit} -dt 2e-3 -constrain_mode SHAKE -cutoff 8 > nvt.out") == 0
+    assert run(f"SPONGE -mode NPT -barostat berendsen_barostat -thermostat middle_langevin \
+-default_in_file_prefix WATS -step_limit {step_limit} -dt 2e-3 \
+-constrain_mode SHAKE -cutoff 8 > npt.out") == 0
     with open("leaprc", "w") as f:
         f.write("""source leaprc.water.tip3p
 t = loadpdb WATS.pdb
@@ -9258,6 +9258,8 @@ quit""")
   nstlim = {step_limit}
   ntt = 3
   gamma_ln = 1
+  ntb = 2
+  ntp = 1
   dt = 2e-3
   ntwx = 1000
   ntpr = 1000
