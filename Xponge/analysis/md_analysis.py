@@ -9,6 +9,7 @@ from ..helper import Xopen, guess_element_from_mass, set_global_alternative_name
 try:
     import MDAnalysis as mda
     from MDAnalysis.coordinates import base
+    from MDAnalysis.coordinates.timestep import Timestep
     from MDAnalysis.lib import util
     from MDAnalysis.topology.base import TopologyReaderBase
     from MDAnalysis.core import topologyattrs
@@ -149,7 +150,7 @@ class XpongeResidueReader(base.ReaderBase):
     def __init__(self, filename, **kwargs):
         super().__init__(filename, **kwargs)
         self.ts = self._Timestep(self.n_atoms, **self._ts_kwargs)
-        self.ts.positions = [[getattr(atom, i) for i in "xyz"] for atom in self.filename.atoms]
+        self.ts.positions = np.array([[getattr(atom, i) for i in "xyz"] for atom in self.filename.atoms])
 
     @property
     def n_atoms(self):
@@ -212,7 +213,7 @@ class XpongeMoleculeReader(base.ReaderBase):
         filename.atom2index = {atom: i for i, atom in enumerate(filename.atoms)}
         super().__init__(filename, **kwargs)
         self.ts = self._Timestep(self.n_atoms, **self._ts_kwargs)
-        self.ts.positions = [[getattr(atom, i) for i in "xyz"] for atom in self.filename.atoms]
+        self.ts.positions = np.array([[getattr(atom, i) for i in "xyz"] for atom in self.filename.atoms])
 
     @property
     def n_atoms(self):
@@ -288,7 +289,7 @@ representing the 3 box lengths and 3 box angles.
         self._n_frames = os.path.getsize(dat_file_name) // 12 // self.n_atoms
         self.trajfile = None
         self.boxfile = None
-        self.ts = base.Timestep(self.n_atoms, **self._ts_kwargs)
+        self.ts = self._Timestep(self.n_atoms, **self._ts_kwargs)
         self._read_next_timestep()
 
     @property
@@ -375,7 +376,7 @@ representing the 3 box lengths and 3 box angles.
         t = self.trajfile.read(12 * self.n_atoms)
         if not t:
             raise EOFError
-        setattr(ts, "_pos", np.frombuffer(t, dtype=np.float32).reshape(self.n_atoms, 3))
+        ts.positions = np.frombuffer(t, dtype=np.float32).reshape(self.n_atoms, 3)
 
         if self.box is not None:
             ts.dimensions = self.box
@@ -482,7 +483,7 @@ class SpongeCoordinateReader(base.ReaderBase):
         self._n_frames = 1
         self.file = None
         self.start = 0
-        self.ts = base.Timestep(self.n_atoms, **self._ts_kwargs)
+        self.ts = self._Timestep(self.n_atoms, **self._ts_kwargs)
         self._read_next_timestep()
 
     @property
@@ -545,8 +546,7 @@ class SpongeCoordinateReader(base.ReaderBase):
             self.open_file()
         if self.file.tell() != self.start:
             raise EOFError
-        t = np.loadtxt(self.file, max_rows=self.n_atoms)
-        setattr(ts, "_pos", t)
+        ts.positions = np.loadtxt(self.file, max_rows=self.n_atoms)
         box = list(map(float, self.file.readline().split()))
         ts.dimensions = box
         ts.frame += 1
@@ -639,5 +639,3 @@ mda._READER_HINTS["SPONGE_CRD"] = lambda x: x.endswith("_coordinate.txt")
 mda._SINGLEFRAME_WRITERS["SPONGE_CRD"] = SpongeCoordinateWriter
 mda._MULTIFRAME_WRITERS["SPONGE_TRAJ"] = SpongeTrajectoryWriter
 
-
-set_global_alternative_names()
