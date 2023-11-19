@@ -64,9 +64,9 @@ quit""")
   ntpr = 500
 /
 """)
-    assert os.system("tleap >> test_min.log") == 0
-    assert os.system("pmemd.cuda -p t.parm7 -c t.rst7 -i mdin -O -o amber_gpu.out >> test_min.log 2>> test_min.log") == 0
-    assert os.system("pmemd -p t.parm7 -c t.rst7 -i mdin -O -o amber_cpu.out >> test_min.log 2>> test_min.log") == 0
+    assert os.system("tleap > tleap.log") == 0
+    assert os.system("pmemd.cuda -p t.parm7 -c t.rst7 -i mdin -O -o amber_gpu.out > pmemd_cuda.log 2> pmemd_cuda.log") == 0
+    assert os.system("pmemd -p t.parm7 -c t.rst7 -i mdin -O -o amber_cpu.out > pmemd.log 2> pmemd.log") == 0
     assert os.system("SPONGE -cutoff 8 -amber_parm7 t.parm7 -amber_rst7 t.rst7 -mode minimization \
--write_information_interval 500 >> test_min.log 2>> test_min.log") == 0
+-write_information_interval 500 > sponge.log") == 0
 
