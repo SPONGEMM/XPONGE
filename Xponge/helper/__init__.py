@@ -1886,6 +1886,38 @@ If None, the information will be deleted between start and end
         if link_to_tail is not None and tail is not None:
             self.add_residue_link(tail, link_to_tail)
 
+    def restrain_position(self, select, filename):
+        """
+        This **function** is used to generate the atoms for restraints
+
+        :param select: a string of MDAnalysis selection
+        :param filename: the name of the output atom index file 
+        :return: None
+        """
+        from ..analysis.md_analysis import mda, XpongeMoleculeReader
+        u = mda.Universe(self, format=XpongeMoleculeReader)
+        id2index_map = {atom.id: str(i) for i, atom in enumerate(u.atoms)}
+        atoms = u.select_atoms(select)
+        with open(filename, "w") as f:
+            f.write("\n".join([id2index_map[atom.id] for atom in atoms]))
+
+    def constrain_position(self, select, filename):
+        """
+        This **function** is used to generate the mass in file for constraints
+
+        :param select: a string of MDAnalysis selection
+        :param filename: the name of the output atom index file 
+        :return: None
+        """
+        from ..analysis.md_analysis import mda, XpongeMoleculeReader
+        u = mda.Universe(self, format=XpongeMoleculeReader)
+        index2id_map = {i: atom.id for i, atom in enumerate(u.atoms)}
+        atoms = u.select_atoms(select)
+        atomids = {atom.id for atom in atoms}
+        with open(filename, "w") as f:
+            f.write("\n".join([str(atom.mass) if index2id_map[i] not in atomids else "0"
+                               for i, atom in enumerate(self.get_atoms())]))
+
 
 def _link_residue_process_coordinate(molecule, atom1, atom2):
     """

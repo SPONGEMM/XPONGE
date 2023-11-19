@@ -9237,7 +9237,7 @@ END
 """)
 
     wats = Xponge.load_pdb(pdb)
-    wats.box_length = [43.368080, 40.426720, 39.411995]
+    wats.box_length = [44.3620000,  41.3950000,  40.4300000]
     Xponge.save_pdb(wats, "WATS.pdb")
     Xponge.save_sponge_input(wats, "WATS")
     step_limit = 50000
@@ -9249,7 +9249,7 @@ END
     with open("leaprc", "w") as f:
         f.write("""source leaprc.water.tip3p
 t = loadpdb WATS.pdb
-setBox t centers 1.5
+setBox t centers 0
 saveamberparm t t.parm7 t.rst7
 quit""")
     with open("mdin", "w") as f:

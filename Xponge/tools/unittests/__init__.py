@@ -14,7 +14,12 @@ CATEGORY = Xdict({'0': "base",
                   '1': "building",
                   '2': "forcefield_loading",
                   '3': "forcefield_using",
-                  '4': "MD_efficiency"},
+                  '4': "MD_efficiency",
+                  '5': "MD_function",
+                  '6': "MD_thermodynamics",
+                  '7': "MD_kinetics",
+                  '8': "analysis",
+                  '100': "application"},
                   not_found_message="{} is not a valid unittest category")
 
 class XpongeTestRunner(unittest.TextTestRunner):
