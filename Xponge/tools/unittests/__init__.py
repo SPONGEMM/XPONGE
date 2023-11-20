@@ -21,6 +21,8 @@ CATEGORY = Xdict({'0': "base",
                   '6': "MD_thermodynamics",
                   '7': "MD_kinetics",
                   '8': "analysis",
+                  '9': "enhancing_sampling",
+                  '10': "workflow",
                   '100': "application"},
                   not_found_message="{} is not a valid unittest category")
 
