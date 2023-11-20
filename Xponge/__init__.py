@@ -95,6 +95,9 @@ from .process import impose_bond, impose_angle, impose_dihedral, add_solvent_box
     main_axis_rotate, get_peptide_from_sequence, optimize, Region, UnionRegion, IntersectRegion, \
     BlockRegion, SphereRegion, FrustumRegion, PrismRegion, Lattice
 
+pi = np.pi
+kb = 0.00198716
+
 
 def _initialize():
     """

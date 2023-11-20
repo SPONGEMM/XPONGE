@@ -9245,9 +9245,9 @@ END
     wats.box_length = [44.3620000,  41.3950000,  40.4300000]
     Xponge.save_pdb(wats, "WATS.pdb")
     Xponge.save_sponge_input(wats, "WATS")
-    step_limit = 50000
+    step_limit = 500000
     if Xponge.GlobalSetting.purpose == "academic":
-        step_limit = 500000
+        step_limit = 5000000
     assert run(f"SPONGE -mode NVT -thermostat middle_langevin -default_in_file_prefix WATS \
 -step_limit {step_limit} -dt 2e-3 -constrain_mode SHAKE -cutoff 8 -rst pe > pe.out") == 0
     assert run(f"SPONGE -mode NVT -thermostat middle_langevin -default_in_file_prefix WATS \

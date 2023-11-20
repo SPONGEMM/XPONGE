@@ -9250,7 +9250,7 @@ END
 
     assert run(f"SPONGE -mode NVT -thermostat nose_hoover_chain -default_in_file_prefix WATS \
 -step_limit {step_limit} -dt 2e-3 -constrain_mode SHAKE -cutoff 8 -write_information_interval 100 \
--target_temperature 300 -mdout 300.mdout -nose_hoover_chain 10 > 300.out") == 0
+-target_temperature 300 -mdout 300.mdout -nose_hoover_chain_length 10 > 300.out") == 0
 
     out1 = MdoutReader("300.mdout")
     Xponge.Xprint(f"<T>={np.mean(out1.temperature)}")
@@ -9258,7 +9258,7 @@ END
 
     assert run(f"SPONGE -mode NVT -thermostat nose_hoover_chain -default_in_file_prefix WATS \
 -step_limit {step_limit} -dt 2e-3 -constrain_mode SHAKE -cutoff 8 -write_information_interval 100 \
--target_temperature 310 -mdout 310.mdout -nose_hoover_chain 10 > 310.out") == 0
+-target_temperature 310 -mdout 310.mdout -nose_hoover_chain_length 10 > 310.out") == 0
 
     out2 = MdoutReader("310.mdout")
     Xponge.Xprint(f"<T>={np.mean(out2.temperature)}")
@@ -9285,3 +9285,4 @@ END
     plt.plot(x, y3, label="310")
     plt.legend()
     plt.savefig("reweighting.png")
+    assert np.abs((e1 - e2) / e1) < 0.01

@@ -148,13 +148,14 @@ class XpongeResidueReader(base.ReaderBase):
         Elements
     """
     def __init__(self, filename, **kwargs):
+        self.molecule = filename
         super().__init__(filename, **kwargs)
         self.ts = self._Timestep(self.n_atoms, **self._ts_kwargs)
-        self.ts.positions = np.array([[getattr(atom, i) for i in "xyz"] for atom in self.filename.atoms])
+        self.ts.positions = np.array([[getattr(atom, i) for i in "xyz"] for atom in self.molecule.atoms])
 
     @property
     def n_atoms(self):
-        return len(self.filename.atoms)
+        return len(self.molecule.atoms)
 
     @property
     def n_frames(self):
@@ -169,7 +170,7 @@ class XpongeResidueReader(base.ReaderBase):
         :return: MDAnalysis Topology object
         """
         attrs = [topologyattrs.Segids(np.array(['SYSTEM'], dtype=object))]
-        residue = self.filename
+        residue = self.molecule
         natoms = len(residue.atoms)
         nres = 1
         masses = [atom.mass for atom in residue.atoms]
@@ -193,6 +194,11 @@ class XpongeResidueReader(base.ReaderBase):
         attrs.append(topologyattrs.Bonds(bonds))
         return Topology(natoms, nres, 1, attrs, resid, None)
 
+    def _reopen(self):
+        return
+
+    def _read_next_timestep(self):
+        return self.ts
 
 class XpongeMoleculeReader(base.ReaderBase):
     """
@@ -209,15 +215,15 @@ class XpongeMoleculeReader(base.ReaderBase):
         Elements
     """
     def __init__(self, filename, **kwargs):
-        filename.atoms = [atom for residue in filename.residues for atom in residue.atoms]
-        filename.atom2index = {atom: i for i, atom in enumerate(filename.atoms)}
+        self.molecule = filename
+        self.molecule.get_atoms()
         super().__init__(filename, **kwargs)
         self.ts = self._Timestep(self.n_atoms, **self._ts_kwargs)
-        self.ts.positions = np.array([[getattr(atom, i) for i in "xyz"] for atom in self.filename.atoms])
+        self.ts.positions = np.array([[getattr(atom, i) for i in "xyz"] for atom in self.molecule.atoms])
 
     @property
     def n_atoms(self):
-        return len(self.filename.atoms)
+        return len(self.molecule.atoms)
 
     @property
     def n_frames(self):
@@ -232,7 +238,7 @@ class XpongeMoleculeReader(base.ReaderBase):
         :return: MDAnalysis Topology object
         """
         attrs = [topologyattrs.Segids(np.array(['SYSTEM'], dtype=object))]
-        molecule = self.filename
+        molecule = self.molecule
         natoms = len(molecule.atoms)
         nres = len(molecule.residues)
         masses = [atom.mass for atom in molecule.atoms]
@@ -251,11 +257,11 @@ class XpongeMoleculeReader(base.ReaderBase):
         for i, res in enumerate(molecule.residues):
             resid[count:count + len(res.atoms)] = i
             count += len(res.atoms)
-        bonds = [[molecule.atom2index[self._t2a(residue, ai)],
-                  molecule.atom2index[self._t2a(residue, aj)]]
+        bonds = [[molecule.atom_index[self._t2a(residue, ai)],
+                  molecule.atom_index[self._t2a(residue, aj)]]
                   for residue in molecule.residues
                   for ai, bondi in residue.type.connectivity.items() for aj in bondi]
-        bonds.extend([[molecule.atom2index[rl.atom1], molecule.atom2index[rl.atom2]]
+        bonds.extend([[molecule.atom_index[rl.atom1], molecule.atom_index[rl.atom2]]
                      for rl in molecule.residue_links])
         attrs.append(topologyattrs.Bonds(bonds))
         return Topology(natoms, nres, 1, attrs, resid, None)
@@ -263,6 +269,12 @@ class XpongeMoleculeReader(base.ReaderBase):
     @staticmethod
     def _t2a(residue, atom):
         return residue.name2atom(residue.type.atom2name(atom))
+
+    def _reopen(self):
+        return
+
+    def _read_next_timestep(self):
+        return self.ts
 
 class SpongeTrajectoryReader(base.ReaderBase):
     """

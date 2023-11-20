@@ -9285,3 +9285,4 @@ END
     plt.plot(x, y3, label="310")
     plt.legend()
     plt.savefig("reweighting.png")
+    assert np.abs((e1 - e2) / e1) < 0.01
