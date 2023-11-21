@@ -9267,4 +9267,3 @@ quit""")
 """)
     assert os.system("tleap > tleap.out 2> tleap.out") == 0
     assert os.system("pmemd.cuda -p t.parm7 -c t.rst7 -i mdin -O > pmemd.out 2> pmemd.out") == 0
-

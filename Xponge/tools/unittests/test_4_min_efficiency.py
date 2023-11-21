@@ -7,7 +7,6 @@ __all__ = ["test_min"]
 def test_min():
     """ test the speed of minimization """
     import os
-    import Xponge
     from Xponge.mdrun import run
 
     s = r"""@<TRIPOS>MOLECULE
@@ -48,7 +47,7 @@ USER_CHARGES
         f.write(s)
 
     with open("leaprc", "w") as f:
-        f.write(f"""source leaprc.water.tip3p
+        f.write("""source leaprc.water.tip3p
 source leaprc.gaff
 t = loadmol2 ben.mol2
 solvateBox t WAT 20
@@ -65,8 +64,8 @@ quit""")
 /
 """)
     assert os.system("tleap > tleap.log") == 0
-    assert os.system("pmemd.cuda -p t.parm7 -c t.rst7 -i mdin -O -o amber_gpu.out > pmemd_cuda.log 2> pmemd_cuda.log") == 0
+    assert os.system("pmemd.cuda -p t.parm7 -c t.rst7 -i mdin -O -o amber_gpu.out \
+> pmemd_cuda.log 2> pmemd_cuda.log") == 0
     assert os.system("pmemd -p t.parm7 -c t.rst7 -i mdin -O -o amber_cpu.out > pmemd.log 2> pmemd.log") == 0
-    assert os.system("SPONGE -cutoff 8 -amber_parm7 t.parm7 -amber_rst7 t.rst7 -mode minimization \
+    assert run("SPONGE -cutoff 8 -amber_parm7 t.parm7 -amber_rst7 t.rst7 -mode minimization \
 -write_information_interval 500 > sponge.log") == 0
-

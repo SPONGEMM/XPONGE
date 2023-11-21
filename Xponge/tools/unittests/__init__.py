@@ -4,12 +4,12 @@
 import sys
 import os
 import pathlib
+import warnings
 import re
 import logging
 import importlib.util as iu
 import unittest
 from ...helper import Xdict, Xopen, Xprint, GlobalSetting, source
-import warnings
 warnings.filterwarnings("ignore")
 
 CATEGORY = Xdict({'0': "base",

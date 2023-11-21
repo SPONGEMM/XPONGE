@@ -6,7 +6,6 @@ __all__ = ["test_unperiodic", "test_periodic"]
 
 def test_unperiodic():
     """ test the wrapping of unperiodic molecules """
-    import os
     import Xponge
     import Xponge.forcefield.amber.ff14sb
     import Xponge.forcefield.amber.tip3p
@@ -33,7 +32,6 @@ def test_unperiodic():
 
 def test_periodic():
     """ test the wrapping of periodic molecules """
-    import os
     import Xponge
     import Xponge.forcefield.amber.ff14sb
     import Xponge.forcefield.amber.tip3p

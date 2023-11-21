@@ -10,14 +10,23 @@ class _CVVirtualAtom:
     """ an meta class for virtual atom in CV system"""
     def __str__(self):
         return self.name
+    def to_string(self, folder):
+        """ convert this information to a string """
+        raise NotImplementedError
 
 class _CV:
-   """ an meta class for CV in CV system """
-   def __str__(self):
+    """ an meta class for CV in CV system """
+    def __str__(self):
         return self.name
+    def to_string(self, folder):
+        """ convert this information to a string """
+        raise NotImplementedError
 
 class _CVBias:
-   """ an meta class for bias in CV system """
+    """ an meta class for bias in CV system """
+    def to_string(self, folder):
+        """ convert this information to a string """
+        raise NotImplementedError
 
 class _Center(_CVVirtualAtom):
     """ cv virtual atom: center """
@@ -53,7 +62,7 @@ class _COM(_CVVirtualAtom):
         self.atom = atom
 
     def to_string(self, folder):
-        prefix = Path(prefix)
+        prefix = Path(folder)
         if len(self.atom) > 10:
             with open(prefix / (self.name + "_atom.txt"), "w") as f:
                 f.write("\n".join(map(str, self.atom)))
@@ -287,7 +296,7 @@ class CVSystem:
             self._id2index = {atom.id : i for i, atom in enumerate(self.u.atoms)}
         return self._id2index
 
-    def remove(self, name):
+    def remove(self, name):  #pylint: disable=unused-argument
         """
            Remove a name from the system
         """
@@ -485,7 +494,7 @@ class CVSystem:
             :return: None
         """
         if "restrain" not in self.bias:
-            self.bias["restrain"] = _SteerCV(self.cv[name], weight, reference)
+            self.bias["restrain"] = _RestrainCV(self.cv[name], weight, reference)
             self.names["restrain"] = self.bias["restrain"]
         else:
             self.bias["restrain"].cv.append(self.cv[name])
@@ -513,4 +522,3 @@ class CVSystem:
                 f.write("#" * 30 + "\n#definition of bias\n" + "#" * 30 + "\n")
                 for bias in self.bias.values():
                     f.write(bias.to_string(folder))
-

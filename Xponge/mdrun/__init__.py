@@ -5,7 +5,6 @@ import os
 import sys
 from ..helper import Xopen, Xprint, set_global_alternative_names
 
-
 def run(args):
     """
     call SPONGE to run the MD simulation
