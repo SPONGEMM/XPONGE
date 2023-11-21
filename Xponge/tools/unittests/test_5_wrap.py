@@ -51,7 +51,7 @@ def test_periodic():
     cv.print("x")
     cv.add_cv_rmsd("r", "protein")
     cv.print("r")
-    cv.steer("x", 2)
+    cv.steer("x", 20)
     cv.output("cv_up.txt")
     step_limit = 50000
     assert run("SPONGE -mode minimization -default_in_file_prefix p -step_limit 5000 -rst min > min.out") == 0
