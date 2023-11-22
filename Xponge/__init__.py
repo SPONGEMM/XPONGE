@@ -97,7 +97,7 @@ from .process import impose_bond, impose_angle, impose_dihedral, add_solvent_box
 
 pi = np.pi
 kb = 0.00198716
-
+bar = 1.439506089041446e-5
 
 def _initialize():
     """

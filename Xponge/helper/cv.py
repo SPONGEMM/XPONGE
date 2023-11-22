@@ -109,6 +109,33 @@ class _Boxlength(_CV):
 }}
 """
 
+class _Density(_CV):
+    """ cv: density """
+    def __init__(self, name, mass):
+        self.name = name
+        self.mass = mass
+
+    def to_string(self, folder):
+        return f"""{self.name}_lx
+{{
+    CV_type = box_length_x
+}}
+{self.name}_ly
+{{
+    CV_type = box_length_y
+}}
+{self.name}_lz
+{{
+    CV_type = box_length_z
+}}
+{self.name}
+{{
+    CV = {self.name}_lx {self.name}_ly {self.name}_lz
+    CV_type = combination
+    function = {self.mass / 0.6023}f / ({self.name}_lx * {self.name}_ly * {self.name}_lz)
+}}
+"""
+
 class _Distance(_CV):
     """ cv: distance """
     def __init__(self, name, atom1, atom2):
@@ -241,12 +268,16 @@ class _RestrainCV(_CVBias):
             self.cv = [cv]
             self.weight = [weight]
             self.reference = [reference]
+        self.start_step = []
+        self.max_step = []
+        self.reduce_step = []
+        self.stop_step = []
 
     def to_string(self, folder):
         need_period = False
-        period_line = " "
+        period_line = ""
         periods = []
-        for cv in self.cv.values():
+        for cv in self.cv:
             if hasattr(cv, "period"):
                 need_period = True
             periods.append(str(getattr(cv, "period", 0)))
@@ -257,6 +288,10 @@ class _RestrainCV(_CVBias):
     CV = {" ".join([str(cv) for cv in self.cv])}
     weight = {" ".join([str(weight) for weight in self.weight])}
     reference = {" ".join([str(reference) for reference in self.reference])}
+    start_step = {" ".join([str(start_step) for start_step in self.start_step])}
+    max_step = {" ".join([str(max_step) for max_step in self.max_step])}
+    reduce_step = {" ".join([str(reduce_step) for reduce_step in self.reduce_step])}
+    stop_step = {" ".join([str(stop_step) for stop_step in self.stop_step])}
 {period_line}}}
 """
 
@@ -355,6 +390,8 @@ class CVSystem:
             :param atom2: an int or a name of virtual atom
             :return: None
         """
+        if name in self.names:
+            raise ValueError(f"{name} has been defined in the name system")
         self.cv[name] = _Distance(name, atom1, atom2)
         self.names[name] = self.cv[name]
         self._association[name] = []
@@ -374,6 +411,8 @@ class CVSystem:
             :param xyz: the axis of the position
             :return: None
         """
+        if name in self.names:
+            raise ValueError(f"{name} has been defined in the name system")
         if xyz not in ("x", "y", "z"):
             raise ValueError(f"xyz should be one of 'x', 'y' or 'z', but {xyz} is given")
         self.cv[name] = _Displacement(name, atom1, atom2, xyz)
@@ -393,9 +432,24 @@ class CVSystem:
             :param xyz: the axis of the position
             :return: None
         """
+        if name in self.names:
+            raise ValueError(f"{name} has been defined in the name system")
         if xyz not in ("x", "y", "z"):
             raise ValueError(f"xyz should be one of 'x', 'y' or 'z', but {xyz} is given")
         self.cv[name] = _Boxlength(name, xyz)
+        self.names[name] = self.cv[name]
+        self._association[name] = []
+
+    def add_cv_density(self, name):
+        """
+            Add a CV with the type of "combination" to the system, which gives the density of the system
+
+            :param name: the name of the CV
+            :return: None
+        """
+        if name in self.names:
+            raise ValueError(f"{name} has been defined in the name system")
+        self.cv[name] = _Density(name, self.molecule.mass)
         self.names[name] = self.cv[name]
         self._association[name] = []
 
@@ -409,6 +463,8 @@ class CVSystem:
             :param atom3: an int or a name of virtual atom
             :return: None
         """
+        if name in self.names:
+            raise ValueError(f"{name} has been defined in the name system")
         self.cv[name] = _Angle(name, atom1, atom2, name3)
         self.names[name] = self.cv[name]
         self._association[name] = []
@@ -429,6 +485,8 @@ class CVSystem:
             :param atom4: an int or a name of virtual atom
             :return: None
         """
+        if name in self.names:
+            raise ValueError(f"{name} has been defined in the name system")
         self.cv[name] = _Dihedral(name, atom1, atom2, atom3, atom4)
         self.names[name] = self.cv[name]
         self._association[name] = []
@@ -484,13 +542,17 @@ class CVSystem:
             self.bias["steer"].cv.append(self.cv[name])
             self.bias["steer"].weight.append(weight)
 
-    def restrain(self, name, weight, reference):
+    def restrain(self, name, weight, reference, start_step=0, max_step=0, reduce_step=0, stop_step=0):
         """
             Add a CV to restrain
 
             :param name: the name of the CV
             :param weight: the weight for steering
             :param reference: the reference for steering
+            :param start_step: the step to start the restraints
+            :param max_step: the step to reach the max weight of restraints
+            :param max_step: the step to reduce the weight of restraints
+            :param stop_step: the step to stop the restraints
             :return: None
         """
         if "restrain" not in self.bias:
@@ -500,6 +562,9 @@ class CVSystem:
             self.bias["restrain"].cv.append(self.cv[name])
             self.bias["restrain"].weight.append(weight)
             self.bias["restrain"].reference.append(reference)
+        for i in ["start", "max", "reduce", "stop"]:
+            i = i + "_step"
+            getattr(self.bias["restrain"], i).append(locals()[i])
 
     def output(self, filename, folder="."):
         """

@@ -375,9 +375,10 @@ def save_sponge_input(cls, prefix=None, dirname="."):
     :param cls: the object to save
     :param prefix: the prefix of the output files
     :param dirname: the directory to save the output files
-    :return: None
+    :return: the molecule instance built
     """
     if isinstance(cls, Molecule):
+        mol = cls
         build_bonded_force(cls)
 
         if not prefix:
@@ -399,7 +400,9 @@ def save_sponge_input(cls, prefix=None, dirname="."):
         residue = Residue(cls, name=cls.name)
         for atom in cls.atoms:
             residue.Add_Atom(atom)
-        save_sponge_input(residue, prefix, dirname)
+        mol = save_sponge_input(residue, prefix, dirname)
+
+    return mol
 
 
 def _pdb_chain(cls: Molecule):
