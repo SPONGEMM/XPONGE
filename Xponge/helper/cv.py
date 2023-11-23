@@ -345,6 +345,14 @@ class CVSystem:
             self._id2index = {atom.id : i for i, atom in enumerate(self.u.atoms)}
         return self._id2index
 
+    def get_atom_index(self, atom):
+        """
+            Convert an Xponge.Atom to int
+        """
+        if atom in self.virtual_atom:
+            return atom
+        return self.molecule.atom_index[atom]
+
     def remove(self, name):  #pylint: disable=unused-argument
         """
            Remove a name from the system
@@ -386,14 +394,13 @@ class CVSystem:
             raise ValueError(f"{name} has been defined in the name system")
         if xyz not in ("x", "y", "z"):
             raise ValueError(f"xyz should be one of 'x', 'y' or 'z', but {xyz} is given")
-        if atom in self.virtual_atom:
-            self._association[name].append(self.names[name])
-        elif not isinstance(atom, Atom):
-            raise TypeError(f"atom should be an Xponge.Atom or a name of virtual atom, but {atom} is given")
-        self.cv[name] = _Position(name, self.molecule.atom_index[atom], xyz, scaled)
+        self.cv[name] = _Position(name, self.get_atom_index(atom), xyz, scaled)
         self.names[name] = self.cv[name]
         self._association[name] = []
-
+        if atom in self.virtual_atom:
+            self._association[atom].append(self.names[name])
+        elif not isinstance(atom, Atom):
+            raise TypeError(f"atom should be an Xponge.Atom or a name of virtual atom, but {atom} is given")
 
 
     def add_cv_distance(self, name, atom1, atom2):
@@ -407,15 +414,15 @@ class CVSystem:
         """
         if name in self.names:
             raise ValueError(f"{name} has been defined in the name system")
+        self.cv[name] = _Distance(name, self.get_atom_index(atom1),
+                                  self.get_atom_index(atom2))
+        self.names[name] = self.cv[name]
+        self._association[name] = []
         for atom in [atom1, atom2]:
             if atom in self.virtual_atom:
                 self._association[atom].append(self.names[name])
             elif not isinstance(atom, Atom):
                 raise TypeError(f"atom should be an Xponge.Atom or a name of virtual atom, but {atom1} is given")
-        self.cv[name] = _Distance(name, self.molecule.atom_index[atom1],
-                                  self.molecule.atom_index[atom2],)
-        self.names[name] = self.cv[name]
-        self._association[name] = []
 
     def add_cv_displacement(self, name, atom1, atom2, xyz):
         """
@@ -431,16 +438,17 @@ class CVSystem:
             raise ValueError(f"{name} has been defined in the name system")
         if xyz not in ("x", "y", "z"):
             raise ValueError(f"xyz should be one of 'x', 'y' or 'z', but {xyz} is given")
+
+        self.cv[name] = _Displacement(name,self.get_atom_index(atom1),
+                                      self.get_atom_index(atom2),
+                                      xyz)
+        self.names[name] = self.cv[name]
+        self._association[name] = []
         for atom in [atom1, atom2]:
             if atom in self.virtual_atom:
                 self._association[atom].append(self.names[name])
             elif not isinstance(atom, Atom):
                 raise TypeError(f"atom should be an Xponge.Atom or a name of virtual atom, but {atom1} is given")
-        self.cv[name] = _Displacement(name, self.molecule.atom_index[atom1],
-                                      self.molecule.atom_index[atom2],
-                                      xyz)
-        self.names[name] = self.cv[name]
-        self._association[name] = []
 
     def add_cv_box_length(self, name, xyz):
         """
@@ -483,16 +491,17 @@ class CVSystem:
         """
         if name in self.names:
             raise ValueError(f"{name} has been defined in the name system")
+
+        self.cv[name] = _Angle(name, self.get_atom_index(atom1),
+                                  self.get_atom_index(atom2),
+                               self.get_atom_index(atom3))
+        self.names[name] = self.cv[name]
+        self._association[name] = []
         for atom in [atom1, atom2, atom3]:
             if atom in self.virtual_atom:
                 self._association[atom].append(self.names[name])
             elif not isinstance(atom, Atom):
                 raise TypeError(f"atom should be an Xponge.Atom or a name of virtual atom, but {atom1} is given")
-        self.cv[name] = _Angle(name, self.molecule.atom_index[atom1],
-                               self.molecule.atom_index[atom2],
-                               self.molecule.atom_index[atom3])
-        self.names[name] = self.cv[name]
-        self._association[name] = []
 
     def add_cv_dihedral(self, name, atom1, atom2, atom3, atom4):
         """
@@ -507,17 +516,18 @@ class CVSystem:
         """
         if name in self.names:
             raise ValueError(f"{name} has been defined in the name system")
+
+        self.cv[name] = _Dihedral(name, self.get_atom_index(atom1),
+                                  self.get_atom_index(atom2),
+                               self.get_atom_index(atom3),
+                               self.get_atom_index(atom4))
+        self.names[name] = self.cv[name]
+        self._association[name] = []
         for atom in [atom1, atom2, atom3, atom4]:
             if atom in self.virtual_atom:
                 self._association[atom].append(self.names[name])
             elif not isinstance(atom, Atom):
                 raise TypeError(f"atom should be an Xponge.Atom or a name of virtual atom, but {atom1} is given")
-        self.cv[name] = _Dihedral(name, self.molecule.atom_index[atom1],
-                               self.molecule.atom_index[atom2],
-                               self.molecule.atom_index[atom3],
-                               self.molecule.atom_index[atom4])
-        self.names[name] = self.cv[name]
-        self._association[name] = []
 
     def add_cv_rmsd(self, name, select):
         """
