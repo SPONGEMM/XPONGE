@@ -1,11 +1,11 @@
 """
-    This **module** gives the unit tests of umbrella sampling
+    This **module** gives the unit tests of selective integrated enhancing sampling
 """
 
 __all__ = ["test_sits"]
 
 def test_sits():
-    """ test targeted MD """
+    """ test SITS """
     import shutil
     import numpy as np
     import matplotlib.pyplot as plt
@@ -20,11 +20,11 @@ def test_sits():
     min_command = f"SPONGE -mode minimization -step_limit 10000 -default_in_file_prefix test \
                    -cutoff 1 -skin 1 -neighbor_list_refresh_interval 100000 -rst min > temp.out"
 
-    run_command = f"SPONGE -mode NVT -dt 1e-6 -default_in_file_prefix test \
+    run_command = f"SPONGE -mode NVT -dt 1e-3 -default_in_file_prefix test \
                    -sits_dihedral_in_file test_dihedral.txt \
                    -cutoff 1 -skin 1 -neighbor_list_refresh_interval 100000 \
                    -thermostat andersen_thermostat -coordinate_in_file min_coordinate.txt \
-                   -write_information_interval 100"
+                   -cv_in_file cv.txt -write_information_interval 100"
 
     assign = Xponge.get_assignment_from_smiles("OO")
     hw = Xponge.AtomType.get_type("HW")
@@ -39,12 +39,18 @@ def test_sits():
 2 0 1 3 3 5 -0.6
 """)
 
+    cv = CVSystem(mol)
+    cv.add_cv_dihedral("torsion", mol.atoms[2], mol.atoms[0], mol.atoms[1], mol.atoms[3])
+    cv.print("torsion")
+    cv.output("cv.txt")
+
     assert run(min_command) == 0
     assert run(run_command + " -SITS_mode observation -SITS_atom_numbers 4 -step_limit 20000 > temp.out") == 0
     assert run(run_command + " -SITS_mode iteration  -SITS_atom_numbers 4 \
 -SITS_T_low 100 -SITS_T_high 6000 -SITS_k_numbers 6000 -SITS_pe_b -0.0 -step_limit 100000 > temp.out") == 0
     assert run(run_command + " -SITS_mode production  -SITS_atom_numbers 4 \
--SITS_T_low 100 -SITS_T_high 6000 -SITS_k_numbers 6000 -SITS_pe_b -0.0 -SITS_nk_in_file SITS_nk_rest.txt -step_limit 980000 > temp.out") == 0
+-SITS_T_low 100 -SITS_T_high 6000 -SITS_k_numbers 6000 -SITS_pe_b -0.0 \
+-SITS_nk_in_file SITS_nk_rest.txt -step_limit 980000 > temp.out") == 0
 
     t = MdoutReader("mdout.txt")
     bias = t.SITS_bias

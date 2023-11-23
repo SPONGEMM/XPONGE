@@ -5,7 +5,7 @@
 __all__ = ["test_umbrella"]
 
 def test_umbrella():
-    """ test targeted MD """
+    """ test umbrella sampling """
     import shutil
     import numpy as np
     import matplotlib.pyplot as plt
