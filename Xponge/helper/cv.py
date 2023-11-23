@@ -4,7 +4,7 @@
 from pathlib import Path
 from collections.abc import Iterable
 import numpy as np
-from . import Xdict
+from . import Xdict, Atom
 
 class _CVVirtualAtom:
     """ an meta class for virtual atom in CV system"""
@@ -282,7 +282,7 @@ class _RestrainCV(_CVBias):
                 need_period = True
             periods.append(str(getattr(cv, "period", 0)))
         if need_period:
-            period_line = "    " + " ".join(periods) + "\n"
+            period_line = "    period = " + " ".join(periods) + "\n"
         return f"""restrain
 {{
     CV = {" ".join([str(cv) for cv in self.cv])}
@@ -293,6 +293,20 @@ class _RestrainCV(_CVBias):
     reduce_step = {" ".join([str(reduce_step) for reduce_step in self.reduce_step])}
     stop_step = {" ".join([str(stop_step) for stop_step in self.stop_step])}
 {period_line}}}
+"""
+
+class _Meta1D(_CVBias):
+    """ bias: meta1d """
+    def __init__(self, cv, **kwargs):
+        self.cv = cv
+        self.kwargs = kwargs
+
+    def to_string(self, folder):
+        lines = [f"    {key} = {value}\n" for key, value in self.kwargs.items()]
+        return f"""meta1d
+{{
+    CV = {self.cv}
+{"".join(lines)}}}
 """
 
 class CVSystem:
@@ -372,13 +386,14 @@ class CVSystem:
             raise ValueError(f"{name} has been defined in the name system")
         if xyz not in ("x", "y", "z"):
             raise ValueError(f"xyz should be one of 'x', 'y' or 'z', but {xyz} is given")
-        self.cv[name] = _Position(name, atom, xyz, scaled)
-        self.names[name] = self.cv[name]
-        self._association[name] = []
         if atom in self.virtual_atom:
             self._association[name].append(self.names[name])
-        elif not isinstance(atom, int):
-            raise TypeError(f"atom should be an int or a name of virtual atom, but {atom} is given")
+        elif not isinstance(atom, Atom):
+            raise TypeError(f"atom should be an Xponge.Atom or a name of virtual atom, but {atom} is given")
+        self.cv[name] = _Position(name, self.molecule.atom_index[atom], xyz, scaled)
+        self.names[name] = self.cv[name]
+        self._association[name] = []
+
 
 
     def add_cv_distance(self, name, atom1, atom2):
@@ -392,14 +407,15 @@ class CVSystem:
         """
         if name in self.names:
             raise ValueError(f"{name} has been defined in the name system")
-        self.cv[name] = _Distance(name, atom1, atom2)
-        self.names[name] = self.cv[name]
-        self._association[name] = []
         for atom in [atom1, atom2]:
             if atom in self.virtual_atom:
                 self._association[atom].append(self.names[name])
-            elif not isinstance(atom, int):
-                raise TypeError(f"atom should be an int or a name of virtual atom, but {atom1} is given")
+            elif not isinstance(atom, Atom):
+                raise TypeError(f"atom should be an Xponge.Atom or a name of virtual atom, but {atom1} is given")
+        self.cv[name] = _Distance(name, self.molecule.atom_index[atom1],
+                                  self.molecule.atom_index[atom2],)
+        self.names[name] = self.cv[name]
+        self._association[name] = []
 
     def add_cv_displacement(self, name, atom1, atom2, xyz):
         """
@@ -415,14 +431,16 @@ class CVSystem:
             raise ValueError(f"{name} has been defined in the name system")
         if xyz not in ("x", "y", "z"):
             raise ValueError(f"xyz should be one of 'x', 'y' or 'z', but {xyz} is given")
-        self.cv[name] = _Displacement(name, atom1, atom2, xyz)
-        self.names[name] = self.cv[name]
-        self._association[name] = []
         for atom in [atom1, atom2]:
             if atom in self.virtual_atom:
                 self._association[atom].append(self.names[name])
-            elif not isinstance(atom, int):
-                raise TypeError(f"atom should be an int or a name of virtual atom, but {atom1} is given")
+            elif not isinstance(atom, Atom):
+                raise TypeError(f"atom should be an Xponge.Atom or a name of virtual atom, but {atom1} is given")
+        self.cv[name] = _Displacement(name, self.molecule.atom_index[atom1],
+                                      self.molecule.atom_index[atom2],
+                                      xyz)
+        self.names[name] = self.cv[name]
+        self._association[name] = []
 
     def add_cv_box_length(self, name, xyz):
         """
@@ -465,14 +483,16 @@ class CVSystem:
         """
         if name in self.names:
             raise ValueError(f"{name} has been defined in the name system")
-        self.cv[name] = _Angle(name, atom1, atom2, name3)
-        self.names[name] = self.cv[name]
-        self._association[name] = []
         for atom in [atom1, atom2, atom3]:
             if atom in self.virtual_atom:
                 self._association[atom].append(self.names[name])
-            elif not isinstance(atom, int):
-                raise TypeError(f"atom should be an int or a name of virtual atom, but {atom1} is given")
+            elif not isinstance(atom, Atom):
+                raise TypeError(f"atom should be an Xponge.Atom or a name of virtual atom, but {atom1} is given")
+        self.cv[name] = _Angle(name, self.molecule.atom_index[atom1],
+                               self.molecule.atom_index[atom2],
+                               self.molecule.atom_index[atom3])
+        self.names[name] = self.cv[name]
+        self._association[name] = []
 
     def add_cv_dihedral(self, name, atom1, atom2, atom3, atom4):
         """
@@ -487,14 +507,17 @@ class CVSystem:
         """
         if name in self.names:
             raise ValueError(f"{name} has been defined in the name system")
-        self.cv[name] = _Dihedral(name, atom1, atom2, atom3, atom4)
-        self.names[name] = self.cv[name]
-        self._association[name] = []
         for atom in [atom1, atom2, atom3, atom4]:
             if atom in self.virtual_atom:
                 self._association[atom].append(self.names[name])
-            elif not isinstance(atom, int):
-                raise TypeError(f"atom should be an int or a name of virtual atom, but {atom1} is given")
+            elif not isinstance(atom, Atom):
+                raise TypeError(f"atom should be an Xponge.Atom or a name of virtual atom, but {atom1} is given")
+        self.cv[name] = _Dihedral(name, self.molecule.atom_index[atom1],
+                               self.molecule.atom_index[atom2],
+                               self.molecule.atom_index[atom3],
+                               self.molecule.atom_index[atom4])
+        self.names[name] = self.cv[name]
+        self._association[name] = []
 
     def add_cv_rmsd(self, name, select):
         """
@@ -520,6 +543,8 @@ class CVSystem:
             :param name: the name of the CV
             :return: None
         """
+        if name not in self.cv:
+            raise ValueError(f"{name} is not a valid CV")
         if "print" not in self.bias:
             self.bias["print"] = _PrintCV(self.cv[name])
             self.names["print"] = self.bias["print"]
@@ -535,6 +560,8 @@ class CVSystem:
             :param weight: the weight for steering
             :return: None
         """
+        if name not in self.cv:
+            raise ValueError(f"{name} is not a valid CV")
         if "steer" not in self.bias:
             self.bias["steer"] = _SteerCV(self.cv[name], weight)
             self.names["steer"] = self.bias["steer"]
@@ -547,14 +574,16 @@ class CVSystem:
             Add a CV to restrain
 
             :param name: the name of the CV
-            :param weight: the weight for steering
-            :param reference: the reference for steering
+            :param weight: the weight for restraints
+            :param reference: the reference for restraints
             :param start_step: the step to start the restraints
             :param max_step: the step to reach the max weight of restraints
             :param max_step: the step to reduce the weight of restraints
             :param stop_step: the step to stop the restraints
             :return: None
         """
+        if name not in self.cv:
+            raise ValueError(f"{name} is not a valid CV")
         if "restrain" not in self.bias:
             self.bias["restrain"] = _RestrainCV(self.cv[name], weight, reference)
             self.names["restrain"] = self.bias["restrain"]
@@ -565,6 +594,28 @@ class CVSystem:
         for i in ["start", "max", "reduce", "stop"]:
             i = i + "_step"
             getattr(self.bias["restrain"], i).append(locals()[i])
+
+    def meta1d(self, name, dCV, CV_minimal, CV_maximum, welltemp_factor, height, sigma):
+        """
+           Add a CV to do metadynamics
+
+           :param name: the name of the CV
+           :param dCV: the weight for meta1d
+           :param CV_minimal: the minimal value of the CV
+           :param CV_maximum: the maximum value of the CV
+           :param welltemp_factor: the welltemfactor value of the CV
+           :param height: the height of the Gaussian potential to add
+           :param sigma: the sigma of the Gaussian potential to add
+        """
+        if name not in self.cv:
+            raise ValueError(f"{name} is not a valid CV")
+        if "meta1d" not in self.bias:
+            kwargs= {}
+            for i in ["dCV", "CV_minimal", "CV_maximum", "welltemp_factor", "height", "sigma"]:
+                kwargs[i] = locals()[i]
+            if hasattr(self.cv[name], "period"):
+                kwargs["CV_period"] = self.cv[name].period
+            self.bias["meta1d"] = _Meta1D(name, **kwargs)
 
     def output(self, filename, folder="."):
         """
@@ -580,7 +631,7 @@ class CVSystem:
                 for virtual_atom in self.virtual_atom.values():
                     f.write(virtual_atom.to_string(folder))
             if self.cv:
-                f.write("#" * 30 + "\n#definition of collected variables\n" + "#" * 20 + "\n")
+                f.write("#" * 30 + "\n#definition of collected variables\n" + "#" * 30 + "\n")
                 for cv in self.cv.values():
                     f.write(cv.to_string(folder))
             if self.bias:

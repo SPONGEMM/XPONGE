@@ -8,7 +8,7 @@ def test_msd():
     """ test the correctness of msd """
     import os
     import Xponge
-    import Xponge.forcefield.amber.tip3p
+    import Xponge.forcefield.amber.tip4pew
     import numpy as np
     from Xponge.mdrun import run
     from Xponge.analysis.md_analysis import mda
@@ -9242,6 +9242,7 @@ TER
 END
 """)
     wats = Xponge.load_pdb(pdb)
+    wats.add_missing_atoms()
     wats.box_length = [44.3620000,  41.3950000,  40.4300000]
     Xponge.save_pdb(wats, "WATS.pdb")
     Xponge.save_sponge_input(wats, "WATS")
@@ -9258,7 +9259,7 @@ END
     msd1 = EinsteinMSD(u, select="name O", fft=False)
     msd1.run()
     with open("leaprc", "w") as f:
-        f.write("""source leaprc.water.tip3p
+        f.write("""source leaprc.water.tip4pew
 t = loadpdb WATS.pdb
 setBox t centers 0
 saveamberparm t t.parm7 t.rst7

@@ -334,9 +334,9 @@ TER     305      SER A  20                                                      
     cv.output("cv.txt")
     assert run("SPONGE -default_in_file_prefix trp_cage -mode minimization -rst min > min.out") == 0
     assert run("SPONGE -default_in_file_prefix trp_cage -mode nvt \
--thermostat andersen_thermostat -target_temperature 1000 -rst heat \
+-thermostat andersen_thermostat -target_temperature 2000 -rst heat \
 -cutoff 8 -coordinate_in_file min_coordinate.txt -step_limit 100000 \
--dt 2e-3 -constrain_mode SHAKE > heat.out") == 0
+-dt 1e-3 -constrain_mode SHAKE > heat.out") == 0
     assert run("SPONGE -default_in_file_prefix trp_cage -mode npt -cv_in_file cv.txt \
 -thermostat andersen_thermostat -barostat andersen_barostat -target_temperature 300 \
 -cutoff 8 -coordinate_in_file heat_coordinate.txt -step_limit 100000 \

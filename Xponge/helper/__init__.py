@@ -1228,7 +1228,7 @@ class Residue(Entity):
                 temp_atom = getattr(self.type, atom_name)
                 self_position = np.array([getattr(temp_atom, i) for i in "xyz"])
                 self_position = np.dot(rotation, (self_position - center1)) + center2
-                tofind = self.type.connectivity[temp_atom] or self.atoms
+                tofind = self.type.connectivity[temp_atom] or self.type.atoms
                 for connected_atom in tofind:
                     if connected_atom.name in t:
                         connected_position = np.array([getattr(connected_atom, i) for i in "xyz"])
