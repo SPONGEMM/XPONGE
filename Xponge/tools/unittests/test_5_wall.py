@@ -9242,7 +9242,7 @@ END
     Xponge.save_sponge_input(wats, "wats")
     assert run("SPONGE -mode NVT -thermostat andersen_thermostat -default_in_file_prefix wats \
 -cutoff 8 -step_limit 100000 -hard_wall_z_high 55 -hard_wall_z_low 5 -target_temperature 350 \
--crd hard.dat -box hard.box ") == 0
+-crd hard.dat -box hard.box > hard.out") == 0
 
 def test_soft_wall():
     """
@@ -9252,9 +9252,9 @@ def test_soft_wall():
     with open("wats_soft_walls.txt", "w") as f:
         f.write("""[[[ x_wall ]]]
 [[ potential ]]
-E = 1.0e5f * powf((z - 5.0f), -12.0f) + 1.0e5f * powf((z - 55.0f), -12.0f);
+E = powf((z - 5.0f) * (z - 5.0f), -6.0f) + powf((55.0f - z) * (55.0f - z), -6.0f);
+[[ end ]]
 """)
-
     assert run("SPONGE -mode NVT -thermostat andersen_thermostat -default_in_file_prefix wats \
 -cutoff 8 -step_limit 100000 -target_temperature 350 \
--crd soft.dat -box soft.box  ") == 0
+-crd soft.dat -box soft.box > soft.out") == 0
