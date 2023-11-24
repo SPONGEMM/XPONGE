@@ -1,4 +1,4 @@
-name: Xponge
+name: XpongeDoc
 channels:
   - rdkit
 dependencies:

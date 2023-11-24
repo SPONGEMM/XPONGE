@@ -9,6 +9,22 @@ Xponge.helper package
 Submodules
 ----------
 
+Xponge.helper.cv module
+-----------------------
+
+.. automodule:: Xponge.helper.cv
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Xponge.helper.file module
+-------------------------
+
+.. automodule:: Xponge.helper.file
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Xponge.helper.math module
 -------------------------
 

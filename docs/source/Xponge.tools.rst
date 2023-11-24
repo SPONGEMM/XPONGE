@@ -6,8 +6,24 @@ Xponge.tools package
    :undoc-members:
    :show-inheritance:
 
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   Xponge.tools.unittests
+
 Submodules
 ----------
+
+Xponge.tools.mbar module
+------------------------
+
+.. automodule:: Xponge.tools.mbar
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
 Xponge.tools.mmgbsa module
 --------------------------

@@ -291,7 +291,7 @@ The command line tool ``Xponge.mdrun`` is used to call the MD program SPONGE, wh
                                  BIN_PATH can be an absolute path or a relative path to this module file
             mdrun SPONGE*:  run SPONGE
 
-There are 4 subtools now, and here is a list of the subtools:
+There are 2 subtools now, and here is a list of the subtools:
 
 .. list-table::
     :widths: 10 50
@@ -301,12 +301,9 @@ There are 4 subtools now, and here is a list of the subtools:
     * - tool
       - description
     * - SPONGE
-      - the normal MD simulation with periodic box conditions
-    * - SPONGE_NOPBC
-      - the normal MD simulation without periodic box conditions
+      - the normal MD simulation
     * - SPONGE_TI
       - the MD calculation for thermodynamic integration
-    * - SPONGE_FEP
-      - the MD calculation for free energy perturbation
+
 
 The commands can be seen in the `SPONGE documents <https://spongemm.readthedocs.io/zh_CN/latest/%E8%BE%93%E5%85%A5%E5%91%BD%E4%BB%A4/%E8%BE%93%E5%85%A5%E5%91%BD%E4%BB%A4.html>`_ (in Chinese)
