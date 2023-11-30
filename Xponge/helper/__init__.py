@@ -856,9 +856,7 @@ None to use the charge sum of the unomitted atoms
             for atom in self.atoms:
                 atom.copied[forcopy].linked_atoms = {key: set(map(lambda _atom: _atom.copied[forcopy], value)) for
                                                      key, value in atom.linked_atoms.items()}
-                atom.copied[forcopy].internal_linked_atoms = {key: set(map(lambda _atom: _atom.copied[forcopy],
-                                                                           value))
-                                                              for key, value in atom.internal_linked_atoms.items()}
+
         if not donot_delete:
             for atom in self.atoms:
                 atom.copied.pop(forcopy)
@@ -1757,8 +1755,6 @@ If None, the information will be deleted between start and end
             for atom in self.atoms:
                 atom.copied[forcopy].linked_atoms = {key: set(map(lambda aton: aton.copied[forcopy], value)) for
                                                      key, value in atom.linked_atoms.items()}
-                atom.copied[forcopy].internal_linked_atoms = {key: set(map(lambda aton: aton.copied[forcopy], value)) for
-                                                              key, value in atom.internal_linked_atoms.items()}
 
         for res in self.residues:
             for atom in res.atoms:

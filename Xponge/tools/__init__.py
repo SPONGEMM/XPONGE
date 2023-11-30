@@ -278,7 +278,9 @@ def mol2rfe(args):
     if not args.ff:
         parmchk2_gaff(args.r1, args.temp + "_TMP1.frcmod")
 
-    to_res = load_mol2(args.r2).residues[0]
+    to_mol = load_mol2(args.r2)
+    build_bonded_force(to_mol)
+    to_res = to_mol.residues[0]
     to_ = assign.Get_Assignment_From_ResidueType(to_res.type)
     if not args.ff:
         parmchk2_gaff(args.r2, args.temp + "_TMP2.frcmod")
@@ -288,6 +290,9 @@ def mol2rfe(args):
         parmchk2_gaff(mol2file, f"{args.temp}_TMP{3+extrai}.frcmod")
 
     rmol = load_pdb(args.pdb)
+
+    if rmol.residues[args.ri].type != from_res_type_:
+        raise ValueError(f"The type of the {args.ri}-th residue in pdb is not the same as that in mol2. Maybe you should set the option '-ri XXX' correctly")
 
     merged_from, merged_to, matchmap = Merge_Dual_Topology(rmol, rmol.residues[args.ri],
                                                     to_res, from_, to_,

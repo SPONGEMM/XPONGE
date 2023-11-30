@@ -134,8 +134,8 @@ def _mol2rfe_pre_equilibrium(args, iteror):
             command += f" -coordinate_in_file {i}/min/{args.temp}_coordinate.txt"
             if not args.pi:
                 command += f" -mode NPT -cutoff 8 -dt {args.dt} -constrain_mode SHAKE"
-                command += " -barostat andersen_barostat -thermostat middle_langevin"
-                command += " -middle_langevin_gamma 10 -velocity_max 20 -andersen_barostat_tau 0.1"
+                command += " -barostat andersen_barostat -thermostat andersen_thermostat "
+                command += " -velocity_max 20"
                 exit_code = run(command)
             else:
                 command += f" -mdin {args.pi}"
