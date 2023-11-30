@@ -9247,9 +9247,9 @@ END
         step_limit = 5000000
         temperature_limit = 1
 
-    assert run(f"SPONGE -mode NPT -thermostat andersen_thermostat -barostat berendsen_barostat -default_in_file_prefix WATS \
--step_limit {step_limit} -dt 2e-3 -constrain_mode SHAKE -cutoff 8 -write_information_interval 100 \
--target_temperature 300 -mdout 300.mdout > 300.out") == 0
+    assert run(f"SPONGE -mode NPT -thermostat andersen_thermostat -barostat berendsen_barostat \
+-default_in_file_prefix WATS -step_limit {step_limit} -dt 2e-3 -constrain_mode SHAKE -cutoff 8 \
+-write_information_interval 100 -target_temperature 300 -mdout 300.mdout > 300.out") == 0
 
     out1 = MdoutReader("300.mdout")
     Xponge.Xprint(f"<T>={np.mean(out1.temperature)}")

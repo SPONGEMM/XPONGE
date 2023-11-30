@@ -292,7 +292,8 @@ def mol2rfe(args):
     rmol = load_pdb(args.pdb)
 
     if rmol.residues[args.ri].type != from_res_type_:
-        raise ValueError(f"The type of the {args.ri}-th residue in pdb is not the same as that in mol2. Maybe you should set the option '-ri XXX' correctly")
+        raise ValueError(f"The type of the {args.ri}-th residue in pdb is not the same as that in mol2. \
+Maybe you should set the option '-ri XXX' correctly")
 
     merged_from, merged_to, matchmap = Merge_Dual_Topology(rmol, rmol.residues[args.ri],
                                                     to_res, from_, to_,

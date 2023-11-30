@@ -579,7 +579,7 @@ class CVSystem:
             self.bias["steer"].cv.append(self.cv[name])
             self.bias["steer"].weight.append(weight)
 
-    def restrain(self, name, weight, reference, start_step=0, max_step=0, reduce_step=0, stop_step=0):
+    def restrain(self, name, weight, reference, start_step=0, max_step=0, reduce_step=0, stop_step=0): #pylint: disable=unused-argument
         """
             Add a CV to restrain
 
@@ -605,7 +605,7 @@ class CVSystem:
             i = i + "_step"
             getattr(self.bias["restrain"], i).append(locals()[i])
 
-    def meta1d(self, name, dCV, CV_minimal, CV_maximum, welltemp_factor, height, sigma):
+    def meta1d(self, name, dCV, CV_minimal, CV_maximum, welltemp_factor, height, sigma): #pylint: disable=unused-argument, invalid-name
         """
            Add a CV to do metadynamics
 

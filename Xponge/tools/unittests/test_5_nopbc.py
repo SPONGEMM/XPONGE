@@ -96,12 +96,10 @@ def test_cv_run():
     """
         test the steer MD simulation without pbc
     """
-    import os
     import Xponge
     import Xponge.forcefield.amber.ff14sb
     import Xponge.forcefield.amber.tip3p
     from Xponge.forcefield.special import gb
-    from Xponge.analysis import MdoutReader
     from Xponge.helper.cv import CVSystem
     from Xponge.mdrun import run
 

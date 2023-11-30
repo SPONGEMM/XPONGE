@@ -16,10 +16,10 @@ def test_umbrella():
     from Xponge.mdrun import run
     from Xponge.analysis import wham
 
-    min_command = f"SPONGE -mode minimization -step_limit 10000 -default_in_file_prefix test \
+    min_command = "SPONGE -mode minimization -step_limit 10000 -default_in_file_prefix test \
                    -cv_in_file cv.txt -cutoff 1 -skin 1 -neighbor_list_refresh_interval 100000"
 
-    run_command = f"SPONGE -mode NVT -dt 1e-3 -step_limit 20000 -default_in_file_prefix test \
+    run_command = "SPONGE -mode NVT -dt 1e-3 -step_limit 20000 -default_in_file_prefix test \
                    -cv_in_file cv.txt -cutoff 1 -skin 1 -neighbor_list_refresh_interval 100000 \
                    -thermostat andersen_thermostat -coordinate_in_file restart_coordinate.txt \
                    -write_information_interval 100"
@@ -60,4 +60,3 @@ def test_umbrella():
     plt.legend()
     plt.savefig("sampling.png")
     plt.clf()
-
