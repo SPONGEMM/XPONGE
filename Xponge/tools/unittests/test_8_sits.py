@@ -6,7 +6,6 @@ __all__ = ["test_sits"]
 
 def test_sits():
     """ test SITS """
-    import shutil
     import numpy as np
     import matplotlib.pyplot as plt
     import Xponge
@@ -17,10 +16,10 @@ def test_sits():
     from Xponge.analysis import MdoutReader
     from scipy.stats import gaussian_kde
 
-    min_command = f"SPONGE -mode minimization -step_limit 10000 -default_in_file_prefix test \
+    min_command = "SPONGE -mode minimization -step_limit 10000 -default_in_file_prefix test \
                    -cutoff 1 -skin 1 -neighbor_list_refresh_interval 100000 -rst min > temp.out"
 
-    run_command = f"SPONGE -mode NVT -dt 1e-3 -default_in_file_prefix test \
+    run_command = "SPONGE -mode NVT -dt 1e-3 -default_in_file_prefix test \
                    -sits_dihedral_in_file test_dihedral.txt \
                    -cutoff 1 -skin 1 -neighbor_list_refresh_interval 100000 \
                    -thermostat andersen_thermostat -coordinate_in_file min_coordinate.txt \
@@ -55,8 +54,8 @@ def test_sits():
     t = MdoutReader("mdout.txt")
     bias = t.SITS_bias
     t = t.torsion
-    kT = -8.314 * 300 / 4184
-    w = np.exp(-bias/kT)
+    kt = -8.314 * 300 / 4184
+    w = np.exp(-bias/kt)
     t = np.concatenate((t, t + np.pi * 2, t - np.pi * 2))
     w = np.concatenate((w, w, w))
     kernel = gaussian_kde(t, weights=w, bw_method=0.01)
@@ -72,4 +71,3 @@ def test_sits():
     plt.legend()
     plt.savefig("sits.png")
     plt.clf()
-

@@ -10,7 +10,7 @@ def test_uncovalent():
     import Xponge
     from Xponge import GlobalSetting
     import Xponge.forcefield.amber.tip3p
-    import Xponge.forcefield.amber.gaff as gaff
+    import Xponge.forcefield.amber.gaff
     if GlobalSetting.purpose == "academic":
         return
 
@@ -49,11 +49,3 @@ def test_covalent():
     Xponge.save_mol2(ala, "A.mol2")
     Xponge.save_mol2(gly, "B.mol2")
     os.system("Xponge mol2rfe -pdb test.pdb -r1 A.mol2 -r2 B.mol2 -ri 1 -nl 1 -p1step 5000 -estep 5000")
-
-def test_academic():
-    """ test whether the program meets the need for academic usage """
-    import os
-    import Xponge
-    from Xponge import GlobalSetting
-    if GlobalSetting.purpose != "academic":
-        return

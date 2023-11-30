@@ -479,7 +479,8 @@ class SpongeTrajectoryWriter():
         else:
             raise TypeError(f"u should be Universe or AtomGroup, but {type(u)} got")
         self.datfile.write(ts.positions.astype(np.float32).tobytes())
-        if self.write_box and hasattr(ts, "dimensions") and isinstance(ts.dimensions, Iterable) and len(ts.dimensions) == 6:
+        if self.write_box and hasattr(ts, "dimensions") and isinstance(ts.dimensions, Iterable) \
+            and len(ts.dimensions) == 6:
             self.boxfile.write(" ".join([f"{i:.6f}" for i in ts.dimensions]) + "\n")
 
 

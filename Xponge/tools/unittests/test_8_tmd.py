@@ -6,15 +6,14 @@ __all__ = ["test_tmd"]
 
 def test_tmd():
     """ test targeted MD """
-    import os
     from io import StringIO
     import Xponge
     import Xponge.forcefield.amber.tip3p
     import Xponge.forcefield.amber.ff14sb
     from Xponge.mdrun import run
     from Xponge.helper.cv import CVSystem
-
-    pdb = StringIO("""ATOM      1  N   ASN A   1      -8.901   4.127  -0.555  1.00  0.00           N  
+    pdb = StringIO("""
+ATOM      1  N   ASN A   1      -8.901   4.127  -0.555  1.00  0.00           N  
 ATOM      2  CA  ASN A   1      -8.608   3.135  -1.618  1.00  0.00           C  
 ATOM      3  C   ASN A   1      -7.117   2.964  -1.897  1.00  0.00           C  
 ATOM      4  O   ASN A   1      -6.634   1.849  -1.758  1.00  0.00           O  

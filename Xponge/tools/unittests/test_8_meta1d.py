@@ -6,7 +6,6 @@ __all__ = ["test_meta1d"]
 
 def test_meta1d():
     """ test targeted MD """
-    import shutil
     import numpy as np
     import matplotlib.pyplot as plt
     import Xponge
@@ -17,10 +16,10 @@ def test_meta1d():
     from Xponge.analysis import MdoutReader
     from scipy.stats import gaussian_kde
 
-    min_command = f"SPONGE -mode minimization -step_limit 10000 -default_in_file_prefix test \
+    min_command = "SPONGE -mode minimization -step_limit 10000 -default_in_file_prefix test \
                    -cv_in_file cv.txt -cutoff 1 -skin 1 -neighbor_list_refresh_interval 100000 > temp.out"
 
-    run_command = f"SPONGE -mode NVT -dt 1e-3 -step_limit 1000000 -default_in_file_prefix test \
+    run_command = "SPONGE -mode NVT -dt 1e-3 -step_limit 1000000 -default_in_file_prefix test \
                    -cv_in_file cv.txt -cutoff 1 -skin 1 -neighbor_list_refresh_interval 100000 \
                    -thermostat andersen_thermostat -coordinate_in_file restart_coordinate.txt \
                    -write_information_interval 100 > temp.out"
@@ -49,8 +48,8 @@ def test_meta1d():
     t = MdoutReader("mdout.txt")
     bias = t.meta1d
     t = t.torsion
-    kT = -8.314 * 300 / 4184
-    w = np.exp(-bias/kT)
+    kt = -8.314 * 300 / 4184
+    w = np.exp(-bias/kt)
     t = np.concatenate((t, t + np.pi * 2, t - np.pi * 2))
     w = np.concatenate((w, w, w))
     kernel = gaussian_kde(t, weights=w, bw_method=0.01)
@@ -70,5 +69,3 @@ def test_meta1d():
     plt.legend()
     plt.savefig("meta1d.png")
     plt.clf()
-
-
