@@ -41,7 +41,7 @@ def modified_bondi_radii(atom):
                   "P": 0.86, "S": 0.96}
     atom.GB_scaler = temp_dict2.get(element, 0.8)
     if element == "H":
-        for atom_a in atom.residue.connectivity[atom]:
+        for atom_a in atom.residue.type.connectivity[atom.residue.type.name2atom(atom.name)]:
             element_a = Guess_Element_From_Mass(atom_a.mass)
             if element_a in ("C", "N"):
                 atom.GB_radii = 1.3

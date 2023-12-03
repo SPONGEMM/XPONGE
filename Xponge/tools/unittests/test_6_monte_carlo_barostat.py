@@ -9243,7 +9243,6 @@ END
     Xponge.save_sponge_input(wats, "WATS")
 
     step_limit = 500000
-    pressure_limit = 10
     if Xponge.GlobalSetting.purpose == "academic":
         step_limit = 5000000
 

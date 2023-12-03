@@ -1,4 +1,4 @@
-Xponge 1.3 Documentation
+Xponge 1.4 Documentation
 ------------------------------------
 
 |JOSS| |mdanalysis| |rdkit|

@@ -856,9 +856,7 @@ None to use the charge sum of the unomitted atoms
             for atom in self.atoms:
                 atom.copied[forcopy].linked_atoms = {key: set(map(lambda _atom: _atom.copied[forcopy], value)) for
                                                      key, value in atom.linked_atoms.items()}
-                atom.copied[forcopy].internal_linked_atoms = {key: set(map(lambda _atom: _atom.copied[forcopy],
-                                                                           value))
-                                                              for key, value in atom.internal_linked_atoms.items()}
+
         if not donot_delete:
             for atom in self.atoms:
                 atom.copied.pop(forcopy)
@@ -1228,7 +1226,7 @@ class Residue(Entity):
                 temp_atom = getattr(self.type, atom_name)
                 self_position = np.array([getattr(temp_atom, i) for i in "xyz"])
                 self_position = np.dot(rotation, (self_position - center1)) + center2
-                tofind = self.type.connectivity[temp_atom] or self.atoms
+                tofind = self.type.connectivity[temp_atom] or self.type.atoms
                 for connected_atom in tofind:
                     if connected_atom.name in t:
                         connected_position = np.array([getattr(connected_atom, i) for i in "xyz"])
@@ -1757,8 +1755,6 @@ If None, the information will be deleted between start and end
             for atom in self.atoms:
                 atom.copied[forcopy].linked_atoms = {key: set(map(lambda aton: aton.copied[forcopy], value)) for
                                                      key, value in atom.linked_atoms.items()}
-                atom.copied[forcopy].internal_linked_atoms = {key: set(map(lambda aton: aton.copied[forcopy], value)) for
-                                                              key, value in atom.internal_linked_atoms.items()}
 
         for res in self.residues:
             for atom in res.atoms:

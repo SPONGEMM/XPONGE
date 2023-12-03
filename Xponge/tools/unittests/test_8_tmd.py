@@ -6,15 +6,14 @@ __all__ = ["test_tmd"]
 
 def test_tmd():
     """ test targeted MD """
-    import os
     from io import StringIO
     import Xponge
     import Xponge.forcefield.amber.tip3p
     import Xponge.forcefield.amber.ff14sb
     from Xponge.mdrun import run
     from Xponge.helper.cv import CVSystem
-
-    pdb = StringIO("""ATOM      1  N   ASN A   1      -8.901   4.127  -0.555  1.00  0.00           N  
+    pdb = StringIO("""
+ATOM      1  N   ASN A   1      -8.901   4.127  -0.555  1.00  0.00           N  
 ATOM      2  CA  ASN A   1      -8.608   3.135  -1.618  1.00  0.00           C  
 ATOM      3  C   ASN A   1      -7.117   2.964  -1.897  1.00  0.00           C  
 ATOM      4  O   ASN A   1      -6.634   1.849  -1.758  1.00  0.00           O  
@@ -334,9 +333,9 @@ TER     305      SER A  20                                                      
     cv.output("cv.txt")
     assert run("SPONGE -default_in_file_prefix trp_cage -mode minimization -rst min > min.out") == 0
     assert run("SPONGE -default_in_file_prefix trp_cage -mode nvt \
--thermostat andersen_thermostat -target_temperature 1000 -rst heat \
+-thermostat andersen_thermostat -target_temperature 2000 -rst heat \
 -cutoff 8 -coordinate_in_file min_coordinate.txt -step_limit 100000 \
--dt 2e-3 -constrain_mode SHAKE > heat.out") == 0
+-dt 1e-3 -constrain_mode SHAKE > heat.out") == 0
     assert run("SPONGE -default_in_file_prefix trp_cage -mode npt -cv_in_file cv.txt \
 -thermostat andersen_thermostat -barostat andersen_barostat -target_temperature 300 \
 -cutoff 8 -coordinate_in_file heat_coordinate.txt -step_limit 100000 \

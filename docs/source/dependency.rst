@@ -66,7 +66,7 @@ Here is the list of all packages which may be used:
       - [6]
     * - rdkit
       - cheminformatics
-      - ``conda install -c rdkit rdkit``
+      - ``pip install rdkit``
       - [7]
     * - MDAnalysis
       - trajectory analysis

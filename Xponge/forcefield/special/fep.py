@@ -599,7 +599,7 @@ the tanimoto coefficient of the max common structure.
     :return: two molecules in the initial and final lambda stat respectively, and the matchmap
     """
     build.Build_Bonded_Force(mol)
-    build.Build_Bonded_Force(residue_b)
+    build.Build_Bonded_Force(residue_b.type)
 
     from ...helper.rdkit import assign_to_rdmol
     from rdkit.Chem import rdFMCS as MCS
@@ -751,10 +751,10 @@ the tanimoto coefficient of the max common structure.
         new_atom1_b = mol_b.residues[res2index[atom1.residue]].name2atom(atom1.name)
         new_atom2_a = mol_a.residues[res2index[atom2.residue]].name2atom(atom2.name)
         new_atom2_b = mol_b.residues[res2index[atom2.residue]].name2atom(atom2.name)
-        if new_atom1_a.residue == residue_a:
+        if atom1.residue == residue_a:
             new_atom1_a = mol_a.residues[ri].name2atom(new_atom1_a.name)
             new_atom1_b = mol_b.residues[ri].name2atom(new_atom1_b.name)
-        if new_atom2_a.residue == residue_a:
+        if atom2.residue == residue_a:
             new_atom2_a = mol_a.residues[ri].name2atom(new_atom2_a.name)
             new_atom2_b = mol_b.residues[ri].name2atom(new_atom2_b.name)
         mol_a.add_residue_link(new_atom1_a, new_atom2_a)

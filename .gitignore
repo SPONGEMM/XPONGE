@@ -1,8 +1,9 @@
 *.pyc
 build/*
 dist/*
-lib/dist/*
-lib/XpongeLib.egg-info/*
+dist/*
+Xponge.egg-info/PKG-INFO
+Xponge.egg-info/SOURCES.txt
 Xponge/.idea
 Xponge/mdrun/BIN_PATH.dat
 docs/build/*
