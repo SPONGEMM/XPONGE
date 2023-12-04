@@ -148,10 +148,21 @@ def _find_extra_string(atom_type_alls, assign):
                     extra_strings[i].append("CN3")
                 elif "NH4" in atom_type_alls[k]:
                     extra_strings[i].append("NH4")
-        extra_strings[i].sort(key=lambda x: _extra_string_sort[x])
+        extra_strings[i].sort(key=lambda x: _extra_string_sort.get(x, 999))
     extra_strings = Xdict({i:"".join(extra_strings[i]) for i in range(assign.atom_numbers)})
     return extra_strings
 
+def _get_type_distance(s1, s2):
+    """ get the distance between two type strings """
+    if len(s1) != len(s2):
+        return 0
+    ans = 0
+    for i, s1i in enumerate(s1):
+        if i % 3 != 2 and s1i != s2[i]:
+            return 0
+        if i % 3 == 2 and s1i != s2[i]:
+            ans += 1
+    return ans
 
 def tpacm4(assign, charge):
     """
@@ -171,13 +182,38 @@ def tpacm4(assign, charge):
             if "ar" in assign.bond_marker[atom][btom]:
                 order = 4
             atom_type.append(f"{string_mapper[assign.atoms[atom]]}{string_mapper[assign.atoms[btom]]}{order}")
+        found = False
         for one_pos in permutations(atom_type):
             temp_atom_type = "".join(one_pos) + type_suffix[atom]
             if temp_atom_type in type_charge_mapper:
                 atom_type_alls.append(temp_atom_type)
                 charges.append(type_charge_mapper[temp_atom_type])
+                found = True
                 break
-        else:
+        if not found:
+            for one_pos in permutations(atom_type):
+                temp_atom_type = "".join(one_pos)
+                if temp_atom_type in type_charge_mapper:
+                    atom_type_alls.append(temp_atom_type)
+                    charges.append(type_charge_mapper[temp_atom_type])
+                    found = True
+                    break
+        if not found:
+            total_length = len(atom_type)
+            dis = 0
+            while (dis < total_length and not found):
+                dis += 1
+                for one_pos in permutations(atom_type):
+                    if found:
+                        break
+                    temp_atom_type = "".join(one_pos)
+                    for type_, charge in type_charge_mapper.items():
+                        if _get_type_distance(type_, temp_atom_type) == dis:
+                            charges.append(charge)
+                            atom_type_alls.append(type_)
+                            found = True
+                            break
+        if not found:
             charges.append(0)
             atom_type_alls.append("XXX")
             Xprint(f"The pattern of atom #{atom} can not be found. The molecule {assign.name} is not in the training dataset of TPACM4 charge model", "WARNING")
