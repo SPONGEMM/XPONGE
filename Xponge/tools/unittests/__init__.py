@@ -10,23 +10,31 @@ import logging
 import importlib.util as iu
 import unittest
 from ...helper import Xdict, Xopen, Xprint, GlobalSetting, source
+
 warnings.filterwarnings("ignore")
 
-CATEGORY = Xdict({'0': "base",
-                  '1': "building",
-                  '2': "forcefield_loading",
-                  '3': "forcefield_using",
-                  '4': "MD_efficiency",
-                  '5': "MD_function",
-                  '6': "MD_thermodynamics",
-                  '7': "MD_kinetics",
-                  '8': "enhancing_sampling",
-                  '9': "workflow",
-                  '100': "application"},
-                  not_found_message="{} is not a valid unittest category")
+CATEGORY = Xdict(
+    {
+        "0": "base",
+        "1": "building",
+        "2": "forcefield_loading",
+        "3": "forcefield_using",
+        "4": "MD_efficiency",
+        "5": "MD_function",
+        "6": "MD_thermodynamics",
+        "7": "MD_kinetics",
+        "8": "enhancing_sampling",
+        "9": "workflow",
+        "10": "cmake",
+        "100": "application",
+    },
+    not_found_message="{} is not a valid unittest category",
+)
+
 
 class XpongeTestRunner(unittest.TextTestRunner):
-    """ the unittest wrapper of Xponge tests """
+    """the unittest wrapper of Xponge tests"""
+
     def run(self, test):
         result = self._makeResult()
         test(result)
@@ -38,8 +46,9 @@ class XpongeTestRunner(unittest.TextTestRunner):
                 Xprint(error[1], "ERROR")
         return result
 
+
 def _find_tests(todo):
-    """ find all tests in the folder"""
+    """find all tests in the folder"""
     module_dir = os.path.dirname(os.path.abspath(__file__))
     file_list = os.listdir(module_dir)
     file_list.sort()
@@ -50,7 +59,9 @@ def _find_tests(todo):
             file_path = os.path.join(module_dir, file_name)
             index = result.group(1)
             module_name = result.group(2)
-            if todo == "all":
+            if (
+                todo == "all" and module_name != "cmake"
+            ):  # do not test cmake in all for it has to be tested in the source directory
                 tests.append([module_name, file_path, index])
             elif todo == module_name:
                 spec = iu.spec_from_file_location(module_name, file_path)
@@ -62,8 +73,9 @@ def _find_tests(todo):
                 tests.append(CATEGORY[index])
     return tests
 
+
 def _check_test_file(f):
-    """ check the cases in the test file """
+    """check the cases in the test file"""
     if not os.path.exists(f):
         raise ValueError(f"{f} does not exist")
     result = re.search(r"test_(\d+)_(.+)\.py", f)
@@ -77,14 +89,15 @@ def _check_test_file(f):
         tests.append(getattr(module, case))
     return tests, module_name, category
 
+
 def _run_one_test(case, verbose):
-    """ Run one test"""
+    """Run one test"""
     for handle in GlobalSetting.logger.handlers:
         handle.setLevel("CRITICAL")
-    log_file = f'{case.__name__}.log'
+    log_file = f"{case.__name__}.log"
     file_handler = logging.FileHandler(log_file, mode="w")
     file_handler.set_name("temp")
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s\n%(message)s')
+    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s\n%(message)s")
     file_handler.setFormatter(formatter)
     file_handler.setLevel(verbose)
     GlobalSetting.logger.addHandler(file_handler)
@@ -96,6 +109,7 @@ def _run_one_test(case, verbose):
         else:
             handler.setLevel(verbose)
     return result
+
 
 def _run_several_tests(tests, name, args, catogory):
     """run several tests"""
@@ -114,6 +128,7 @@ def _run_several_tests(tests, name, args, catogory):
         Xprint(f"\nError function(s): {', '.join(errors)}")
     if not failures and not errors:
         Xprint("")
+
 
 def mytest(args):
     """
@@ -138,5 +153,7 @@ def mytest(args):
         for case, f, index in tests:
             folder = pathlib.Path(f"{CATEGORY[index]}") / f"{case}"
             folder.mkdir(exist_ok=True, parents=True)
-            os.system(f"cd {folder} && {sys.argv[0]} test -f {f} -v {args.verbose} -p {args.purpose}")
-            Xprint("-"*30)
+            os.system(
+                f"cd {folder} && {sys.argv[0]} test -f {f} -v {args.verbose} -p {args.purpose}"
+            )
+            Xprint("-" * 30)
