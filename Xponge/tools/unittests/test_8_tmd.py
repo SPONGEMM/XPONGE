@@ -4,15 +4,18 @@
 
 __all__ = ["test_tmd"]
 
+
 def test_tmd():
-    """ test targeted MD """
+    """test targeted MD"""
     from io import StringIO
     import Xponge
     import Xponge.forcefield.amber.tip3p
     import Xponge.forcefield.amber.ff14sb
     from Xponge.mdrun import run
     from Xponge.helper.cv import CVSystem
-    pdb = StringIO("""
+
+    pdb = StringIO(
+        """
 ATOM      1  N   ASN A   1      -8.901   4.127  -0.555  1.00  0.00           N  
 ATOM      2  CA  ASN A   1      -8.608   3.135  -1.618  1.00  0.00           C  
 ATOM      3  C   ASN A   1      -7.117   2.964  -1.897  1.00  0.00           C  
@@ -317,7 +320,8 @@ ATOM    301  HA  SER A  20       0.601   9.760   2.310  1.00  0.00           H
 ATOM    302  HB2 SER A  20       2.210  11.338   0.272  1.00  0.00           H  
 ATOM    303  HB3 SER A  20       1.636  11.959   1.824  1.00  0.00           H  
 ATOM    304  HG  SER A  20       2.831  10.040   2.676  1.00  0.00           H  
-TER     305      SER A  20                                                      """)
+TER     305      SER A  20                                                      """
+    )
 
     t = Xponge.load_pdb(pdb)
     t.add_missing_atoms()
@@ -326,17 +330,32 @@ TER     305      SER A  20                                                      
     cv = CVSystem(t)
     cv.add_cv_rmsd("RMSD", "protein and backbone")
     cv.add_cv_density("rho")
-    cv.restrain("rho", 1e6, 1, stop_step=50000)
+    cv.restrain("rho", 1e6, 1, reduce_step=1, stop_step=50000)
     cv.restrain("RMSD", 50, 0, max_step=50000, reduce_step=50000, stop_step=100000)
     cv.print("RMSD")
     cv.print("rho")
     cv.output("cv.txt")
-    assert run("SPONGE -default_in_file_prefix trp_cage -mode minimization -rst min > min.out") == 0
-    assert run("SPONGE -default_in_file_prefix trp_cage -mode nvt \
+    assert (
+        run(
+            "SPONGE -default_in_file_prefix trp_cage -mode minimization -rst min > min.out"
+        )
+        == 0
+    )
+    assert (
+        run(
+            "SPONGE -default_in_file_prefix trp_cage -mode nvt \
 -thermostat andersen_thermostat -target_temperature 2000 -rst heat \
 -cutoff 8 -coordinate_in_file min_coordinate.txt -step_limit 100000 \
--dt 1e-3 -constrain_mode SHAKE > heat.out") == 0
-    assert run("SPONGE -default_in_file_prefix trp_cage -mode npt -cv_in_file cv.txt \
+-dt 1e-3 -constrain_mode SHAKE > heat.out"
+        )
+        == 0
+    )
+    assert (
+        run(
+            "SPONGE -default_in_file_prefix trp_cage -mode npt -cv_in_file cv.txt \
 -thermostat andersen_thermostat -barostat andersen_barostat -target_temperature 300 \
 -cutoff 8 -coordinate_in_file heat_coordinate.txt -step_limit 100000 \
--dt 2e-3 -constrain_mode SHAKE > npt.out") == 0
+-dt 2e-3 -constrain_mode SHAKE > npt.out"
+        )
+        == 0
+    )
