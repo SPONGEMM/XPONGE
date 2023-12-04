@@ -660,7 +660,7 @@ def save_mol2(cls, filename=None):
     elif isinstance(cls, assign.Assign):
         cls.Save_As_Mol2(filename)
     else:
-        raise TypeError("Only Molecule, Residue, ResidueType and Assign can be saved as a pdb file")
+        raise TypeError("Only Molecule, Residue, ResidueType and Assign can be saved as a mol2 file")
 
 
 def save_gro(cls, filename):
