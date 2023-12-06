@@ -59,9 +59,7 @@ def _find_tests(todo):
             file_path = os.path.join(module_dir, file_name)
             index = result.group(1)
             module_name = result.group(2)
-            if (
-                todo == "all" and module_name != "cmake"
-            ):  # do not test cmake in all for it has to be tested in the source directory
+            if todo == "all":
                 tests.append([module_name, file_path, index])
             elif todo == module_name:
                 spec = iu.spec_from_file_location(module_name, file_path)
@@ -153,7 +151,13 @@ def mytest(args):
         for case, f, index in tests:
             folder = pathlib.Path(f"{CATEGORY[index]}") / f"{case}"
             folder.mkdir(exist_ok=True, parents=True)
-            os.system(
-                f"cd {folder} && {sys.argv[0]} test -f {f} -v {args.verbose} -p {args.purpose}"
-            )
+            if case == "cmake":
+                src_dir = os.path.abspath(os.path.expanduser(args.src_dir))
+                os.system(
+                    f"cd {folder} && {sys.argv[0]} test -f {f} -v {args.verbose} -p {args.purpose} -S {src_dir}"
+                )
+            else:
+                os.system(
+                    f"cd {folder} && {sys.argv[0]} test -f {f} -v {args.verbose} -p {args.purpose}"
+                )
             Xprint("-" * 30)

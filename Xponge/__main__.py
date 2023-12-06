@@ -23,6 +23,7 @@ only test the program, and a test with academic purpose will do more to exam the
                         help="the unit tests need to do")
     mytest.add_argument("-f", "--file", metavar="file",
                         help="the unit test file. If set, argument -d/--do will be suppressed")
+    mytest.add_argument("-S","--src_dir", metavar="src_dir",help="the source directory of SPONGE, used for cmake test")
     mytest.set_defaults(func=tools.mytest)
 
 
