@@ -740,4 +740,6 @@ mda._READERS["SPONGE_H5MD"] = SPONGEH5MDReader
 mda._READER_HINTS["SPONGE_H5MD"] = lambda x: x.endswith(".h5md")
 
 mda._SINGLEFRAME_WRITERS["SPONGE_CRD"] = SpongeCoordinateWriter
+mda._SINGLEFRAME_WRITERS["TXT"] = SpongeCoordinateWriter
 mda._MULTIFRAME_WRITERS["SPONGE_TRAJ"] = SpongeTrajectoryWriter
+mda._MULTIFRAME_WRITERS["DAT"] = SpongeTrajectoryWriter

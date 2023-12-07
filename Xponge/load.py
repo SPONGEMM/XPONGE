@@ -951,12 +951,13 @@ def _ffitp_dihedrals(line, output):
     if func == "1":
         output["dihedrals"] += "-".join(words[:4]) + " " + " ".join(words[5:]) + " 0\n"
     elif func == "2":
-        temp1 = [words[1], words[2], words[0], words[3]]
+        temp = [words[1], words[2], words[0], words[3]]
         temp2 = [words[1], words[2], words[3], words[0]]
-        if words[0][0].upper() in ("C", "N", "S"):
-            output["impropers"] += "-".join(temp1) + " {b} {k}".format(b=float(words[5]), k=float(words[6]) / 2) + "\n"
-        else:
-            output["impropers"] += "-".join(temp2) + " {b} {k}".format(b=float(words[5]), k=float(words[6]) / 2) + "\n"
+        if words[0][0] == "O":
+            temp = temp2
+        elif words[3] == "C":
+            temp = temp2
+        output["impropers"] += "-".join(temp) + " {b} {k}".format(b=float(words[5]), k=float(words[6]) / 2) + "\n"
     elif func == "9":
         for i in range(5, len(words), 20):
             output["dihedrals"] += "-".join(words[:4]) + " " + " ".join(words[i:i + 3]) + " 0\n"

@@ -1,10 +1,10 @@
 """
 This **package** sets the protein configuration of charmm27 force field
 """
-from ...helper import remove_real_global_variable, source, Xprint
+from ....helper import remove_real_global_variable, source, Xprint, set_real_global_variable
+from . import CHARMM27_DATA_DIR
 
-source("....")
-source("...charmm27")
+source(".....")
 
 load_mol2(os.path.join(CHARMM27_DATA_DIR, "protein.mol2"), as_template=True)
 
@@ -15,6 +15,14 @@ ResidueType.clear_type("NHE")
 remove_real_global_variable("HYP")
 remove_real_global_variable("CHYP")
 remove_real_global_variable("NHE")
+
+ResidueType.set_type("HIS", ResidueType.get_type("HIE"))
+ResidueType.set_type("NHIS", ResidueType.get_type("NHIE"))
+ResidueType.set_type("CHIS", ResidueType.get_type("CHIE"))
+
+set_real_global_variable("HIS", ResidueType.get_type("HIS"))
+set_real_global_variable("NHIS", ResidueType.get_type("NHIS"))
+set_real_global_variable("CHIS", ResidueType.get_type("CHIS"))
 
 residues = "ALA ARG ASN ASP CYS CYX GLN GLU GLY HID HIE HIP ILE LEU LYS MET PHE PRO SER THR TRP TYR VAL".split()
 

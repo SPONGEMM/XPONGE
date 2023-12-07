@@ -1,10 +1,10 @@
 """
-This **package** sets the tip3p configuration of charmm27 force field
+This **package** sets the tip3p configuration of charmm force field
 """
 from ...helper import source, Xprint, set_real_global_variable
 
 source("....")
-source("...charmm27")
+source("...charmm")
 
 
 AtomType.New_From_String(
@@ -32,11 +32,16 @@ OW-OW   0.152               1.7683
 HW-HW   0                   0
 """)
 
-TIP3P = load_mol2(os.path.join(CHARMM27_DATA_DIR, "tip3p.mol2"), as_template=True)
+load_mol2(os.path.join(os.path.dirname(__file__), "tip3p.mol2"), as_template=True)
 
-load_mol2(os.path.join(CHARMM27_DATA_DIR, "atomic_ions.mol2"), as_template=True)
+ResidueType.set_type("H2O", ResidueType.get_type("WAT"))
+ResidueType.set_type("HOH", ResidueType.get_type("WAT"))
 
-set_real_global_variable("WAT", TIP3P)
+set_real_global_variable("H2O", ResidueType.get_type("WAT"))
+set_real_global_variable("HOH", ResidueType.get_type("WAT"))
+
+load_mol2(os.path.join(os.path.dirname(__file__), "atomic_ions.mol2"), as_template=True)
+
 
 Xprint("""Reference for tip3p:
   William L. Jorgensen, Jayaraman Chandrasekhar, and Jeffry D. Madura

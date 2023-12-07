@@ -164,6 +164,7 @@ def _get_type_distance(s1, s2):
             ans += 1
     return ans
 
+
 def tpacm4(assign, charge):
     """
     This **function** is used to calculate the Gasteiger charge of an assignment
@@ -190,29 +191,20 @@ def tpacm4(assign, charge):
                 charges.append(type_charge_mapper[temp_atom_type])
                 found = True
                 break
-        if not found:
+        total_length = len(atom_type)
+        for dis in range(0, total_length):
+            if found:
+                break
             for one_pos in permutations(atom_type):
-                temp_atom_type = "".join(one_pos)
-                if temp_atom_type in type_charge_mapper:
-                    atom_type_alls.append(temp_atom_type)
-                    charges.append(type_charge_mapper[temp_atom_type])
-                    found = True
+                if found:
                     break
-        if not found:
-            total_length = len(atom_type)
-            dis = 0
-            while (dis < total_length and not found):
-                dis += 1
-                for one_pos in permutations(atom_type):
-                    if found:
+                temp_atom_type = "".join(one_pos)
+                for type_, charge_ in type_charge_mapper.items():
+                    if _get_type_distance(type_, temp_atom_type) == dis:
+                        charges.append(charge_)
+                        atom_type_alls.append(type_)
+                        found = True
                         break
-                    temp_atom_type = "".join(one_pos)
-                    for type_, charge in type_charge_mapper.items():
-                        if _get_type_distance(type_, temp_atom_type) == dis:
-                            charges.append(charge)
-                            atom_type_alls.append(type_)
-                            found = True
-                            break
         if not found:
             charges.append(0)
             atom_type_alls.append("XXX")
