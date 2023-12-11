@@ -535,9 +535,12 @@ connected to two other atoms, "N4" means a nitrogen atom connected to four other
         for btom in range(atom + 1, self.atom_numbers + 1):
             self.bonds[btom - 1] = self.bonds.pop(btom)
             self.atom_types[btom - 1] = self.atom_types.pop(btom)
+            self.bond_marker[btom - 1] = self.bond_marker.pop(btom)
         for btom, bond in self.bonds.items():
-            self.bonds[btom] = Xdict({key - 1 if key > btom else key : value
-                for key, value in bond.items() if key != btom})
+            self.bonds[btom] = Xdict({(key - 1 if key > atom else key) : value
+                for key, value in bond.items() if key != atom})
+            self.bond_marker[btom] = Xdict({(key - 1 if key > atom else key) : value
+                for key, value in self.bond_marker[btom].items() if key != atom})
 
     def delete_bond(self, atom1, atom2):
         """
@@ -840,19 +843,21 @@ the marker "ar" will be added to the aromatic bond.
         f.write(towrite)
         f.close()
 
-    def save_as_mol2(self, filename):
+    def save_as_mol2(self, filename, atomtype="sybyl"):
         """
         This **function** saves the instance as a mol2 file
 
         :param filename: the name of the output file
+        :param atomtype: the rule of atom types.
         :return: None
         """
         if not isinstance(filename, str):
             raise TypeError("filename needed to save an assignment as a mol2 file")
         import Xponge.forcefield.sybyl #pylint: disable=unused-import
-        atom_types = self.determine_atom_type("sybyl")
-        for atom, atype in enumerate(atom_types):
-            self.element_details[atom] = "." + atype.split(".")[1] if "." in atype else ""
+        if atomtype:
+            atom_types = self.determine_atom_type(atomtype)
+            for atom, atype in enumerate(atom_types):
+                self.element_details[atom] = "." + atype.split(".")[1] if "." in atype else ""
         bonds = []
         for i in range(self.atom_numbers):
             for j, order in self.bonds[i].items():

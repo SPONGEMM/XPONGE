@@ -1,5 +1,5 @@
 """
-This **package** sets the basic configuration of charmm27 force field
+This **package** sets the basic configuration of CHARMM force field
 """
 import os
 from ... import GlobalSetting, load_ffitp, AtomType, ResidueType, set_global_alternative_names

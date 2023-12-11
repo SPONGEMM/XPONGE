@@ -107,11 +107,16 @@ def _name2name(subparsers):
     name2name.add_argument("-tres", "-to_residue", dest="to_residue", default="",
                            help="the residue name in tfile if tformat == pdb")
 
-    name2name.add_argument("-oformat", "-out_format", dest="out_format", choices=["mol2", "pdb", "mcs_pdb"],
+    name2name.add_argument("-oformat", "-out_format", dest="out_format",
+                           choices=["mol2", "pdb", "mcs_pdb", "gaff_mol2"],
                            required=True, help="the format of the output file")
     name2name.add_argument("-ofile", "-out_file", dest="out_file", required=True, help="the name of the output file")
-    name2name.add_argument("-ores", "-out_residue", dest="out_residue", default="ASN",
+    name2name.add_argument("-ores", "-out_residue", dest="out_residue",
                            help="the name of the output residue")
+    name2name.add_argument("-ff", "-forcefield", dest="ff", nargs="*", default=["Xponge.forcefield.amber.gaff"],
+                           help="the forcefield for atom types in gaff_mol2")
+    name2name.add_argument("-cpcrd", "-copy_coordinate", dest="cpcrd", action="store_true",
+                           help="use the coordinates of tfile")
     name2name.add_argument("-tmcs", type=int, default=10, help="the time to find max common structure")
     name2name.set_defaults(func=tools.name2name)
 

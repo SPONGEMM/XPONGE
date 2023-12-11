@@ -119,7 +119,8 @@ def _find_the_force(frc, frc_all_final, cls):
         if not finded:
             leastfinded_x = 999
             for frc_one in frc_ones:
-                tofind = [[atom.type.name, "X"] for atom in frc_one]
+                tofind = frc.Get_Type_Name(frc_one).split("-")
+                tofind = [[atom, "X"] for atom in tofind]
                 for p in product(*tofind):
                     pcountx = p.count("X")
                     if pcountx > leastfinded_x:
@@ -129,6 +130,7 @@ def _find_the_force(frc, frc_all_final, cls):
                         finded = {tofindname: [frc.get_type(tofindname), frc_one]}
                         leastfinded_x = pcountx
                         break
+
         assert (not frc.compulsory or len(finded) == 1), "None of %s type found for %s" % (
             frc.get_class_name(), "-".join([atom.type.name for atom in frc_one]))
 

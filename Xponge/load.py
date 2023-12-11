@@ -832,7 +832,7 @@ class GromacsTopologyIterator():
     def __init__(self, filename=None, macros=None):
         self.files = []
         self.filenames = []
-
+        self.stack = []
         self.flag = ""
         self.macro_define_stat = []
 
@@ -846,6 +846,7 @@ class GromacsTopologyIterator():
     def __iter__(self):
         self.flag = ""
         self.macro_define_stat = []
+        self.stack = []
         return self
 
     def __next__(self):
@@ -857,10 +858,14 @@ class GromacsTopologyIterator():
                 if line[0] == "#":
                     line = self._line_define(line)
                 elif self.macro_define_stat and not self.macro_define_stat[-1]:
+                    self.stack.append("false line")
                     line = next(self)
+                    self.stack.pop()
                 elif "[" in line and "]" in line:
                     self.flag = line[1:-1].strip()
+                    self.stack.append(f"flag line: {self.flag}")
                     line = next(self)
+                    self.stack.pop()
                 for macro, tobecome in self.defined_macros.items():
                     line = line.replace(macro, tobecome)
                 return line
@@ -897,9 +902,13 @@ class GromacsTopologyIterator():
         if comment >= 0:
             line = line[:comment]
         while line and line[-1] == "\\":
+            self.stack.append("extra line")
             line = line[:-1] + " " + next(self).strip()
+            self.stack.pop()
         if not line:
+            self.stack.append("blank line")
             line = next(self)
+            self.stack.pop()
         return line
 
     def _line_define(self, line):
@@ -909,6 +918,7 @@ class GromacsTopologyIterator():
         :return:
         """
         words = line.split()
+        need_new_line = True
         if words[0] == "#ifdef":
             macro = words[1]
             if self.macro_define_stat and not self.macro_define_stat[-1]:
@@ -923,11 +933,14 @@ class GromacsTopologyIterator():
         elif words[0] == "#endif":
             self.macro_define_stat.pop()
         elif self.macro_define_stat and not self.macro_define_stat[-1]:
-            next(self)
+            self.stack.append(f"false define: {len(self.macro_define_stat)}")
+            line = next(self)
+            self.stack.pop()
+            need_new_line = False
         elif words[0] == "#define":
             if len(words) > 2:
                 self.defined_macros[words[1]] = line[line.find(words[1]) + len(words[1]):].strip()
-            else:
+            else:#elif len(words) > 1:
                 self.defined_macros[words[1]] = ""
         elif words[0] == "#include":
             self._add_iterator_file(words[1])
@@ -935,7 +948,10 @@ class GromacsTopologyIterator():
             self.defined_macros.pop(words[1])
         elif words[0] == "#error":
             raise AssertionError(line)
-        line = next(self)
+        if need_new_line:
+            self.stack.append(f"process define: {line}")
+            line = next(self)
+            self.stack.pop()
         return line
 
 
@@ -957,12 +973,18 @@ def _ffitp_dihedrals(line, output):
             temp = temp2
         elif words[3] == "C":
             temp = temp2
+        elif words[3] == "CN3T":
+            temp = temp2
         output["impropers"] += "-".join(temp) + " {b} {k}".format(b=float(words[5]), k=float(words[6]) / 2) + "\n"
+    elif func == "3":
+        output["RB_dihedrals"] += "-".join(words[:4]) + " " + " ".join(words[5:]) + "\n"
+    elif func == "4":
+        output["periodic_impropers"] += "-".join(words[:4]) + " " + " ".join(words[5:]) + "\n"
     elif func == "9":
         for i in range(5, len(words), 20):
             output["dihedrals"] += "-".join(words[:4]) + " " + " ".join(words[i:i + 3]) + " 0\n"
     else:
-        raise NotImplementedError
+        raise NotImplementedError(f"Unsupported dihedral function type {func} for line:\n{line}")
 
 
 def load_ffitp(filename, macros=None):
@@ -985,8 +1007,11 @@ def load_ffitp(filename, macros=None):
     output["angles"] = "name b[degree] k[kJ/mol·rad^-2]\n"
     output["Urey-Bradley"] = "name b[degree] k[kJ/mol·rad^-2] r13[nm] kUB[kJ/mol·nm^-2]\n"
     output["dihedrals"] = "name phi0[degree] k[kJ/mol] periodicity  reset\n"
+    output["periodic_impropers"] = "name phi0[degree] k[kJ/mol] periodicity\n"
     output["impropers"] = "name phi0[degree] k[kJ/mol·rad^-2]\n"
+    output["RB_dihedrals"] = "name c0[kJ/mol] c1[kJ/mol] c2[kJ/mol] c3[kJ/mol] c4[kJ/mol] c5[kJ/mol]\n"
     output["cmaps"] = Xdict()
+    output["bond_type_names"] = Xdict(not_found_message="The bond type of {} can not be found")
     for line in iterator:
         if iterator.flag == "":
             continue
@@ -1006,6 +1031,8 @@ def load_ffitp(filename, macros=None):
 
         elif iterator.flag == "atomtypes":
             words = line.split()
+            if len(words) == 8:
+                output["bond_type_names"][words[0]] = words.pop(1)
             output["atomtypes"] += "{type} {mass} {charge} {type}\n".format(type=words[0], mass=float(words[2]),
                                                                             charge=float(words[3]))
             output["LJ"] += "{type}-{type} {V} {W}\n".format(type=words[0], V=float(words[5]), W=float(words[6]))

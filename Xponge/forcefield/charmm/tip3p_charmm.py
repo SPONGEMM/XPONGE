@@ -1,5 +1,5 @@
 """
-This **package** sets the tips3p configuration of charmm force field
+This **package** sets the tips3p configuration of CHARMM force field
 """
 from ...helper import source, Xprint, set_real_global_variable
 
@@ -42,6 +42,8 @@ set_real_global_variable("HOH", ResidueType.get_type("WAT"))
 load_mol2(os.path.join(os.path.dirname(__file__), "atomic_ions.mol2"), as_template=True)
 
 Xprint("""Reference for CHARMM modified tip3p:
-  to do
+      MacKerell, Jr., A. D.,  et al. All-atom
+    empirical potential for molecular modeling and dynamics Studies of
+    proteins.  Journal of Physical Chemistry B, 1998, 102, 3586-3616.
 """)
 # pylint:disable=undefined-variable

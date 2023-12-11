@@ -177,23 +177,23 @@ def name2name(args):
     from rdkit.Chem import rdFMCS
     source("..")
     rdktool = source("..helper.rdkit")
-
+    for ff in args.ff:
+        source(ff)
+    ResidueType.clear_type()
     if args.to_format == "mol2":
         to_ = assign.Get_Assignment_From_Mol2(args.to_file, total_charge="sum")
     elif args.to_format == "gaff_mol2":
-        source("..forcefield.amber.gaff")
         to_ = load_mol2(args.to_file).residues[0]
         to_ = assign.Get_Assignment_From_ResidueType(to_)
     elif args.to_format == "pdb":
         to_ = assign.Get_Assignment_From_PDB(args.to_file,
                                              only_residue=args.to_residue)
-
+    ResidueType.clear_type()
     if args.from_format == "mol2":
         from_ = assign.Get_Assignment_From_Mol2(args.from_file, total_charge="sum")
     elif args.from_format == "gaff_mol2":
-        source("..forcefield.amber.gaff")
-        from_ = load_mol2(args.from_file).residues[0]
-        from_ = assign.Get_Assignment_From_ResidueType(from_)
+        from_0 = load_mol2(args.from_file).residues[0]
+        from_ = assign.Get_Assignment_From_ResidueType(from_0)
     elif args.from_format == "pdb":
         from_ = assign.Get_Assignment_From_PDB(args.from_file,
                                                only_residue=args.from_residue)
@@ -208,9 +208,23 @@ def name2name(args):
     match_b = rdmol_b.GetSubstructMatch(result.queryMol)
     matchmap = {from_.names[match_b[j]]: to_.names[match_a[j]] for j in range(len(match_a))}
 
+    if args.out_residue is None:
+        args.out_residue = from_.name
+
     from_.names = [matchmap.get(name, name) for name in from_.names]
     from_.name = args.out_residue
+    if args.cpcrd:
+        for j, aj in enumerate(match_a):
+            from_.coordinate[match_b[j]] = to_.coordinate[aj]
+            if args.from_format == "gaff_mol2":
+                from_0.atoms[match_b[j]].x = to_.coordinate[aj][0]
+                from_0.atoms[match_b[j]].y = to_.coordinate[aj][1]
+                from_0.atoms[match_b[j]].z = to_.coordinate[aj][2]
 
+    if args.from_format == "gaff_mol2":
+        from_0.name = args.out_residue
+        for atom in from_0.atoms:
+            atom.name = matchmap.get(atom.name, atom.name)
     if args.out_format == "mol2":
         from_.Save_As_Mol2(args.out_file)
     elif args.out_format == "pdb":
@@ -227,7 +241,10 @@ def name2name(args):
         f = Xopen(args.out_file, "w")
         f.write(towrite)
         f.close()
-
+    elif args.out_format == "gaff_mol2":
+        if args.from_format != "gaff_mol2":
+            raise TypeError("The output format 'gaff_mol2' can only be used when fformat == 'gaff_mol2'")
+        save_mol2(from_0, args.out_file)
 
 def mol2rfe(args):
     """

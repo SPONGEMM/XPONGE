@@ -1,5 +1,5 @@
 """
-This **module** is the basic setting for the force field property of charge
+This **module** is the basic setting for the force field property of Lennard-Jones
 """
 import numpy as np
 from ... import Generate_New_Pairwise_Force_Type
@@ -64,6 +64,35 @@ def lorentz_berthelot_for_b(epsilon1, rmin1, epsilon2, rmin2):
     :return: the B coefficient for the atom pair
     """
     return np.sqrt(epsilon1 * epsilon2) * 2 * ((rmin1 + rmin2) ** 6)
+
+
+def good_hope_for_a(epsilon1, rmin1, epsilon2, rmin2):
+    """
+    This **function** is used to calculate the A coefficient for Good-Hope mix rule
+
+    :param epsilon1: the epsilon parameter of the first atom
+    :param rmin1: the rmin parameter of the first atom
+    :param epsilon2: the epsilon parameter of the second atom
+    :param rmin2: the rmin parameter of the second atom
+    :return: the A coefficient for the atom pair
+    """
+    return np.sqrt(epsilon1 * epsilon2) * ((4 * rmin1 * rmin2) ** 6)
+
+
+def good_hope_for_b(epsilon1, rmin1, epsilon2, rmin2):
+    """
+    This **function** is used to calculate the B coefficient for Good-Hope mix rule
+
+    :param epsilon1: the epsilon parameter of the first atom
+    :param rmin1: the rmin parameter of the first atom
+    :param epsilon2: the epsilon parameter of the second atom
+    :param rmin2: the rmin parameter of the second atom
+    :return: the B coefficient for the atom pair
+    """
+    return np.sqrt(epsilon1 * epsilon2) * 2 * ((4 * rmin1 * rmin2) ** 3)
+
+
+
 
 
 def _find_ab_lj(ljtypes, stat=True):

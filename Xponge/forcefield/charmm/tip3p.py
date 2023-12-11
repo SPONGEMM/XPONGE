@@ -1,5 +1,5 @@
 """
-This **package** sets the tip3p configuration of charmm force field
+This **package** sets the tip3p configuration of CHARMM force field
 """
 from ...helper import source, Xprint, set_real_global_variable
 

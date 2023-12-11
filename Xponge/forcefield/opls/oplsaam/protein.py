@@ -1,20 +1,12 @@
 """
-This **package** sets the protein configuration of charmm27 force field
+This **package** sets the protein configuration of OPLS-AA/M force field
 """
-from ....helper import remove_real_global_variable, source, set_real_global_variable
-from . import CHARMM27_DATA_DIR
+from ....helper import source, set_real_global_variable
+from . import OPLSAAM_DATA_DIR
 
 source(".....")
 
-load_mol2(os.path.join(CHARMM27_DATA_DIR, "protein.mol2"), as_template=True)
-
-ResidueType.clear_type("HYP")
-ResidueType.clear_type("CHYP")
-ResidueType.clear_type("NHE")
-
-remove_real_global_variable("HYP")
-remove_real_global_variable("CHYP")
-remove_real_global_variable("NHE")
+load_mol2(os.path.join(OPLSAAM_DATA_DIR, "protein.mol2"), as_template=True)
 
 ResidueType.set_type("HIS", ResidueType.get_type("HIE"))
 ResidueType.set_type("NHIS", ResidueType.get_type("NHIE"))

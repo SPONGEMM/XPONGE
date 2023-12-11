@@ -14,4 +14,6 @@
 
 #include "ffnonbonded.itp"
 #include "ffbonded.itp"
+#include "ffnabonded.itp"
+#include "ffnanonbonded.itp"
 #include "cmap.itp"
