@@ -862,7 +862,7 @@ class GromacsTopologyIterator():
                     line = next(self)
                     self.stack.pop()
                 elif "[" in line and "]" in line:
-                    self.flag = line[1:-1].strip()
+                    self.flag = line.strip()[1:-1].strip()
                     self.stack.append(f"flag line: {self.flag}")
                     line = next(self)
                     self.stack.pop()
@@ -1081,5 +1081,106 @@ def load_ffitp(filename, macros=None):
             output["LJ"] += "{type1}-{type2} {V} {W}\n".format(type1=words[0], type2=words[1], V=float(words[3]),
                                                                W=float(words[4]))
     return output
+
+def _molitp_find_tail_residue(filename, macros):
+    """ find the index of the tail residue for every molecule """
+    tails = {}
+    system_molecules = set()
+    current = None
+    iterator = GromacsTopologyIterator(filename, macros)
+    for line in iterator:
+        if iterator.flag == "moleculetype":
+            current = line.split()[0]
+            tails[current] = 1
+        elif iterator.flag == "atoms":
+            resnr = int(line.split()[2])
+            if resnr > tails[current]:
+                tails[current] = resnr
+        elif iterator.flag == "molecules":
+            system_molecules.add(line.split()[0])
+    return tails, system_molecules
+
+def _molitp_parse_atoms(line, current_mol, current_stat, tails, head_prefix, tail_prefix):
+    """ parse one line for atoms of a molitp file """
+    words = line.split()
+    nr = int(words[0])
+    resnr = int(words[2])
+    resname = words[3]
+    if tails[current_mol.name] != 1 and resnr == 1:
+        resname = head_prefix + resname
+    if tails[current_mol.name] != 1 and resnr == tails[current_mol.name]:
+        resname = tail_prefix + resname
+    atom_type = words[1]
+    atom_name = words[4]
+    if resnr != current_stat["resnr"]:
+        current_stat["resnr"] = resnr
+        if resname not in ResidueType.get_all_types():
+            set_real_global_variable(resname, ResidueType(name=resname))
+            current_stat[ResidueType.get_type(resname)] = True
+        current_mol.add_residue(ResidueType.get_type(resname))
+    current_residue = current_mol.residues[-1]
+    if current_stat[ResidueType.get_type(resname)]:
+        current_residue.type.Add_Atom(atom_name, atom_type, 0, 0, 0)
+        current_residue.type.atoms[-1].Update(**{"charge[e]": float(words[6])})
+    current_residue.Add_Atom(atom_name, atom_type, 0, 0, 0)
+    current_residue.atoms[-1].Update(**{"charge[e]": float(words[6])})
+    current_stat[nr] = current_residue.atoms[-1]
+
+def _molitp_parse_bonds(line, current_mol, current_stat):
+    """ parse one line for bonds of a molitp file """
+    words = line.split()
+    atom1 = current_stat[int(words[0])]
+    atom2 = current_stat[int(words[1])]
+    if atom1.residue == atom2.residue:
+        if current_stat[atom1.residue.type]:
+            atom1.residue.type.add_connectivity(atom1.name, atom2.name)
+        atom1.residue.add_connectivity(atom1.name, atom2.name)
+    else:
+        current_mol.add_residue_link(atom1, atom2)
+
+
+def load_molitp(filename, head_prefix="N", tail_prefix="C", macros=None):
+    """
+    This **function** is used to load a molitp file
+
+    .. ATTENTION::
+
+        This is used to read a itp file for molecules (molitp or top) file instead of a force field file.
+
+    :param filename: the name of the file to load
+    :param head_prefix: a string, the prefix will be added to the name of the first residue of each molecule
+    :param tail_prefix: a string, the prefix will be added to the name of the last residue of each molecule
+    :param macros: the macros used to read the Gromacs topology file
+    :return: 1. an Xponge.Molecule representing the systema. None if not define
+             2. an Xponge.Xdict, which maps the names of the molecules to Xponge.Molecule
+    """
+    sys = None
+    mols = Xdict(not_found_message="{} is not a defined molecule in the system")
+    current_mol = None
+    current_stat = Xdict(not_found_method=lambda key: None)
+    tails, system_molecules = _molitp_find_tail_residue(filename, macros)
+    iterator = GromacsTopologyIterator(filename, macros)
+    for line in iterator:
+        Xprint(f"file={iterator.filenames[-1]}", "DEBUG")
+        Xprint(f"flag={iterator.flag}", "DEBUG")
+        Xprint(f"line={line}", "DEBUG")
+        if iterator.flag == "moleculetype":
+            name = line.split()[0]
+            current_stat.clear()
+            if name in system_molecules:
+                current_mol = Molecule(name=name)
+                mols[name] = current_mol
+            else:
+                current_stat["skip"] = True
+        elif iterator.flag == "atoms" and not current_stat["skip"]:
+            _molitp_parse_atoms(line, current_mol, current_stat, tails, head_prefix, tail_prefix)
+        elif iterator.flag == "bonds" and not current_stat["skip"]:
+            _molitp_parse_bonds(line, current_mol, current_stat)
+        elif iterator.flag == "system":
+            sys = Molecule(name=line.strip())
+        elif iterator.flag == "molecules":
+            words = line.split()
+            sys += mols[words[0]] * int(words[1])
+    return sys, mols
 
 set_global_alternative_names()
