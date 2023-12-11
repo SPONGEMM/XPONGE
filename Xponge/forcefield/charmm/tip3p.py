@@ -40,9 +40,6 @@ ResidueType.set_type("HOH", ResidueType.get_type("WAT"))
 set_real_global_variable("H2O", ResidueType.get_type("WAT"))
 set_real_global_variable("HOH", ResidueType.get_type("WAT"))
 
-load_mol2(os.path.join(os.path.dirname(__file__), "atomic_ions.mol2"), as_template=True)
-
-
 Xprint("""Reference for tip3p:
   William L. Jorgensen, Jayaraman Chandrasekhar, and Jeffry D. Madura
     Comparison of simple potential functions for simulating liquid water

@@ -39,8 +39,6 @@ ResidueType.set_type("HOH", ResidueType.get_type("WAT"))
 set_real_global_variable("H2O", ResidueType.get_type("WAT"))
 set_real_global_variable("HOH", ResidueType.get_type("WAT"))
 
-load_mol2(os.path.join(os.path.dirname(__file__), "atomic_ions.mol2"), as_template=True)
-
 Xprint("""Reference for CHARMM modified tip3p:
       MacKerell, Jr., A. D.,  et al. All-atom
     empirical potential for molecular modeling and dynamics Studies of

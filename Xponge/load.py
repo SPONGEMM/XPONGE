@@ -537,12 +537,12 @@ def load_coordinate(filename, mol=None):
             crd[i][:] = np.array([float(x) for x in f.readline().split()])
         box = np.array(f.readline().split(), dtype=np.float32)
     if mol:
-        for i, atom in enumerate(mol.atoms):
+        for i, atom in enumerate(mol.get_atoms()):
             atom.x = crd[i][0]
             atom.y = crd[i][1]
             atom.z = crd[i][2]
         if isinstance(mol, Molecule):
-            mol.box_length = box
+            mol.box_length = box[:3]
     return crd, box
 
 
@@ -1082,7 +1082,7 @@ def load_ffitp(filename, macros=None):
                                                                W=float(words[4]))
     return output
 
-def _molitp_find_tail_residue(filename, macros):
+def _molitp_find_tail_residue(filename, macros, water_replace):
     """ find the index of the tail residue for every molecule """
     tails = {}
     system_molecules = set()
@@ -1097,7 +1097,9 @@ def _molitp_find_tail_residue(filename, macros):
             if resnr > tails[current]:
                 tails[current] = resnr
         elif iterator.flag == "molecules":
-            system_molecules.add(line.split()[0])
+            molname = line.split()[0]
+            if not (molname == "SOL" and water_replace):
+                system_molecules.add(molname)
     return tails, system_molecules
 
 def _molitp_parse_atoms(line, current_mol, current_stat, tails, head_prefix, tail_prefix):
@@ -1114,12 +1116,15 @@ def _molitp_parse_atoms(line, current_mol, current_stat, tails, head_prefix, tai
     atom_name = words[4]
     if resnr != current_stat["resnr"]:
         current_stat["resnr"] = resnr
+        current_stat["new_res_type"] = False
         if resname not in ResidueType.get_all_types():
             set_real_global_variable(resname, ResidueType(name=resname))
-            current_stat[ResidueType.get_type(resname)] = True
-        current_mol.add_residue(ResidueType.get_type(resname))
+            current_stat["new_res_type"] = True
+        current_mol.add_residue(Residue(ResidueType.get_type(resname)))
+        if current_stat["new_res_type"]:
+            current_stat[current_mol.residues[-1]] = True
     current_residue = current_mol.residues[-1]
-    if current_stat[ResidueType.get_type(resname)]:
+    if current_stat["new_res_type"]:
         current_residue.type.Add_Atom(atom_name, atom_type, 0, 0, 0)
         current_residue.type.atoms[-1].Update(**{"charge[e]": float(words[6])})
     current_residue.Add_Atom(atom_name, atom_type, 0, 0, 0)
@@ -1132,14 +1137,14 @@ def _molitp_parse_bonds(line, current_mol, current_stat):
     atom1 = current_stat[int(words[0])]
     atom2 = current_stat[int(words[1])]
     if atom1.residue == atom2.residue:
-        if current_stat[atom1.residue.type]:
+        if current_stat[atom1.residue]:
             atom1.residue.type.add_connectivity(atom1.name, atom2.name)
         atom1.residue.add_connectivity(atom1.name, atom2.name)
     else:
         current_mol.add_residue_link(atom1, atom2)
 
 
-def load_molitp(filename, head_prefix="N", tail_prefix="C", macros=None):
+def load_molitp(filename, water_replace=True, head_prefix="N", tail_prefix="C", macros=None):
     """
     This **function** is used to load a molitp file
 
@@ -1148,6 +1153,7 @@ def load_molitp(filename, head_prefix="N", tail_prefix="C", macros=None):
         This is used to read a itp file for molecules (molitp or top) file instead of a force field file.
 
     :param filename: the name of the file to load
+    :param water_replace: whether to change water to SPONGE. True as default.
     :param head_prefix: a string, the prefix will be added to the name of the first residue of each molecule
     :param tail_prefix: a string, the prefix will be added to the name of the last residue of each molecule
     :param macros: the macros used to read the Gromacs topology file
@@ -1158,7 +1164,7 @@ def load_molitp(filename, head_prefix="N", tail_prefix="C", macros=None):
     mols = Xdict(not_found_message="{} is not a defined molecule in the system")
     current_mol = None
     current_stat = Xdict(not_found_method=lambda key: None)
-    tails, system_molecules = _molitp_find_tail_residue(filename, macros)
+    tails, system_molecules = _molitp_find_tail_residue(filename, macros, water_replace)
     iterator = GromacsTopologyIterator(filename, macros)
     for line in iterator:
         Xprint(f"file={iterator.filenames[-1]}", "DEBUG")
@@ -1167,7 +1173,10 @@ def load_molitp(filename, head_prefix="N", tail_prefix="C", macros=None):
         if iterator.flag == "moleculetype":
             name = line.split()[0]
             current_stat.clear()
-            if name in system_molecules:
+            if water_replace and name == "SOL":
+                mols[name] = ResidueType.get_type("WAT")
+                current_stat["skip"] = True
+            elif name in system_molecules:
                 current_mol = Molecule(name=name)
                 mols[name] = current_mol
             else:
@@ -1180,7 +1189,39 @@ def load_molitp(filename, head_prefix="N", tail_prefix="C", macros=None):
             sys = Molecule(name=line.strip())
         elif iterator.flag == "molecules":
             words = line.split()
-            sys += mols[words[0]] * int(words[1])
+            mol = mols[words[0]]
+            sys += mol * int(words[1])
     return sys, mols
+
+
+def load_gro(filename, mol=None):
+    """
+    This **function** is used to read the GROMACS coordinate file
+
+    :param filename: the coordinate file to load
+    :param mol: the molecule or residue to load the coordinate into
+    :return: two numpy arrays, representing the coordinates and the box information respectively
+    """
+    with Xopen(filename, "r") as f:
+        f.readline()
+        atom_numbers = int(f.readline().split()[0])
+        crd = np.zeros((atom_numbers, 3), dtype=np.float32)
+        for i in range(atom_numbers):
+            line = f.readline()
+            crd[i][0] = float(line[20:28]) * 10
+            crd[i][1] = float(line[28:36]) * 10
+            crd[i][2] = float(line[36:44]) * 10
+        line = f.readline().split()
+        if len(line) != 3:
+            raise NotImplementedError("SPONGE now can only perform simulations in an orthongonal box")
+        box = np.array([float(line[0]), float(line[1]), float(line[2]), 9, 9, 9]) * 10
+    if mol:
+        for i, atom in enumerate(mol.get_atoms()):
+            atom.x = crd[i][0]
+            atom.y = crd[i][1]
+            atom.z = crd[i][2]
+        if isinstance(mol, Molecule):
+            mol.box_length = box[:3]
+    return crd, box
 
 set_global_alternative_names()
