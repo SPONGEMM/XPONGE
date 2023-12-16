@@ -1277,8 +1277,7 @@ class ResidueLink:
         """indicates the instance built or not"""
         self.bonded_forces = {frc.get_class_name(): [] for frc in GlobalSetting.BondedForces}
         """the bonded forces after building"""
-        self.tohash = ResidueLink.get_hash(atom1, atom2, "atom")
-        self.residue_tohash = ResidueLink.get_hash(atom1.residue, atom2.residue, "residue")
+        self.tohash = ResidueLink.get_hash(atom1, atom2)
 
     def __repr__(self):
         return "Entity of ResidueLink: " + repr(self.atom1) + "-" + repr(self.atom2)
@@ -1290,17 +1289,14 @@ class ResidueLink:
         return isinstance(other, ResidueLink) and self.tohash == other.tohash
 
     @staticmethod
-    def get_hash(one, other, key="atom"):
+    def get_hash(one, other):
         """
         This **function** is used to get the hash value of the ResidueLink
 
         :param one: one Atom or Residue of the link
         :param other: the other Atom or Residue of the link
-        :param key: "atom" or "residue", to specify the key
         :return: the hash value
         """
-        if key not in ("atom", "residue"):
-            raise ValueError(f'key should be "atom" or "residue", but got {key}')
         tohash = [f"{one}-{other}", f"{other}-{one}"]
         tohash.sort()
         return hash(tohash[0])
@@ -1360,9 +1356,7 @@ class Molecule():
         """the atom index"""
         self.residue_links = set()
         """the residue links in the molecule"""
-        self._residue_links_map = Xdict(atom=Xdict(), residue=Xdict(),
-                                        satom=Xdict(), not_found_message='key should be "atom", "satom", \
-"residue "or "sresidue", but got {}')
+        self._residue_links_map = Xdict()
 
         self.bonded_forces = Xdict()
         """the bonded forces after building"""
@@ -1571,30 +1565,20 @@ in this Molecule
         self.built = False
         reslink = ResidueLink(atom1, atom2)
         self.residue_links.add(reslink)
-        self._residue_links_map["atom"][reslink.tohash] = reslink
-        if reslink.residue_tohash in self._residue_links_map["residue"]:
-            raise ValueError("There can only be at most one residue link between two residues")
-        self._residue_links_map["residue"][reslink.residue_tohash] = reslink
-        if atom1 in self._residue_links_map["satom"]:
-            raise ValueError(f"There can only be at most one residue link for one atom {atom1}")
-        self._residue_links_map["satom"][atom1] = reslink
-        if atom2 in self._residue_links_map["satom"]:
-            raise ValueError(f"There can only be at most one residue link for one atom {atom2}")
-        self._residue_links_map["satom"][atom2] = reslink
+        self._residue_links_map[reslink.tohash] = reslink
 
-    def get_residue_link(self, one, other, key="atom"):
+    def get_residue_link(self, one, other):
         """
         This **function** is used to get the ResidueLink between two residues
 
         :param one: one Atom or Residue of the ResidueLink
         :param other: the other Atom or Residue of the ResidueLink
-        :param key: "atom" or "residue", to specify the key
         :return: the ResidueLink or None if not found
         """
-        tohash = ResidueLink.get_hash(one, other, key)
-        return self._residue_links_map[key].get(tohash, None)
+        tohash = ResidueLink.get_hash(one, other)
+        return self._residue_links_map.get(tohash, None)
 
-    def del_residue_link(self, one, other, key="atom"):
+    def del_residue_link(self, one, other):
         """
         This **function** is used to delete the ResidueLink between two residues
 
@@ -1603,13 +1587,10 @@ in this Molecule
         :param key: "atom" or "residue", to specify the key
         :return: None
         """
-        tohash = ResidueLink.get_hash(one, other, key)
-        reslink = self._residue_links_map[key][tohash]
+        tohash = ResidueLink.get_hash(one, other)
+        reslink = self._residue_links_map[tohash]
         self.residue_links.remove(reslink)
-        self._residue_links_map["atom"].pop(reslink.tohash)
-        self._residue_links_map["residue"].pop(reslink.residue_tohash)
-        self._residue_links_map["satom"].pop(reslink.atom1)
-        self._residue_links_map["satom"].pop(reslink.atom2)
+        self._residue_links_map.pop(reslink.tohash)
 
     def add_missing_atoms(self):
         """
@@ -2048,8 +2029,7 @@ def _add(self, other, deepcopy, link):
         new_molecule.residues += other_molecule.residues
         new_molecule.residue_links |= other_molecule.residue_links
         #pylint: disable=protected-access
-        new_molecule._residue_links_map["atom"].update(other_molecule._residue_links_map["atom"])
-        new_molecule._residue_links_map["residue"].update(other_molecule._residue_links_map["residue"])
+        new_molecule._residue_links_map.update(other_molecule._residue_links_map)
         if link and res_a and res_a.type.tail and res_b.type.head:
             atom1 = res_a.name2atom(res_a.type.tail)
             atom2 = res_b.name2atom(res_b.type.head)

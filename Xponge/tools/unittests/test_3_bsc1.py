@@ -62,11 +62,11 @@ quit""")
   ntpr = 1
 /
 """)
-    assert os.system("tleap > tleap.out 2> tleap.out") == 0
+    assert os.system("tleap > tleap.out 2>&1") == 0
     assert run("SPONGE -mode minimization -amber_parm7 t.parm7 -amber_rst7 t.rst7 -rst min.rst7 \
 -step_limit 2000 -minimization_dt_factor 5e-3 > min.out") == 0
-    assert os.system("pmemd.cuda -i mdin -p t.parm7 -c min.rst7 -x amber.nc -O > pmemd.out 2> pmemd.out") == 0
-    assert os.system("Xponge converter -p t.parm7 -c amber.nc -o amber.dat -of sponge_traj") == 0
+    assert os.system("pmemd.cuda -i mdin -p t.parm7 -c min.rst7 -x amber.nc -O > pmemd.out 2>&1") == 0
+    assert os.system("Xponge converter -p t.parm7 -c amber.nc -o amber.dat -of sponge_traj > convertion.out") == 0
 
     with open("t.parm7") as f:
         n_solvent = f.read().count("WAT ")

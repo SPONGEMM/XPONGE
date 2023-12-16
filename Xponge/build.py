@@ -423,13 +423,11 @@ def _pdb_chain(cls: Molecule):
         new_chain = False
         if pre_res.type.tail is None or res.type.head is None:
             new_chain = True
-        else:
-            link_atoms = {pre_res.type.tail, res.type.head}
         if not new_chain:
-            reslink = cls.get_residue_link(pre_res, res, "residue")
+            tail = pre_res.name2atom(pre_res.type.tail)
+            head = res.name2atom(res.type.head)
+            reslink = cls.get_residue_link(tail, head)
             if reslink is None:
-                new_chain = True
-            elif {reslink.atom1.name, reslink.atom2.name} != link_atoms:
                 new_chain = True
         if new_chain:
             length = i - start

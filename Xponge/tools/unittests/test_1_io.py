@@ -889,12 +889,9 @@ CONECT  805  798
 """)
     p = Xponge.load_pdb(s, ignore_conect=False)
     assert len(p.residue_links) == 3
-    l1 = p.get_residue_link(p.residues[0], p.residues[1], "residue")
-    assert {l1.atom1, l1.atom2} == {p.residues[0].SG, p.residues[1].SG}
-    l2 = p.get_residue_link(p.residues[2], p.residues[3], "residue")
-    assert {l2.atom1, l2.atom2} == {p.residues[2].C, p.residues[3].N}
-    l3 = p.get_residue_link(p.residues[1], p.residues[2], "residue")
-    assert {l3.atom1, l3.atom2} == {p.residues[1].C, p.residues[2].N}
+    assert p.get_residue_link(p.residues[0].SG, p.residues[1].SG) is not None
+    assert p.get_residue_link(p.residues[2].C, p.residues[3].N) is not None
+    assert p.get_residue_link(p.residues[1].C, p.residues[2].N) is not None
     Xponge.save_pdb(p, "test.pdb")
 
 def test_mol2_general():
