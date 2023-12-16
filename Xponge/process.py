@@ -482,22 +482,27 @@ class Region(ABC):
     This **abstract class** is used to define a region
     **New From 1.2.6.4**
     """
-    def __init__(self):
-        self.side = "in"
+    def __init__(self, side="in", boundary=False):
         self._side = True
+        self.side = side
+        self.boundary = boundary
 
     @abstractmethod
     def __contains__(self, item):
         pass
 
-    def set_side(self, side):
+    @property
+    def side(self):
+        return "in" if self._side else "out"
+
+    @side.setter
+    def side(self, side):
         """
         This **function** is used to set the side of the region"
 
         :param side: either "in" or "out"
         :return: None
         """
-        self.side = side
         if side == "in":
             self._side = True
         elif side == "out":
@@ -556,20 +561,24 @@ class BlockRegion(Region):
     :param y_high: the highest y coordinate of the block region
     :param z_high: the highest z coordinate of the block region
     :param side: either "in" or "out"
+    :param boundary: whether the boudary is seen as in the region
     """
-    def __init__(self, x_low, y_low, z_low, x_high, y_high, z_high, side="in"):
+    def __init__(self, x_low, y_low, z_low, x_high, y_high, z_high, side="in", boundary=False):
         self.x_low = x_low
         self.y_low = y_low
         self.z_low = z_low
         self.x_high = x_high
         self.y_high = y_high
         self.z_high = z_high
-        super().__init__()
-        self.set_side(side)
+        super().__init__(side, boundary)
 
     def __contains__(self, item):
-        ans = self.x_low < item[0] < self.x_high and self.y_low < item[1] < self.y_high \
-              and self.z_low < item[2] < self.z_high
+        if self.boundary:
+            ans = self.x_low <= item[0] <= self.x_high and self.y_low <= item[1] <= self.y_high \
+                  and self.z_low <= item[2] <= self.z_high
+        else:
+            ans = self.x_low < item[0] < self.x_high and self.y_low < item[1] < self.y_high \
+                  and self.z_low < item[2] < self.z_high
         return ans if self._side else not ans
 
 
@@ -583,18 +592,21 @@ class SphereRegion(Region):
     :param z: the z coordinate of the sphere origin
     :param r: the radius of the sphere
     :param side: either "in" or "out"
+    :param boundary: whether the boudary is seen as in the region
     """
-    def __init__(self, x, y, z, r, side="in"):
+    def __init__(self, x, y, z, r, side="in", boundary=False):
         self.x = x
         self.y = y
         self.z = z
         self._r2 = r * r
-        super().__init__()
-        self.set_side(side)
+        super().__init__(side, boundary)
 
     def __contains__(self, item):
         ans = (item[0] - self.x) ** 2 + (item[1] - self.y) ** 2 + (item[2] - self.z) ** 2
-        ans = ans < self._r2
+        if boundary:
+            ans = ans <= self._r2
+        else:
+            ans = ans < self._r2
         return ans if self._side else not ans
 
 
@@ -612,8 +624,9 @@ class FrustumRegion(Region):
     :param z2: the z coordinate of the second circle origin
     :param r2: the radius of the second circle origin
     :param side: either "in" or "out"
+    :param boundary: whether the boudary is seen as in the region
     """
-    def __init__(self, x1, y1, z1, r1, x2, y2, z2, r2, side="in"):
+    def __init__(self, x1, y1, z1, r1, x2, y2, z2, r2, side="in", boundary=False):
         self.r1 = r1
         self.r2 = r2
         self.o1 = np.array([x1, y1, z1], dtype=np.float32)
@@ -622,8 +635,7 @@ class FrustumRegion(Region):
         self.length = np.linalg.norm(self.axis)
         self.axis /= self.length
         self.k = (r2 - r1) / self.length
-        super().__init__()
-        self.set_side(side)
+        super().__init__(side, boundary)
 
     def __contains__(self, item):
         crd = np.array(item) - self.o1
@@ -631,7 +643,10 @@ class FrustumRegion(Region):
         projection = np.dot(crd, self.axis)
         distance = length * length - projection * projection
         r = self.r1 + self.k * projection
-        ans = self.length > projection > 0 and distance < r * r
+        if boundary:
+            ans = self.length >= projection >= 0 and distance <= r * r
+        else:
+            ans = self.length > projection > 0 and distance < r * r
         return ans if self._side else not ans
 
 
@@ -653,8 +668,9 @@ class PrismRegion(Region):
     :param y3: the y coordinate of the third basis vector
     :param z3: the z coordinate of the third basis vector
     :param side: either "in" or "out"
+    :param boundary: whether the boudary is seen as in the region
     """
-    def __init__(self, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3, side="in"):
+    def __init__(self, x0, y0, z0, x1, y1, z1, x2, y2, z2, x3, y3, z3, side="in", boundary=False):
         self.l0 = np.array([x0, y0, z0], dtype=np.float32)
         self.l1 = np.array([x1, y1, z1], dtype=np.float32)
         self.l2 = np.array([x2, y2, z2], dtype=np.float32)
@@ -667,14 +683,16 @@ class PrismRegion(Region):
         self.n1 /= np.linalg.norm(self.n1)
         self.length = np.array([np.dot(self.l1, self.n1), np.dot(self.l2, self.n2), np.dot(self.l3, self.n3)])
         assert np.all(self.length > 0), "The basis vectors should mmet the right-handed axis system requirements"
-        super().__init__()
-        self.set_side(side)
+        super().__init__(side, boundary)
 
     def __contains__(self, item):
         crd = np.array(item) - self.l0
-        ans = 0 <= np.dot(crd, self.n1) < self.length[0] and 0 <= np.dot(crd, self.n2) < self.length[1] and \
-              0 <= np.dot(crd, self.n3) < self.length[2]
-
+        if boundary:
+            ans = 0 <= np.dot(crd, self.n1) <= self.length[0] and 0 <= np.dot(crd, self.n2) <= self.length[1] and \
+                  0 <= np.dot(crd, self.n3) <= self.length[2]
+        else:
+            ans = 0 < np.dot(crd, self.n1) < self.length[0] and 0 < np.dot(crd, self.n2) < self.length[1] and \
+                  0 < np.dot(crd, self.n3) < self.length[2]
         return ans if self._side else not ans
 
 
@@ -734,8 +752,7 @@ class Lattice:
             style_name = style.split(":")[1].strip()
             Lattice.styles[style_name] = self
 
-    @staticmethod
-    def _judge_region(x1, y1, z1, x2, y2, z2, region, mol, basis_mol, res_len):
+    def _judge_region(self, x1, y1, z1, x2, y2, z2, region, mol, basis_mol, res_len):
         """
             judge whether (x2, y2, z2) in the region. 
             If so, the basis mol will be added to mol, and coordinates will be modified
