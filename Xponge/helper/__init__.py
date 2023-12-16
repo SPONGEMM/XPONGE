@@ -607,6 +607,7 @@ class ResidueType(Type):
         self.connect_atoms = Xdict()
         """a dict mapping the atom to \
  another dict which mapping the connecting type to the name of the connected atom"""
+        self.checked_list = Xdict()
 
     def __getattribute__(self, attr):
         if attr not in ("_name2atom", "contents") and hasattr(self, "_name2atom") and attr in self._name2atom.keys():

@@ -73,6 +73,7 @@ def _get_frc_all(frc, cls):
             for atom1 in atom0.linked_atoms[d]:
                 _check_backup(backups, atom1, top_matrix, i, d)
         frc_all.extend(backups[len(top) - 1])
+    cls.checked_list[frc.get_class_name()] = [[atom.name for atom in pairs] for pairs in frc_all]
     return frc_all
 
 
@@ -154,7 +155,7 @@ def _build_residue_type(cls):
         _find_the_force(frc, frc_all_final, cls)
 
 
-def _build_residue(cls):
+def _build_residue(cls, checked):
     """
 
     :param cls:
@@ -183,6 +184,8 @@ def _build_residue(cls):
             frc_name = finded_type.get_class_name()
             cls.Add_Bonded_Force(finded_type.entity(finded_atoms, finded_type))
             cls.bonded_forces[frc_name][-1].contents = frc_entity.contents
+        for pair in cls.type.checked_list.get(key, []):
+            checked[key].add("-".join([repr(cls.name2atom(name)) for name in pair]))
 
 
 def _build_reslink_preprosess(atom1, atom2):
@@ -242,11 +245,10 @@ def _build_residue_link(cls, checked):
                 for atom1 in atom12_friends:
                     _check_backup(backups, atom1, top_matrix, i, d)
             for backup in backups[len(top) - 1]:
-                backupset = {atom.residue for atom in backup}
                 backuphash = "-".join([repr(atom) for atom in backup])
-                if len(backupset) > 1 and backuphash not in checked[frc]:
+                if backuphash not in checked[frc.get_class_name()]:
                     frc_all.append(backup)
-                    checked[frc].add(backuphash)
+                    checked[frc.get_class_name()].add(backuphash)
         frc_all_final = _get_frc_all_final(frc, frc_all)
         _find_the_force(frc, frc_all_final, cls)
 
@@ -257,12 +259,12 @@ def _build_molecule(cls):
     :param cls:
     :return:
     """
-    checked = {frc: set() for frc in GlobalSetting.BondedForces}
+    checked = {frc.get_class_name(): set() for frc in GlobalSetting.BondedForces}
     cls.get_atoms()
     for res in cls.residues:
         if not res.type.built:
             build_bonded_force(res.type)
-        _build_residue(res)
+        _build_residue(res, checked)
     for link in cls.residue_links:
         atom1, atom2 = link.atom1, link.atom2
         _build_reslink_preprosess(atom1, atom2)

@@ -888,6 +888,7 @@ CONECT  796  790
 CONECT  805  798
 """)
     p = Xponge.load_pdb(s, ignore_conect=False)
+    p.add_missing_atoms()
     assert len(p.residue_links) == 3
     assert p.get_residue_link(p.residues[0].SG, p.residues[1].SG) is not None
     assert p.get_residue_link(p.residues[2].C, p.residues[3].N) is not None
