@@ -135,11 +135,16 @@ def get_basis_vectors_from_length_and_angle(a, b, c, alpha, beta, gamma, angle_i
     if angle_in_degree:
         alpha, beta, gamma = np.radians(alpha), np.radians(beta), np.radians(gamma)
     basis = np.zeros((3, 3))
-    basis[0] = [a, 0, 0]
-    basis[1] = [b * np.cos(gamma), b * np.sin(gamma), 0]
-    basis[2, 0] = c * np.cos(beta)
-    basis[2, 1] = c * (np.cos(alpha) - np.cos(beta) * np.cos(gamma)) / np.sin(gamma)
-    basis[2, 2] = np.sqrt(c**2 - basis[2, 0]**2 - basis[2, 1]**2)
+    if abs(alpha - 1.5708) < 1e-4 and abs(beta - 1.5708) < 1e-4 and abs(gamma - 1.5708) < 1e-4:
+        basis[0][0] = a
+        basis[1][1] = b
+        basis[2][2] = c
+    else:
+        basis[0] = [a, 0, 0]
+        basis[1] = [b * np.cos(gamma), b * np.sin(gamma), 0]
+        basis[2, 0] = c * np.cos(beta)
+        basis[2, 1] = c * (np.cos(alpha) - np.cos(beta) * np.cos(gamma)) / np.sin(gamma)
+        basis[2, 2] = np.sqrt(c**2 - basis[2, 0]**2 - basis[2, 1]**2)
     return basis
 
 

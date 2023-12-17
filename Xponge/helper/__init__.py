@@ -807,6 +807,39 @@ None to use the charge sum of the unomitted atoms
         self.connectivity[atom0].add(atom1)
         self.connectivity[atom1].add(atom0)
 
+    def remove_connectivity(self, atom0, atom1):
+        """
+        This **function** is used to remove the connectivity between two atoms from the residue type.
+
+        :param atom0: the atom name or the Atom instance
+        :param atom1: the atom name or the Atom instance
+        :return: None
+        """
+        if isinstance(atom0, str):
+            atom0 = self.name2atom(atom0)
+        if isinstance(atom1, str):
+            atom1 = self.name2atom(atom1)
+        self.connectivity[atom0].remove(atom1)
+        self.connectivity[atom1].remove(atom0)
+
+    def remove_periodic_connectivity(self, cutoff=3):
+        """
+        This **function** is used to remove the connectivity between atoms larger than the given cutoff
+
+        :param cutoff: the cutoff distance to recognize the connectivity as periodic or unperiodic
+        :return: a list of the removed connected atom pair names
+        """
+        remove_lists = set()
+        cutoff **= 2
+        for atom0, connects in self.connectivity.items():
+            for atom1 in connects:
+                distance = (atom0.x - atom1.x) ** 2 + (atom0.y - atom1.y) ** 2 + (atom0.z - atom1.z) ** 2
+                if distance > cutoff and (atom1.name, atom0.name) not in remove_lists:
+                    remove_lists.add((atom0.name, atom1.name))
+        for atom0, atom1 in remove_lists:
+            self.remove_connectivity(atom0, atom1)
+        return remove_lists
+
     def add_bonded_force(self, bonded_force_entity, typename=None):
         """
         This **function** is used to add the bonded force to the residue type.

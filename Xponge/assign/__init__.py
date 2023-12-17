@@ -1222,18 +1222,21 @@ def _parse_cif_symops(symops, lattice_info):
     """
         parse the symmetry operations in the file as basis_position
     """
+    symops = symops.replace("'", "")
     if set(symops) - set("+-,xyz0123456789\n /"):
         raise ValueError("the symmetry operator strings can only be simple math expression of x, y, z")
-    symops = symops.replace("x", "1").replace("y", "1").replace("z", "1")
-    lattice_info["basis_position"] = [[eval(op) for op in symop.split(",")] #pylint:disable=eval-used
+    symops = symops.replace("x", "1").replace("y", "1").replace("z", "1").strip()
+    lattice_info["basis_position"] = [[eval(op) for op in symop.split(",") if symop] #pylint:disable=eval-used
                                         for symop in symops.split("\n")]
 
-def get_assignment_from_cif(file, total_charge=0):
+def get_assignment_from_cif(file, total_charge=0, orthogonal_threshold=5):
     """
     This **function** gets an Assign instance and a preprocessed lattice information from a cif file
 
     :param file: the name of the input file or an instance of io.IOBase
     :param total_charge: the total charge of the molecule used when aligning bond orders. 0 for default.
+    :param orthogonal_threshold: cell angle with the difference less than \
+this parameter will be considered to be orthogonal (in degree, and 5 for default)
     :return: the Assign instance and a dict which stores the preprocessed lattice information
     """
     assign = None
@@ -1251,7 +1254,8 @@ def get_assignment_from_cif(file, total_charge=0):
         if len(matches) > 1:
             raise NotImplementedError("The support for CIF files with more than one data block is not implemented now")
         assign = Assign(name=matches[0][5:])
-        symops = re.findall(r"(_symmetry_equiv_pos_as_xyz|_space_group_symop_operation_xyz)\s+(.+?)(?!\_)\n_\S+",
+        symops = re.findall(
+            r"(_symmetry_equiv_pos_as_xyz|_space_group_symop_operation_xyz)\s+(.+?)(?!\_)\n(_\S+|loop_\S*)",
             contents, flags=re.DOTALL)
         if symops:
             _parse_cif_symops(symops[0][1], lattice_info)
@@ -1262,6 +1266,12 @@ def get_assignment_from_cif(file, total_charge=0):
         alpha = _cif_find_box_information("cell_angle_alpha", contents, filename)
         beta = _cif_find_box_information("cell_angle_beta", contents, filename)
         gamma = _cif_find_box_information("cell_angle_gamma", contents, filename)
+        if abs(alpha - 90) < orthogonal_threshold:
+            alpha = 90
+        if abs(beta - 90) < orthogonal_threshold:
+            beta = 90
+        if abs(gamma - 90) < orthogonal_threshold:
+            gamma = 90
         lattice_info["cell_angle"] = [alpha, beta, gamma]
         basis = get_basis_vectors_from_length_and_angle(la, lb, lc, alpha, beta, gamma)
         n_atom, atom_info = _cif_get_loop_with_keyword("atom_site_type_symbol", contents)

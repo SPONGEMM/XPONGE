@@ -710,11 +710,13 @@ class Lattice:
     :param cell_angle: the angle of the unit cell. [90,90,90] for default.
     :param basis_position: a list of lists, every sublist has 3 numbers for coordinates.
     :param spacing: a list with 3 numbers, the spacing distance in three cell basis vectors.
+    :param periodic_bonds: a set of atom pair names. This can be from ResidueType.remove_periodic_connectivity
+    :param periodic_cutoff: a float. 3 for default. The cutoff of the bond to be recognized as periodic or not
     """
     styles = Xdict(not_found_message="There is no lattice style named {}")
 
     def __init__(self, style="custom", basis_molecule=None, scale=None, origin=None, cell_length=None,
-                 cell_angle=None, basis_position=None, spacing=None):
+                 cell_angle=None, basis_position=None, spacing=None, periodic_bonds=None, periodic_cutoff=3):
         self.basis_molecule = basis_molecule
         if style == "custom" or style.startswith("template:"):
             self.scale = 1
@@ -751,8 +753,37 @@ class Lattice:
         if style.startswith("template:"):
             style_name = style.split(":")[1].strip()
             Lattice.styles[style_name] = self
+        self.periodic_bonds = periodic_bonds
+        if periodic_bonds and not isinstance(self.basis_molecule, ResidueType):
+            raise TypeError("Only ResidueType can process the periodic_bonds")
+        self.current_unbonded_periodic_atoms = set()
+        self.periodic_cutoff = periodic_cutoff * periodic_cutoff
 
-    def _judge_region(self, x1, y1, z1, x2, y2, z2, region, mol, basis_mol, res_len):
+    def _process_periodic_bonds(self, mol, res, box):
+        """
+            process the periodicity
+        """
+        if not self.periodic_bonds:
+            return
+        for (name1, name2) in self.periodic_bonds:
+            self.current_unbonded_periodic_atoms.add((res.name2atom(name1), name2))
+            self.current_unbonded_periodic_atoms.add((res.name2atom(name2), name1))
+        remove_key = set()
+        for (atom, name) in self.current_unbonded_periodic_atoms:
+            atom2 = res.name2atom(name)
+            dx = atom.x - atom2.x
+            dx -= np.floor(dx / (box.x_high - box.x_low) + 0.5) * (box.x_high - box.x_low)
+            dy = atom.y - atom2.y
+            dy -= np.floor(dy / (box.y_high - box.y_low) + 0.5) * (box.y_high - box.y_low)
+            dz = atom.z - atom2.z
+            dz -= np.floor(dz / (box.z_high - box.z_low) + 0.5) * (box.z_high - box.z_low)
+            if dx * dx + dy * dy + dz * dz < self.periodic_cutoff:
+                mol.add_residue_link(atom, atom2)
+                remove_key.add((atom, name))
+                remove_key.add((atom2, atom.name))
+        self.current_unbonded_periodic_atoms -= remove_key
+
+    def _judge_region(self, x1, y1, z1, x2, y2, z2, region, mol, basis_mol, res_len, box):
         """
             judge whether (x2, y2, z2) in the region. 
             If so, the basis mol will be added to mol, and coordinates will be modified
@@ -764,6 +795,8 @@ class Lattice:
                     atom.x = atom.x - x1 + x2
                     atom.y = atom.y - y1 + y2
                     atom.z = atom.z - z1 + z2
+            res = mol.residues[-1]
+            self._process_periodic_bonds(mol, res, box)
 
     def create(self, box, region, mol=None):
         """
@@ -805,7 +838,7 @@ class Lattice:
                         x2 = basis[0] + x0
                         y2 = basis[1] + y0
                         z2 = basis[2] + z0
-                        self._judge_region(x1, y1, z1, x2, y2, z2, region, mol, basis_mol, res_len)
+                        self._judge_region(x1, y1, z1, x2, y2, z2, region, mol, basis_mol, res_len, box)
                     x0 += bvs[0][0]
                 x_init += bvs[1][0]
                 x_init %= bvs[0][0]
@@ -815,6 +848,9 @@ class Lattice:
             y_init += bvs[2][1]
             y_init %= bvs[1][1]
             z0 += bvs[2][2]
+        if self.current_unbonded_periodic_atoms:
+            Xprint(f"Not all atoms which can form periodic bonds form periodic bonds: \
+{self.current_unbonded_periodic_atoms}", "WARNING")
         return mol
 
 
