@@ -6,5 +6,5 @@ Xponge.egg-info/PKG-INFO
 Xponge.egg-info/SOURCES.txt
 Xponge/.idea
 Xponge/mdrun/BIN_PATH.dat
-docs/build/*
+docs/Xponge文档/*
 bin/*
