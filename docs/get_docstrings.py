@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import re
 
 class Function:
     def __init__(self, name):
@@ -13,12 +14,26 @@ class Class:
         self.functions = []
 
 class Module:
+    modules = {}
     def __init__(self, name, path):
+        self.modules[name] = self
         self.path = path
         self.name = name
         self.docstring = ""
         self.classes = []
         self.functions = []
+        self.submodules = []
+
+def process_docstring(string):
+    pattern = re.compile(r'\\\n', re.DOTALL)
+    string = re.sub(pattern, '', string)
+    pattern = re.compile(r'\.\. TIP::\s*\n(.*?)\s*\n\s*\n', re.DOTALL)
+    string = re.sub(pattern, lambda match: '> ' + match.group(1).replace('\n', '\n> ') + '\n{.is-info}\n\n', string)
+    pattern = re.compile(r'(\w+)::\s*\n(.*?)\s*\n\s*\n', re.DOTALL)
+    string = re.sub(pattern, r'\1:\n```python\n\2\n```\n\n', string)
+    pattern = re.compile(r'^(.*?)\s*={3,}\s*$', re.MULTILINE)
+    string = re.sub(pattern, r'## \1\n', string)
+    return string
 
 def process_one_file(file):
     path = file.relative_to("..")
@@ -93,25 +108,48 @@ for root, dirs, files in os.walk(xponge):
             continue
         modules.append(process_one_file(file))
 
+for root, dirs, files in os.walk(xponge):
+    root = Path(root)
+    if root.stem == '__pycache__':
+        continue
+    parent = root.parent
+    parent = parent.relative_to("..")
+    try:
+        parent = parent.with_suffix("")
+    except ValueError:
+        continue
+    that = str(parent).replace("\\", ".").replace("/", ".")
+    this = str(root.relative_to("..").with_suffix("").as_posix())
+    if that in Module.modules:
+        Module.modules[that].submodules.append(this)
+
 for module in modules:
     module_folder = "Xponge文档" / module.path.parent
     module_folder.mkdir(parents=True, exist_ok=True)
     with open("Xponge文档" / module.path.with_suffix(".md"), "w") as f:
         print(f"""# {module.name}
 
-    {module.docstring}""", file=f)
+{process_docstring(module.docstring)}""", file=f)
+        if module.submodules:
+            print("## modules\n", file=f)
+        for submodule in module.submodules:
+            print(f"### [{submodule.replace('/', '.')}](/文档/Xponge文档/{submodule})\n", file=f)
+        if module.functions:
+            print("## functions\n", file=f)
         for function in module.functions:
             print(f"""### {function.name}
 
-    {function.docstring}
+{process_docstring(function.docstring)}
     """, file=f)
+        if module.classes:
+            print("## classes\n", file=f)
         for class_ in module.classes:
-            print(f"""## {class_.name}
+            print(f"""### {class_.name}
 
-    {class_.docstring}
+{process_docstring(class_.docstring)}
     """, file=f)
             for function in class_.functions:
-                print(f"""### {function.name}
+                print(f"""#### {function.name}
 
-    {function.docstring}
+{process_docstring(function.docstring)}
     """, file=f)
