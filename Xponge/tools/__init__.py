@@ -290,21 +290,21 @@ def mol2rfe(args):
     args.do = args.do[0]
     if "debug" in args.do:
         Debug()
-    from_res_type_ = load_mol2(args.r1).residues[0].type
-    from_ = assign.Get_Assignment_From_ResidueType(from_res_type_)
     if not args.ff:
         parmchk2_gaff(args.r1, args.temp + "_TMP1.frcmod")
+        parmchk2_gaff(args.r2, args.temp + "_TMP2.frcmod")
+    for extrai, mol2file in enumerate(args.r0):
+        load_mol2(mol2file)
+        if not args.ff:
+            parmchk2_gaff(mol2file, f"{args.temp}_TMP{3+extrai}.frcmod")
+
+    from_res_type_ = load_mol2(args.r1).residues[0].type
+    from_ = assign.Get_Assignment_From_ResidueType(from_res_type_)
 
     to_mol = load_mol2(args.r2)
     build_bonded_force(to_mol)
     to_res = to_mol.residues[0]
     to_ = assign.Get_Assignment_From_ResidueType(to_res.type)
-    if not args.ff:
-        parmchk2_gaff(args.r2, args.temp + "_TMP2.frcmod")
-
-    for extrai, mol2file in enumerate(args.r0):
-        load_mol2(mol2file)
-        parmchk2_gaff(mol2file, f"{args.temp}_TMP{3+extrai}.frcmod")
 
     rmol = load_pdb(args.pdb)
 

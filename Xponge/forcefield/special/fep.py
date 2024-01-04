@@ -603,14 +603,18 @@ the tanimoto coefficient of the max common structure.
 
     from ...helper.rdkit import assign_to_rdmol
     from rdkit.Chem import rdFMCS as MCS
-    from rdkit.Chem import Draw, AllChem, RemoveHs
+    from rdkit.Chem import Draw, AllChem, RemoveHs, SanitizeMol, rdmolops
 
     rdmol_a = assign_to_rdmol(assign_a)
     rdmol_b = assign_to_rdmol(assign_b)
-
     if imcs is None:
         Xprint("FINDING MAXIMUM COMMON SUBSTRUCTURE\n")
-        result = MCS.FindMCS([RemoveHs(rdmol_a), RemoveHs(rdmol_b)],
+        flags = rdmolops.SanitizeFlags
+        rdmol_a_no_h = RemoveHs(rdmol_a, sanitize=False)
+        SanitizeMol(rdmol_a_no_h, flags.SANITIZE_ALL & ~flags.SANITIZE_PROPERTIES)
+        rdmol_b_no_h = RemoveHs(rdmol_b, sanitize=False)
+        SanitizeMol(rdmol_b_no_h, flags.SANITIZE_ALL & ~flags.SANITIZE_PROPERTIES)
+        result = MCS.FindMCS([rdmol_a_no_h, rdmol_b_no_h],
                              completeRingsOnly=True,
                              bondCompare=MCS.BondCompare.CompareOrderExact,
                              timeout=tmcs)
