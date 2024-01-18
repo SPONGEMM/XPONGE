@@ -823,7 +823,7 @@ class Lattice:
                                                       self.cell_angle[0], self.cell_angle[1],
                                                       self.cell_angle[2]) * self.scale
         bps = np.array([[bvs[0][0] * basis[0] + bvs[1][0] * basis[1] + bvs[2][0] * basis[2],
-                         bvs[0][1] * basis[1] + bvs[1][1] * basis[2],  bvs[2][2] * basis[2]]
+                         bvs[1][1] * basis[1] + bvs[2][1] * basis[2],  bvs[2][2] * basis[2]]
                          for basis in self.basis_position])
         x_init = box.x_low + self.origin[0]
         y_init = box.y_low + self.origin[1]
