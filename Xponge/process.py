@@ -603,7 +603,7 @@ class SphereRegion(Region):
 
     def __contains__(self, item):
         ans = (item[0] - self.x) ** 2 + (item[1] - self.y) ** 2 + (item[2] - self.z) ** 2
-        if boundary:
+        if self.boundary:
             ans = ans <= self._r2
         else:
             ans = ans < self._r2
@@ -643,7 +643,7 @@ class FrustumRegion(Region):
         projection = np.dot(crd, self.axis)
         distance = length * length - projection * projection
         r = self.r1 + self.k * projection
-        if boundary:
+        if self.boundary:
             ans = self.length >= projection >= 0 and distance <= r * r
         else:
             ans = self.length > projection > 0 and distance < r * r
@@ -687,7 +687,7 @@ class PrismRegion(Region):
 
     def __contains__(self, item):
         crd = np.array(item) - self.l0
-        if boundary:
+        if self.boundary:
             ans = 0 <= np.dot(crd, self.n1) <= self.length[0] and 0 <= np.dot(crd, self.n2) <= self.length[1] and \
                   0 <= np.dot(crd, self.n3) <= self.length[2]
         else:

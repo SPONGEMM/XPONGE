@@ -120,11 +120,11 @@ Then we can see `out.pdb` in VMD:
 
 ## Detailed usage and API documentation
 
-All can be seen [here](https://spongemm.cn/xponge_doc/index.html).
+All can be seen [here](https://spongemm.cn/%E6%96%87%E6%A1%A3/Xponge%E6%96%87%E6%A1%A3/Xponge).
 
 ## Contribution Guideline
 
-If you want to contribute to the main codebase or report some issues, see [here](https://spongemm.cn/xponge_doc/contribution_guide.html) for the guides.
+If you want to contribute to the main codebase or report some issues, see [here](https://spongemm.cn/zh/%E8%B4%A1%E7%8C%AE) for the guides.
 
 ## Dependencies
 
@@ -139,7 +139,7 @@ Here is the list of all packages which may be uesd:
 | XpongeLib         | c/c++ compiled library for Xponge | `pip install XpongeLib`        |
 | pyscf [2-4]       | quantum chemistry                 | `pip install pyscf`            |
 | geometric[5]      | geometry optimization             | `pip install geometric`        |
-| rdkit[6]          | cheminformatics                   | `conda install -c rdkit rdkit` |
+| rdkit[6]          | cheminformatics                   | `pip install rdkit`            |
 | MDAnalysis[7-8]   | trajectory analysis               | `pip install MDAnalysis`       |
 | matplotlib        | plot and visualization            | `pip install matplotlib`       |
 | mindspore[9]      | AI framework for machine learning | See the [official website](https://www.mindspore.cn/install)|

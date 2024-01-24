@@ -3,20 +3,27 @@
 """
 import os
 
-__all__ = ["test_fcc"]
+__all__ = ["test_all"]
 
-def test_fcc():
+def test_all():
     """
-        test the building of a fcc latice
+        test the building of all functions
     """
     import Xponge
     import Xponge.forcefield.amber.tip3p
-    globals().update(Xponge.ResidueType.get_all_types())
-    mol0 = NA + CL
-    mol0.residues[-1].CL.x = 4
-    region = Xponge.BlockRegion(0, 0, 0, 32, 32, 32)
-    box = Xponge.BlockRegion(0, 0, 0, 40, 40, 40)
-    lattice = Xponge.Lattice("fcc", mol0, 8)
-    mol = lattice.Create(box, region)
-    Save_PDB(mol, "NaCl.pdb")
-    Save_SPONGE_Input(mol, "NaCl")
+
+    box = Xponge.BlockRegion(0, 0, 0, 60, 60, 60)
+    region_1 = Xponge.BlockRegion(0, 0, 20, 20, 20, 40)
+    region_2 = Xponge.BlockRegion(0, 0, 40, 20, 20, 60)
+    region_3 = Xponge.BlockRegion(0, 0, 0, 20, 20, 20)
+    region_4 = Xponge.SphereRegion(20, 10, 30, 10)
+    region_5 = Xponge.BlockRegion(20, 0, 20, 60, 60, 60)
+    region_2or3 = Xponge.UnionRegion(region_2, region_3)
+    region_4and5 = Xponge.IntersectRegion(region_4, region_5)
+    t = Xponge.Lattice("bcc", basis_molecule=Xponge.ResidueType.get_type("CL"), scale=4)
+    t2 = Xponge.Lattice("fcc", basis_molecule=Xponge.ResidueType.get_type("K"), scale=3)
+    t3 = Xponge.Lattice("sc", basis_molecule=Xponge.ResidueType.get_type("NA"), scale=3)
+    mol = t.Create(box, region_1)
+    mol = t2.create(box, region_2or3, mol)
+    mol = t3.create(box, region_4and5, mol)
+    Xponge.Save_PDB(mol, "out.pdb")
