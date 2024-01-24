@@ -1084,6 +1084,7 @@ def load_ffitp(filename, macros=None):
 
 def _molitp_find_tail_residue(filename, macros, water_replace):
     """ find the index of the tail residue for every molecule """
+    heads = {}
     tails = {}
     system_molecules = set()
     current = None
@@ -1091,26 +1092,28 @@ def _molitp_find_tail_residue(filename, macros, water_replace):
     for line in iterator:
         if iterator.flag == "moleculetype":
             current = line.split()[0]
-            tails[current] = 1
+            tails[current] = -999999
         elif iterator.flag == "atoms":
             resnr = int(line.split()[2])
             if resnr > tails[current]:
                 tails[current] = resnr
+            if current not in heads:
+                heads[current] = resnr
         elif iterator.flag == "molecules":
             molname = line.split()[0]
             if not (molname == "SOL" and water_replace):
                 system_molecules.add(molname)
-    return tails, system_molecules
+    return heads, tails, system_molecules
 
-def _molitp_parse_atoms(line, current_mol, current_stat, tails, head_prefix, tail_prefix):
+def _molitp_parse_atoms(line, current_mol, current_stat, heads, tails, head_prefix, tail_prefix):
     """ parse one line for atoms of a molitp file """
     words = line.split()
     nr = int(words[0])
     resnr = int(words[2])
     resname = words[3]
-    if tails[current_mol.name] != 1 and resnr == 1:
+    if tails[current_mol.name] != heads[current_mol.name] and resnr == heads[current_mol.name]:
         resname = head_prefix + resname
-    if tails[current_mol.name] != 1 and resnr == tails[current_mol.name]:
+    if tails[current_mol.name] != heads[current_mol.name] and resnr == tails[current_mol.name]:
         resname = tail_prefix + resname
     atom_type = words[1]
     atom_name = words[4]
@@ -1153,7 +1156,7 @@ def load_molitp(filename, water_replace=True, head_prefix="N", tail_prefix="C", 
         This is used to read a itp file for molecules (molitp or top) file instead of a force field file.
 
     :param filename: the name of the file to load
-    :param water_replace: whether to change water to SPONGE. True as default.
+    :param water_replace: whether to change the SOL molecule in GMX to the water in Xponge. True as default.
     :param head_prefix: a string, the prefix will be added to the name of the first residue of each molecule
     :param tail_prefix: a string, the prefix will be added to the name of the last residue of each molecule
     :param macros: the macros used to read the Gromacs topology file
@@ -1164,7 +1167,7 @@ def load_molitp(filename, water_replace=True, head_prefix="N", tail_prefix="C", 
     mols = Xdict(not_found_message="{} is not a defined molecule in the system")
     current_mol = None
     current_stat = Xdict(not_found_method=lambda key: None)
-    tails, system_molecules = _molitp_find_tail_residue(filename, macros, water_replace)
+    heads, tails, system_molecules = _molitp_find_tail_residue(filename, macros, water_replace)
     iterator = GromacsTopologyIterator(filename, macros)
     for line in iterator:
         Xprint(f"file={iterator.filenames[-1]}", "DEBUG")
@@ -1182,7 +1185,7 @@ def load_molitp(filename, water_replace=True, head_prefix="N", tail_prefix="C", 
             else:
                 current_stat["skip"] = True
         elif iterator.flag == "atoms" and not current_stat["skip"]:
-            _molitp_parse_atoms(line, current_mol, current_stat, tails, head_prefix, tail_prefix)
+            _molitp_parse_atoms(line, current_mol, current_stat, heads, tails, head_prefix, tail_prefix)
         elif iterator.flag == "bonds" and not current_stat["skip"]:
             _molitp_parse_bonds(line, current_mol, current_stat)
         elif iterator.flag == "system":
