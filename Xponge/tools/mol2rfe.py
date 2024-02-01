@@ -113,8 +113,8 @@ the potential still can not be reduced to 0", "ERROR")
                 if exit_code != 0:
                     Xprint(f"The minimization of lambda {i} exited with code {exit_code}", "ERROR")
                     sys.exit(exit_code)
-        if len(iteror) != 1 and args.mpy:
-            import_python_script(args.mpy)
+            if args.mpy:
+                os.system(f"python {args.mpy} {i}")
 
 def _mol2rfe_pre_equilibrium(args, iteror):
     """
@@ -143,8 +143,8 @@ def _mol2rfe_pre_equilibrium(args, iteror):
             if exit_code != 0:
                 Xprint(f"The pre_equilibrium of lambda {i} exited with code {exit_code}", "ERROR")
                 sys.exit(exit_code)
-        if len(iteror) != 1 and args.ppy:
-            import_python_script(args.ppy)
+            if args.ppy:
+                os.system(f"python {args.ppy} {i}")
 
 
 def _mol2rfe_equilibrium(args):
@@ -188,8 +188,6 @@ def _mol2rfe_analysis(args, merged_from, merged_to, match_map, from_, to_):
     :return:
     """
     if "analysis" in args.do:
-        f = Xopen("dh_dlambda.txt", "w")
-        f.close()
         resname = merged_from.residues[args.ri].name
         draw_r1_mol = merged_from.deepcopy()
         draw_r2_mol = merged_to.deepcopy()
@@ -218,9 +216,9 @@ def _mol2rfe_analysis(args, merged_from, merged_to, match_map, from_, to_):
             draw_r2_res.atoms.remove(atom)
         build.save_pdb(draw_r1_mol, "r1.pdb")
         build.save_pdb(draw_r2_mol, "r2.pdb")
-        if args.method == "TI":
+        if "TI" in args.method:
             from .ti import ti_analysis
             ti_analysis(args)
-        elif args.method == "MBAR":
+        if "MBAR" in args.method:
             from .mbar import mbar_analysis
             mbar_analysis(args)

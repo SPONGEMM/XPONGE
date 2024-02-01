@@ -4,6 +4,10 @@ This **module** contains the functions for mbar analysis
 import os
 import shutil
 import numpy as np
+import matplotlib.pyplot as plt
+from gamda.special import MBAR
+from scipy.stats import gaussian_kde
+from .. import kb
 from ..mdrun import run
 from ..helper import Xopen
 from ..analysis import MdoutReader
@@ -35,40 +39,39 @@ def mbar_analysis(args):
     beta = 4184 / 300 / 8.314
     frame = args.equilibrium_step // args.wi
     n_lambda = args.nl + 1
-    enes = np.zeros((n_lambda, n_lambda, frame))
-    bias = np.zeros((n_lambda, frame))
+    weights = np.zeros((n_lambda, frame), dtype=np.float32)
     for i in range(n_lambda):
-        if os.path.exists("%d/mbar" % i):
-            shutil.rmtree("%d/mbar" % i)
         if os.path.exists("%d/equilibrium/reweighting_factor.txt" % i):
-            weight = np.loadtxt("%d/equilibrium/reweighting_factor.txt" % i, dtype=np.longfloat).reshape(-1)
+            weight = np.loadtxt("%d/equilibrium/reweighting_factor.txt" % i, dtype=np.float32).reshape(-1)
         else:
-            weight = np.ones(frame, dtype=float)
-        bias[i][:] = np.log(weight) / beta
-        os.mkdir("%d/mbar" % i)
-        for j in range(0, n_lambda):
-            _rerun_ith_traj_with_jth_forcefield(args, i, j)
+            weight = np.ones(frame, dtype=np.float32)
+        weights[i][:] = weight
+        if not args.nar:
+            if os.path.exists("%d/mbar" % i):
+                shutil.rmtree("%d/mbar" % i)
+            os.mkdir("%d/mbar" % i)
+            for j in range(n_lambda):
+                _rerun_ith_traj_with_jth_forcefield(args, i, j)
+    enes = np.zeros((n_lambda, n_lambda, frame), dtype=np.float32)
+    for i in range(n_lambda):
+        for j in range(n_lambda):
             mdout = MdoutReader(f"{i}/mbar/{j}/{args.temp}.mdout")
             enes[i][j][:] = mdout.potential
-    bias = bias.reshape((n_lambda, 1, frame))
-    enes -= np.min(enes - bias, axis=1, keepdims=True)
-    f = np.zeros(n_lambda)
-    last_f = np.ones(n_lambda)
-    while np.any(np.abs(last_f - f) > 0.001):
-        last_f = f
-        sum_j = np.sum(np.exp(-beta * (enes - bias - f.reshape((1, -1, 1)))), axis=1, keepdims=True)
-        f = -np.log(np.sum(np.exp(-beta * enes)/ sum_j, axis=(0, 2))) / beta
-        f -= np.min(f)
-    theta_i = -beta * np.diagonal(enes)
-    sigma_ij = np.zeros(args.nl)
-    sigma_i0 = np.zeros(args.nl)
-    factor = np.array([[1, -1], [-1, 1]])
-    for i in range(args.nl):
-        sigma_ij[i] = np.sqrt(np.sum(factor * np.cov(theta_i[i], theta_i[i+1])))
-        sigma_i0[i] = np.sqrt(np.sum(factor * np.cov(theta_i[0], theta_i[i+1])))
-    fw = Xopen("free_energy.txt", "w")
-    fw.write("lambda_state\tFE(i+1)-FE(i)[kcal/mol]\tFE(i+1)-FE(0)[kcal/mol]\n")
-    fw.write("\n".join(
-        [f"{i}\t\t{f[i+1]-f[i]:.2f} +- {sigma_ij[i]:.2f}\t\t{f[i+1]-f[0]:.2f} +- {sigma_i0[i]:.2f}"
-            for i in range(args.nl)]))
-    fw.close()
+    mbar = MBAR(enes, weights, 1.0 / kb / 300, 1024)
+    mbar.run()
+    fe = np.mean(mbar.f, axis=0)
+    error = np.std(mbar.f, axis=0)
+    f = Xopen("MBAR.txt", "w")
+    f.write("lambda_state\tFE(i+1)-FE(i)[kcal/mol]\tFE(i+1)-FE(0)[kcal/mol]\tSigma(FE(i+1)-FE(0))[kcal/mol]\n")
+    f.write("\n".join(
+        [f"{i}\t\t{fe[i+1] - fe[i]: .2f}\t\t\t{fe[i+1]: .2f}\t\t\t{error[i+1]:.2f}" for i in range(args.nl)]))
+    f.close()
+    ans = mbar.f[:, -1].get()
+    kernel = gaussian_kde(ans, bw_method=1)
+    x = np.linspace(np.min(ans), np.max(ans), 1024)
+    y = kernel(x)
+    plt.plot(x, y)
+    plt.xlabel("Free Energy [kcal/mol]")
+    plt.ylabel("Probability")
+    plt.savefig("MBAR.png")
+    plt.clf()

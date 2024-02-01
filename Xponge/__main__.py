@@ -166,7 +166,8 @@ instead of the default one")
 instead of the default one")
     mol2rfe.add_argument("-ei", "-equilibrium_mdin", help="Use this equilibrium mdin file instead of the default one")
     mol2rfe.add_argument("-ai", "-analysis_mdin", help="Use this analysis mdin file instead of the default one")
-    mol2rfe.add_argument("-method", default="TI", choices=["TI", "MBAR"], help="the method to analyze the free energy")
+    mol2rfe.add_argument("-nar", "-no_analysis_rerun", action="store_true", help="Do not rerun the trajectory for analysis")
+    mol2rfe.add_argument("-method", default="TI", nargs="*", choices=["TI", "MBAR"], help="the method to analyze the free energy")
     mol2rfe.add_argument("-temp", default="TMP", metavar="TMP", help="the temporary file name prefix")
 
     mol2rfe.add_argument("-tmcs", default=60, type=int, metavar="60",

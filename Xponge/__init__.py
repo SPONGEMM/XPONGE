@@ -72,7 +72,7 @@ The atoms in a ``Residue`` or a ``ResidueType`` can be obtained by their names. 
 
 """
 
-__version__ = "1.4.4"
+__version__ = "1.4.5a0"
 
 import os
 import time

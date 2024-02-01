@@ -18,6 +18,7 @@ def import_python_script(path):
         raise TypeError(f"{path} should be a python script")
     import_module(path.stem)
 
+
 def file_filter(infile, outfile, reg_exp, replace_dict):
     """
         This **function** finds the lines which contains any of the given regular expressions and replace some parts.
