@@ -83,7 +83,7 @@ class ReasonedBool(int):
         return self._repr[self]
 
 
-def xopen(filename, flag, mode=None, encoding="UTF-8"):
+def xopen(filename, flag, mode=None, encoding=None):
     """
     This **function** is used to open a file with the proper permissions mode
 
@@ -93,6 +93,8 @@ def xopen(filename, flag, mode=None, encoding="UTF-8"):
     :param encoding: the encoding to use for reading the file, "UTF-8" as default
     :return: the opened file
     """
+    if encoding is None and "b" not in flag:
+        encoding = "UTF-8"
     if mode is None:
         mode = stat.S_IRWXO | stat.S_IRWXG | stat.S_IRWXU
     if flag in ("w", "wb"):
