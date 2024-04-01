@@ -175,6 +175,7 @@ class BondOrderAssignment:
     :param original_penalties: the original penalties dict
     :param max_stat: the max valence stats to iterate
     :param assign: the father Assignment instance
+    :param check_formal_charge: whether check the formal charge of the molecule
     :param total_charge: the total charge of the molecule
     :param extra_criteria: a function as the extra convergence criteria. \
 The function will receive the assignment as input, and give True or False as output.
@@ -226,8 +227,9 @@ The function will receive the assignment as input, and give True or False as out
         "B": {3: 0}
     })
     failure = ReasonedBool(False, "the calculation can not converge")
-    def __init__(self, original_penalties, max_step, max_stat, assign, total_charge=0, extra_criteria=None):
+    def __init__(self, original_penalties, max_step, max_stat, assign, check_formal_charge=True, total_charge=0, extra_criteria=None):
         self.prepare_success = True
+        self.check_formal_charge = check_formal_charge
         self.extra_criteria = extra_criteria
         if original_penalties is None:
             try:
@@ -477,7 +479,7 @@ conected atoms for every atom:\n{valence}\n{uc}\n\n", "DEBUG")
         while count < self.max_step and self.current_stat < self.max_stat and not success:
             if formal_charge_iter is None:
                 success, bonds = self._assign_bond_order_one_try()
-                if success:
+                if success and self.check_formal_charge:
                     success, formal_charge_iter, c3_atoms = self._check_formal_charge(bonds)
             else:
                 success, formal_charge_iter = self._assign_formal_charge_one_try(c3_atoms, formal_charge_iter)

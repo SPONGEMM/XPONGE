@@ -676,7 +676,7 @@ the rule described in the reference (J. Wang et al., J. Am. Chem. Soc, 2001) wil
                         self.add_bond(i, j, -1)
 
     def determine_bond_order(self, max_step=2000, max_stat=20000, penalty_scores=None,
-                             total_charge=None, extra_criteria=None):
+                             check_formal_charge=True, total_charge=None, extra_criteria=None):
         """
         This **function** determines the bond order based on connectivities
 
@@ -686,13 +686,15 @@ the rule described in the reference (J. Wang et al., J. Am. Chem. Soc, 2001) wil
 This should be a list of ordered dicts, and every ordered dict stores the valence-penalty pairs for every atom, \
 and it is sorted by the penalty scores. If None(default), \
 a set of penalty scores described in the reference (J. Wang et al., J. Mol. Graph. Model., 2006) will be used.
+        :param check_formal_charge: whether check the formal charge of the molecule
         :param total_charge: the total charge of the molecule
         :param extra_criteria: a function as the extra convergence criteria. \
 The function will receive the assignment as input, and give True or False as output.
         :return: ReasonedBool, True for success, False for failure.
         """
         from .bond_order import BondOrderAssignment
-        bo_assign = BondOrderAssignment(penalty_scores, max_step, max_stat, self, total_charge, extra_criteria)
+        bo_assign = BondOrderAssignment(penalty_scores, max_step, max_stat, self,
+            check_formal_charge, total_charge, extra_criteria)
         return bo_assign.main()
 
     def check_connectivity(self):
