@@ -2,6 +2,7 @@
 This **module** gives functions and classes to use MDAnalysis to analyze the trajectories
 """
 import os.path
+import time
 from collections.abc import Iterable
 
 import numpy as np
@@ -198,7 +199,12 @@ class XpongeResidueReader(base.ReaderBase):
         return
 
     def _read_next_timestep(self):
-        return self.ts
+        if self.ts.frame == 0:
+            raise EOFError
+        else:
+            self.ts.frame += 1
+            return self.ts
+
 
 class XpongeMoleculeReader(base.ReaderBase):
     """
@@ -274,7 +280,12 @@ class XpongeMoleculeReader(base.ReaderBase):
         return
 
     def _read_next_timestep(self):
-        return self.ts
+        if self.ts.frame == 0:
+            raise EOFError
+        else:
+            self.ts.frame += 1
+            return self.ts
+
 
 class SpongeTrajectoryReader(base.ReaderBase):
     """
@@ -743,3 +754,259 @@ mda._SINGLEFRAME_WRITERS["SPONGE_CRD"] = SpongeCoordinateWriter
 mda._SINGLEFRAME_WRITERS["TXT"] = SpongeCoordinateWriter
 mda._MULTIFRAME_WRITERS["SPONGE_TRAJ"] = SpongeTrajectoryWriter
 mda._MULTIFRAME_WRITERS["DAT"] = SpongeTrajectoryWriter
+
+class MDAViewer:
+    """
+        This class visualizes the MDAnalysis universe via 3Dmol.js
+
+        :param u: the MDAnalysis universe
+    """
+    BODY = r"""
+<div id="frame-slider-div">
+Frame：<input type="number" id="frame-value" value=MAX_FRAME oninput=frameValueChange()>/MAX_FRAME
+<input type="range" id="frame-slider" min=0 max=MAX_FRAME value=MAX_FRAME step=1 oninput=frameSliderChange()>
+</div>
+<div id="zoom-div">
+Zoom: <input id="frame-zoom" checked type="checkbox"><label for="frame-zoom">Keep</label>
+<input type="button" id="button-zoom" value="Zoom" onclick="viewer_ID.zoomTo()">
+</div>
+<div id="play-div">
+Animation:
+<input type="button" id="play-play" value="Play" onclick="XpongeAnimate();playButton.disabled=true;stopButton.disabled=false;">
+<input type="button" id="play-stop" value="Stop" disabled=true onclick="XpongeStopAnimation()">
+</div>
+<div id="mouse-div">
+Mouse: <input id="mouse-hover" checked type="checkbox" onchange="XpongeSetHover(this.checked);viewer_ID.render();"><label for="mouse-hover">Hover</label>
+</div>
+<div id="3dmolviewer_ID"  style="position: relative; width: 640px; height: 480px;"></div>
+<script>
+var viewer_ID = null;
+var m_ID = null;
+var XpongeAnimate = null;
+function XpongeAddFrame(model, atoms)
+{
+    model.addAtoms(atoms);
+    model.addFrame(model.atoms);
+    model.atoms = [];
+}
+function XpongeStopAnimation()
+{
+    viewer_ID.stopAnimate();
+    playButton.disabled=false;
+    stopButton.disabled=true;
+    mouseHover.disabled = false;
+}
+if(typeof($3Dmolpromise) === 'undefined')
+{
+    $3Dmolpromise = null;
+    $3Dmolpromise = new Promise((resolve, reject) =>
+    {
+        var savedexports, savedmodule;
+        if (typeof(exports) !== 'undefined')
+            savedexports = exports;
+        else
+            exports = {};
+        if (typeof(module) !== 'undefined')
+            savedmodule = module;
+        else
+            module = {};
+
+        var tag = document.createElement('script');
+        tag.src = 'https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.1.0/3Dmol-min.js';
+        tag.async = true;
+        tag.onload = () => 
+        {
+            exports = savedexports;
+            module = savedmodule;
+            resolve();
+        };
+        var firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+    });
+}
+function XpongeSetHover(hoverable=true)
+{
+    m_ID.setHoverable({}, hoverable,
+    function(atom, viewer, event, container)
+    {
+        if(!atom.label)
+        {
+            atom.label = viewer.addLabel(atom.atom, {position: atom, backgroundColor: 'mintcream', fontColor:'black'});
+        }
+    },
+    function(atom)
+    {
+        if(atom.label)
+        {
+            viewer_ID.removeLabel(atom.label);
+            delete atom.label;
+        }
+    });
+}
+$3Dmolpromise.then(() =>
+{
+    viewer_ID = $3Dmol.createViewer(document.getElementById("3dmolviewer_ID"),{backgroundColor:"white"});
+    m_ID = viewer_ID.addModel();
+    let atoms = null;
+    KERNEL
+    m_ID.setFrame(MAX_FRAME).then(() =>
+    {
+        XpongeSetHover();
+        m_ID.setStyle({},{stick:{}});
+        viewer_ID.zoomTo();
+        viewer_ID.render();
+    })
+    XpongeAnimate = () =>
+    {
+        mouseHover.checked = false;
+        mouseHover.disabled = true;
+        viewer_ID.incAnim();
+        let interval = 100;
+        let loop = "forward";
+        let reps = 0;
+        let mostFrames = viewer_ID.getNumFrames();
+        let currFrame = Number(frameValue.value);
+        let inc = 1;
+        let displayCount = 0;
+        let displayMax = mostFrames * reps;
+        let time = new Date();
+        let resolve, timer;
+        let self = viewer_ID;
+        let display = function (direction) {
+            time = new Date();
+            if (direction == "forward") {
+                self.setFrame(currFrame)
+                    .then(function () {
+                        currFrame = (currFrame + inc) % mostFrames;
+                        resolve();
+                    });
+            }
+            else if (direction == "backward") {
+                self.setFrame((mostFrames - 1) - currFrame)
+                    .then(function () {
+                        currFrame = (currFrame + inc) % mostFrames;
+                        resolve();
+                    });
+            }
+            else
+            {
+                self.setFrame(currFrame)
+                    .then(function () {
+                        currFrame += inc;
+                        inc *= (((currFrame % (mostFrames - 1)) == 0) ? -1 : 1);
+                        resolve();
+                    });
+            }
+        };
+
+        resolve = function ()
+        {
+            if (frameZoom.checked)
+                self.zoomTo();
+            frameValue.value = self.getFrame();
+            frameSlider.value = self.getFrame();
+            self.render();
+            if (!self.getCanvas().isConnected) {
+                //we no longer exist as part of the DOM
+                self.stopAnimate();
+            }
+            else if (++displayCount == displayMax || !self.isAnimated()) {
+                timer.cancel();
+                self.animationTimers.delete(timer);
+                self.decAnim();
+            }
+            else {
+                var newInterval = interval - (new Date().getTime() - time.getTime());
+                newInterval = (newInterval > 0) ? newInterval : 0;
+                self.animationTimers.delete(timer);
+                timer = new $3Dmol.PausableTimer(display, newInterval, loop);
+                self.animationTimers.add(timer);
+            }
+        };
+
+        timer = new $3Dmol.PausableTimer(display, 0, loop);
+        viewer_ID.animationTimers.add(timer);
+    }
+});
+</script>
+<script>
+var frameSlider = document.getElementById('frame-slider');
+var frameValue = document.getElementById('frame-value');
+var frameZoom = document.getElementById('frame-zoom');
+var playButton = document.getElementById('play-play');
+var stopButton = document.getElementById('play-stop');
+var mouseHover = document.getElementById('mouse-hover'); 
+function frameSliderChange()
+{
+    frameValue.value = frameSlider.value;
+    m_ID.setFrame(frameValue.value).then(() => {
+        if (frameZoom.checked)
+            viewer_ID.zoomTo();
+        if (mouseHover.checked)
+            XpongeSetHover();
+        viewer_ID.render();
+    })
+}
+function frameValueChange()
+{
+    if (frameValue.value >= MAX_FRAME)
+        frameValue.value = MAX_FRAME - 1;
+    if (frameValue.value < 0)
+        frameValue.value = 0;
+    frameSlider.value = frameValue.value;
+    m_ID.setFrame(frameValue.value).then(() => {
+        if (frameZoom.checked)
+            viewer_ID.zoomTo();
+        if (mouseHover.checked)
+            XpongeSetHover();
+        viewer_ID.render();
+    })
+}
+</script>
+"""
+    def __init__(self, u):
+        self.u = u
+        self.id = str(hash(time.time()))
+        self.atom_idx = {}
+        self.kernel = ""
+        self.max_frame = ""
+        self._init_kernel()
+
+    def _init_kernel(self):
+        """ Initialize the kernel """
+        arguments = []
+        self.atom_idx = {atom: i for i, atom in enumerate(self.u.atoms)}
+        atoms = [{'elem': atom.element, 'atom': atom.name,
+            'bonds': [], 'bondOrder': []} for atom in self.u.atoms]
+        for bond in self.u.bonds:
+            atom0, atom1 = (self.atom_idx[atom] for atom in bond.atoms)
+            atoms[atom0]['bonds'].append(atom1)
+            atoms[atom1]['bonds'].append(atom0)
+            if bond.order is not None:
+                bond_order = bond.order
+            else:
+                bond_order = 1
+            atoms[atom0]['bondOrder'].append(bond_order)
+            atoms[atom1]['bondOrder'].append(bond_order)
+        self.max_frame = str(len(self.u.trajectory) - 1)
+
+        for ts in self.u.trajectory:
+            for i, atom in enumerate(atoms):
+                atoms[i]['x'] = self.u.atoms.positions[i][0]
+                atoms[i]['y'] = self.u.atoms.positions[i][1]
+                atoms[i]['z'] = self.u.atoms.positions[i][2]
+            arguments.append(rf"""
+    atoms = {atoms}
+    XpongeAddFrame(m_ID, atoms);
+""")
+        self.kernel = "".join(arguments)
+
+    @property
+    def html(self):
+        """
+            the HTML code for the visulization
+        """
+        return self.BODY.replace("KERNEL", self.kernel).replace("ID", self.id).replace("MAX_FRAME", self.max_frame)
+
+    def _repr_html_(self):
+        return self.html
