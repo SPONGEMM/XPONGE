@@ -13,6 +13,7 @@ try:
     from MDAnalysis.coordinates import base, H5MD
     from MDAnalysis.lib import util
     from MDAnalysis.topology.base import TopologyReaderBase
+    from MDAnalysis.topology.guessers import guess_masses
     from MDAnalysis.core import topologyattrs
     from MDAnalysis.core.topology import Topology
 except ModuleNotFoundError as exc:
@@ -134,6 +135,77 @@ class SpongeInputReader(TopologyReaderBase):
         return Topology(natoms, nres, 1, attrs, resid, None)
 
 
+class XpongeAssignReader(base.ReaderBase):
+    """
+    This **class** is used to read the Xponge Residue or ResidueType to mdanalysis
+
+    Create the following attributes:
+        Atomnames
+        Elements
+        Atomtypes
+        Charges
+        Bonds
+
+    Guesses the following attributes:
+        Masses
+    """
+    def __init__(self, filename, **kwargs):
+        self.molecule = filename
+        super().__init__(filename, **kwargs)
+        self.ts = self._Timestep(self.n_atoms, **self._ts_kwargs)
+        self.ts.positions = self.molecule.coordinate
+
+    @property
+    def n_atoms(self):
+        return len(self.molecule.atoms)
+
+    @property
+    def n_frames(self):
+        return 1
+
+    #pylint: disable=unused-argument
+    def parse(self, **kwargs):
+        """
+        This **function** reads the file and returns the structure
+
+        :param kwargs: keyword arguments
+        :return: MDAnalysis Topology object
+        """
+        attrs = [topologyattrs.Segids(np.array(['SYSTEM'], dtype=object))]
+        residue = self.molecule
+        natoms = len(residue.atoms)
+        nres = 1
+        elements = residue.atoms
+        masses = guess_masses(elements)
+        attrs.append(topologyattrs.Masses(masses, guessed=True))
+        attrs.append(topologyattrs.Elements(elements))
+        attrs.append(topologyattrs.Atomnames(residue.names))
+        attrs.append(topologyattrs.Atomtypes([residue.atom_types[i] for i in range(natoms)]))
+        attrs.append(topologyattrs.Charges(residue.formal_charge))
+        attrs.append(topologyattrs.Resids(np.arange(nres) + 1))
+        attrs.append(topologyattrs.Atomids(np.arange(natoms) + 1))
+        attrs.append(topologyattrs.Resnums(np.arange(nres) + 1))
+        attrs.append(topologyattrs.Resnames([residue.name]))
+        resid = np.zeros(natoms, dtype=np.int32)
+        bonds = []
+        orders = []
+        for atom1, bond in residue.bonds.items():
+            for atom2, order in bond.items():
+                bonds.append((atom1, atom2))
+                orders.append(order)
+        attrs.append(topologyattrs.Bonds(bonds, order=orders))
+        return Topology(natoms, nres, 1, attrs, resid, None)
+
+    def _reopen(self):
+        self.ts.frame = -1
+
+    def _read_next_timestep(self):
+        if self.ts.frame == 0:
+            raise EOFError
+        else:
+            self.ts.frame += 1
+            return self.ts
+
 class XpongeResidueReader(base.ReaderBase):
     """
     This **class** is used to read the Xponge Residue or ResidueType to mdanalysis
@@ -196,7 +268,7 @@ class XpongeResidueReader(base.ReaderBase):
         return Topology(natoms, nres, 1, attrs, resid, None)
 
     def _reopen(self):
-        return
+        self.ts.frame = -1
 
     def _read_next_timestep(self):
         if self.ts.frame == 0:
@@ -277,7 +349,7 @@ class XpongeMoleculeReader(base.ReaderBase):
         return residue.name2atom(residue.type.atom2name(atom))
 
     def _reopen(self):
-        return
+        self.ts.frame = -1
 
     def _read_next_timestep(self):
         if self.ts.frame == 0:
@@ -737,18 +809,17 @@ but walker={self.walker} is given (index starts from 0)")
         ts.frame += 1
         return ts
 
-
 mda._READERS["SPONGE_TRAJ"] = SpongeTrajectoryReader
-mda._READER_HINTS["SPONGE_TRAJ"] = lambda x: x.endswith(".dat")
+mda._READER_HINTS["SPONGE_TRAJ"] = lambda x: isinstance(x, str) and x.endswith(".dat")
 
 mda._PARSERS["SPONGE_MASS"] = SpongeInputReader
-mda._PARSER_HINTS["SPONGE_MASS"] = lambda x: x.endswith("_mass.txt")
+mda._PARSER_HINTS["SPONGE_MASS"] = lambda x: isinstance(x, str) and x.endswith("_mass.txt")
 
 mda._READERS["SPONGE_CRD"] = SpongeCoordinateReader
-mda._READER_HINTS["SPONGE_CRD"] = lambda x: x.endswith("_coordinate.txt")
+mda._READER_HINTS["SPONGE_CRD"] = lambda x: isinstance(x, str) and x.endswith("_coordinate.txt")
 
 mda._READERS["SPONGE_H5MD"] = SPONGEH5MDReader
-mda._READER_HINTS["SPONGE_H5MD"] = lambda x: x.endswith(".h5md")
+mda._READER_HINTS["SPONGE_H5MD"] = lambda x: isinstance(x, str) and x.endswith(".h5md")
 
 mda._SINGLEFRAME_WRITERS["SPONGE_CRD"] = SpongeCoordinateWriter
 mda._SINGLEFRAME_WRITERS["TXT"] = SpongeCoordinateWriter
@@ -763,12 +834,12 @@ class MDAViewer:
     """
     BODY = r"""
 <div id="frame-slider-div">
-Frame：<input type="number" id="frame-value" value=MAX_FRAME oninput=frameValueChange()>/MAX_FRAME
+Frame：<input type="number" id="frame-value"  style="width:80px;" value=MAX_FRAME oninput=frameValueChange()>/MAX_FRAME
 <input type="range" id="frame-slider" min=0 max=MAX_FRAME value=MAX_FRAME step=1 oninput=frameSliderChange()>
 </div>
 <div id="zoom-div">
 Zoom: <input id="frame-zoom" checked type="checkbox"><label for="frame-zoom">Keep</label>
-<input type="button" id="button-zoom" value="Zoom" onclick="viewer_ID.zoomTo()">
+<input type="button" id="button-zoom" value="Zoom" onclick="viewer_ID.zoomTo();">
 </div>
 <div id="play-div">
 Animation:
@@ -777,6 +848,16 @@ Animation:
 </div>
 <div id="mouse-div">
 Mouse: <input id="mouse-hover" checked type="checkbox" onchange="XpongeSetHover(this.checked);viewer_ID.render();"><label for="mouse-hover">Hover</label>
+</div>
+<div id="style-div">
+Style: 
+<input id="style-stick" checked type="checkbox" onchange="XpongeSetStyle();viewer_ID.render();">
+    <label for="style-stick">Stick</label>
+<input id="style-sphere" checked type="checkbox" onchange="XpongeSetStyle();viewer_ID.render();">
+    <label for="style-sphere">Sphere</label>
+<input id="style-sphere-scale" type="number" value=0.3 step=0.01 style="width:40px;" onchange="XpongeSetStyle();viewer_ID.render();">
+    <label for="style-sphere-scale">SphereScale</label>
+
 </div>
 <div id="3dmolviewer_ID"  style="position: relative; width: 640px; height: 480px;"></div>
 <script>
@@ -843,6 +924,18 @@ function XpongeSetHover(hoverable=true)
         }
     });
 }
+function XpongeSetStyle()
+{
+    let style = {};
+    if (stickChecker.checked)
+        style.stick = {};
+    if (sphereChecker.checked)
+    {
+        style.sphere = {};
+        style.sphere.scale = sphereScaler.value;
+    }
+    m_ID.setStyle({}, style);
+}
 $3Dmolpromise.then(() =>
 {
     viewer_ID = $3Dmol.createViewer(document.getElementById("3dmolviewer_ID"),{backgroundColor:"white"});
@@ -852,7 +945,7 @@ $3Dmolpromise.then(() =>
     m_ID.setFrame(MAX_FRAME).then(() =>
     {
         XpongeSetHover();
-        m_ID.setStyle({},{stick:{}});
+        XpongeSetStyle();
         viewer_ID.zoomTo();
         viewer_ID.render();
     })
@@ -935,7 +1028,10 @@ var frameValue = document.getElementById('frame-value');
 var frameZoom = document.getElementById('frame-zoom');
 var playButton = document.getElementById('play-play');
 var stopButton = document.getElementById('play-stop');
-var mouseHover = document.getElementById('mouse-hover'); 
+var mouseHover = document.getElementById('mouse-hover');
+var stickChecker = document.getElementById('style-stick');
+var sphereChecker = document.getElementById('style-sphere');
+var sphereScaler = document.getElementById('style-sphere-scale');
 function frameSliderChange()
 {
     frameValue.value = frameSlider.value;
@@ -944,6 +1040,7 @@ function frameSliderChange()
             viewer_ID.zoomTo();
         if (mouseHover.checked)
             XpongeSetHover();
+        XpongeSetStyle();
         viewer_ID.render();
     })
 }
@@ -959,6 +1056,7 @@ function frameValueChange()
             viewer_ID.zoomTo();
         if (mouseHover.checked)
             XpongeSetHover();
+        XpongeSetStyle();
         viewer_ID.render();
     })
 }
