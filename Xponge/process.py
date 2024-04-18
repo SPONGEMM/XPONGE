@@ -410,6 +410,23 @@ def get_peptide_from_sequence(sequence, charged_terminal=True):
     return toret
 
 
+def sort_atoms_by(mol, template):
+    """
+    This **function** is used to sort the atoms in mol1 to be aligned with mol2
+
+    :param mol: the molecule to sort atoms
+    :param template: the template molecule
+    :return: None
+    """
+    if not isinstance(mol, Molecule) or not isinstance(template, Molecule):
+        raise TypeError("the type of the input should be Xponge.Molecule")
+    for i, (res1, res2) in enumerate(zip(mol.residues, template.residues)):
+        if res1.type != res2.type:
+            raise TypeError(f"the type of the {i}-th residue is not the same. {res1.type} != {res2.type}")
+        keys = {atom.name: j for j, atom in enumerate(res2.atoms)}
+        res1.atoms.sort(key=lambda atom: keys[atom.name])
+
+
 def optimize(mol, step=2000, only_bad_coordinate=True, dt=1e-8, pbc=True, extra_commands=None):
     """
     This **function** is used to optimize the structure of the Molecule instance

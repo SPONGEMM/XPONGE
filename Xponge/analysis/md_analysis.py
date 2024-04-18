@@ -831,20 +831,26 @@ class MDAViewer:
         This class visualizes the MDAnalysis universe via 3Dmol.js
 
         :param u: the MDAnalysis universe
+        :param start: the start frame for visulization
+        :param stride: the stride frame for visulization
+        :param stop: the stop frame for visulization
     """
     BODY = r"""
 <div id="frame-slider-div">
-Frame：<input type="number" id="frame-value"  style="width:80px;" value=MAX_FRAME oninput=frameValueChange()>/MAX_FRAME
+Frame：<input type="number" id="frame-value" style="width:80px;" value=MAX_FRAME oninput=frameValueChange()>/MAX_FRAME
 <input type="range" id="frame-slider" min=0 max=MAX_FRAME value=MAX_FRAME step=1 oninput=frameSliderChange()>
-</div>
-<div id="zoom-div">
-Zoom: <input id="frame-zoom" checked type="checkbox"><label for="frame-zoom">Keep</label>
-<input type="button" id="button-zoom" value="Zoom" onclick="viewer_ID.zoomTo();">
 </div>
 <div id="play-div">
 Animation:
 <input type="button" id="play-play" value="Play" onclick="XpongeAnimate();playButton.disabled=true;stopButton.disabled=false;">
 <input type="button" id="play-stop" value="Stop" disabled=true onclick="XpongeStopAnimation()">
+<input type="number" id="play-stride" style="width:80px;" value=1> frame per <input type="number" id="play-interval" style="width:80px;" value=100> ms
+for <input type="number" id="play-repeat" style="width:80px;" value=0> repeat(s)
+</div>
+<div id="option-div">
+Option: <input id="frame-zoom" checked type="checkbox"><label for="frame-zoom">KeepCentered</label>
+<input type="button" id="button-zoom" value="Recenter" onclick="viewer_ID.zoomTo();">
+<input type="button" id="play-snapshot" value="Snapshot" onclick="XpongeSnapshot()">
 </div>
 <div id="mouse-div">
 Mouse: <input id="mouse-hover" checked type="checkbox" onchange="XpongeSetHover(this.checked);viewer_ID.render();"><label for="mouse-hover">Hover</label>
@@ -855,12 +861,13 @@ Style:
     <label for="style-stick">Stick</label>
 <input id="style-sphere" checked type="checkbox" onchange="XpongeSetStyle();viewer_ID.render();">
     <label for="style-sphere">Sphere</label>
-<input id="style-sphere-scale" type="number" value=0.3 step=0.01 style="width:40px;" onchange="XpongeSetStyle();viewer_ID.render();">
+<input id="style-sphere-scale" type="number" value=0.3 step=0.01 style="width:60px;" onchange="XpongeSetStyle();viewer_ID.render();">
     <label for="style-sphere-scale">SphereScale</label>
 
 </div>
 <div id="3dmolviewer_ID"  style="position: relative; width: 640px; height: 480px;"></div>
 <script>
+
 var viewer_ID = null;
 var m_ID = null;
 var XpongeAnimate = null;
@@ -876,11 +883,23 @@ function XpongeStopAnimation()
     playButton.disabled=false;
     stopButton.disabled=true;
     mouseHover.disabled = false;
+    playStride.disabled = false;
+    playInterval.disabled = false;
+    playRepeat.disabled = false;
+    playSnapshot.disabled = false;
 }
-if(typeof($3Dmolpromise) === 'undefined')
+function XpongeSnapshot()
 {
-    $3Dmolpromise = null;
-    $3Dmolpromise = new Promise((resolve, reject) =>
+    let a = document.createElement('a');
+    a.href = viewer_ID.pngURI();
+    a.download = 'snapshot.png';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+function XpongeSource(url)
+{
+    return new Promise((resolve, reject) =>
     {
         var savedexports, savedmodule;
         if (typeof(exports) !== 'undefined')
@@ -893,7 +912,7 @@ if(typeof($3Dmolpromise) === 'undefined')
             module = {};
 
         var tag = document.createElement('script');
-        tag.src = 'https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.1.0/3Dmol-min.js';
+        tag.src = url;
         tag.async = true;
         tag.onload = () => 
         {
@@ -904,6 +923,11 @@ if(typeof($3Dmolpromise) === 'undefined')
         var firstScriptTag = document.getElementsByTagName('script')[0];
         firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
     });
+}
+if(typeof($3Dmolpromise) == 'undefined')
+{
+    $3Dmolpromise = null;
+    $3Dmolpromise = XpongeSource('https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.1.0/3Dmol.js');
 }
 function XpongeSetHover(hoverable=true)
 {
@@ -936,6 +960,7 @@ function XpongeSetStyle()
     }
     m_ID.setStyle({}, style);
 }
+
 $3Dmolpromise.then(() =>
 {
     viewer_ID = $3Dmol.createViewer(document.getElementById("3dmolviewer_ID"),{backgroundColor:"white"});
@@ -953,13 +978,17 @@ $3Dmolpromise.then(() =>
     {
         mouseHover.checked = false;
         mouseHover.disabled = true;
+        playStride.disabled = true;
+        playInterval.disabled = true;
+        playRepeat.disabled = true;
+        playSnapshot.disabled = true;
         viewer_ID.incAnim();
-        let interval = 100;
+        let interval = Number(playInterval.value);
         let loop = "forward";
-        let reps = 0;
+        let reps = Number(playRepeat.value);
         let mostFrames = viewer_ID.getNumFrames();
         let currFrame = Number(frameValue.value);
-        let inc = 1;
+        let inc = Number(playStride.value);
         let displayCount = 0;
         let displayMax = mostFrames * reps;
         let time = new Date();
@@ -991,7 +1020,6 @@ $3Dmolpromise.then(() =>
                     });
             }
         };
-
         resolve = function ()
         {
             if (frameZoom.checked)
@@ -1032,6 +1060,10 @@ var mouseHover = document.getElementById('mouse-hover');
 var stickChecker = document.getElementById('style-stick');
 var sphereChecker = document.getElementById('style-sphere');
 var sphereScaler = document.getElementById('style-sphere-scale');
+var playStride = document.getElementById('play-stride');
+var playInterval = document.getElementById('play-interval');
+var playRepeat = document.getElementById('play-repeat');
+var playSnapshot = document.getElementById('play-snapshot');
 function frameSliderChange()
 {
     frameValue.value = frameSlider.value;
@@ -1062,17 +1094,18 @@ function frameValueChange()
 }
 </script>
 """
-    def __init__(self, u):
+    def __init__(self, u, start=None, stride=None, stop=None):
         self.u = u
         self.id = str(hash(time.time()))
         self.atom_idx = {}
         self.kernel = ""
         self.max_frame = ""
-        self._init_kernel()
+        self._init_kernel(start, stride, stop)
 
-    def _init_kernel(self):
+    def _init_kernel(self, start, stride, stop):
         """ Initialize the kernel """
         arguments = []
+        traj = self.u.trajectory[start:stop:stride]
         self.atom_idx = {atom: i for i, atom in enumerate(self.u.atoms)}
         atoms = [{'elem': atom.element, 'atom': atom.name,
             'bonds': [], 'bondOrder': []} for atom in self.u.atoms]
@@ -1086,9 +1119,9 @@ function frameValueChange()
                 bond_order = 1
             atoms[atom0]['bondOrder'].append(bond_order)
             atoms[atom1]['bondOrder'].append(bond_order)
-        self.max_frame = str(len(self.u.trajectory) - 1)
+        self.max_frame = str(len(traj) - 1)
 
-        for ts in self.u.trajectory:
+        for ts in traj:
             for i, atom in enumerate(atoms):
                 atoms[i]['x'] = self.u.atoms.positions[i][0]
                 atoms[i]['y'] = self.u.atoms.positions[i][1]

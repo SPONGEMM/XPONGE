@@ -799,6 +799,20 @@ the marker "ar" will be added to the aromatic bond.
         for i in range(self.atom_numbers):
             self.coordinate[i] = rdmol.GetConformer().GetAtomPosition(i)
 
+    @property
+    def uff_energy(self):
+        """
+        This **function** uses rdkit and uff to calculate the energy of the structure
+
+        :return float: the energy of the molecule
+        """
+        from rdkit.Chem import AllChem
+        from ..helper.rdkit import assign_to_rdmol
+        rdmol = assign_to_rdmol(self)
+        ff = AllChem.UFFGetMoleculeForceField(rdmol)
+        energy = ff.CalcEnergy()
+        return energy
+
     def save_as_pdb(self, filename):
         """
         This **function** saves the instance as a pdb file
