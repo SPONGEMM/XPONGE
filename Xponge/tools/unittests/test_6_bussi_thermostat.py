@@ -9248,17 +9248,17 @@ END
         step_limit = 5000000
         temperature_limit = 1
 
-    assert run(f"SPONGE -mode NVT -thermostat berendsen_thermostat -default_in_file_prefix WATS \
+    assert run(f"SPONGE -mode NVT -thermostat bussi_thermostat -default_in_file_prefix WATS \
 -step_limit {step_limit} -dt 2e-3 -constrain_mode SHAKE -cutoff 8 -write_information_interval 100 \
--target_temperature 300 -mdout 300.mdout -berendsen_thermostat_stochastic_term 1 > 300.out") == 0
+-target_temperature 300 -mdout 300.mdout > 300.out") == 0
 
     out1 = MdoutReader("300.mdout")
     Xponge.Xprint(f"<T>={np.mean(out1.temperature)}")
     assert np.abs(np.mean(out1.temperature) - 300) < temperature_limit
 
-    assert run(f"SPONGE -mode NVT -thermostat berendsen_thermostat -default_in_file_prefix WATS \
+    assert run(f"SPONGE -mode NVT -thermostat bussi_thermostat -default_in_file_prefix WATS \
 -step_limit {step_limit} -dt 2e-3 -constrain_mode SHAKE -cutoff 8 -write_information_interval 100 \
--target_temperature 310 -mdout 310.mdout -berendsen_thermostat_stochastic_term 1 > 310.out") == 0
+-target_temperature 310 -mdout 310.mdout > 310.out") == 0
 
     out2 = MdoutReader("310.mdout")
     Xponge.Xprint(f"<T>={np.mean(out2.temperature)}")

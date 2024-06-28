@@ -170,6 +170,7 @@ Xponge/tools/unittests/test_1_charge.py
 Xponge/tools/unittests/test_1_cif.py
 Xponge/tools/unittests/test_1_helper.py
 Xponge/tools/unittests/test_1_io.py
+Xponge/tools/unittests/test_1_lattice.py
 Xponge/tools/unittests/test_1_process.py
 Xponge/tools/unittests/test_2_ffbase.py
 Xponge/tools/unittests/test_3_bsc1.py
@@ -179,6 +180,7 @@ Xponge/tools/unittests/test_3_ff14sb.py
 Xponge/tools/unittests/test_3_ff19sb.py
 Xponge/tools/unittests/test_3_ol3.py
 Xponge/tools/unittests/test_3_oplsaam.py
+Xponge/tools/unittests/test_4_large_system_efficiency.py
 Xponge/tools/unittests/test_4_min_efficiency.py
 Xponge/tools/unittests/test_4_npt_efficiency.py
 Xponge/tools/unittests/test_4_nvt_efficiency.py

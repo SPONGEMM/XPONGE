@@ -65,6 +65,34 @@ def _check_one_energy(gmx_mdout, term_name, sponge_out):
     plt.savefig(f"{term_name}.png")
     plt.clf()
 
+def _check_force(gmx_frc, sponge_frc, n_main_atoms):
+    import numpy as np
+    from Xponge import Xprint
+    sponge_frc = np.fromfile(sponge_frc, dtype=np.float32).reshape(1001, -1, 3)
+
+    assert os.system(f'gmx dump -f {gmx_frc} > force.txt 2> dump.log') == 0
+    gmx_frc = np.zeros_like(sponge_frc).reshape(-1)
+    count = 0
+    with open("force.txt") as f:
+        for line in f:
+            if line.strip().startswith("f[") and "]" in line and "=" in line and "{" in line and "}" in line:
+                line = line.split("{")[1]
+                line = line.split("}")[0]
+                line = line.split(",")
+                for i in line:
+                    gmx_frc[count] = float(i)
+                    count += 1
+    gmx_frc = gmx_frc.reshape(1001, -1, 3)
+
+    sponge_frc = sponge_frc[:,:n_main_atoms,0] * sponge_frc[:,:n_main_atoms,0] + sponge_frc[:,:n_main_atoms,1] * sponge_frc[:,:n_main_atoms,1] + sponge_frc[:,:n_main_atoms,2] * sponge_frc[:,:n_main_atoms,2]
+    sponge_frc = np.sqrt(sponge_frc)
+    gmx_frc = gmx_frc[:,:n_main_atoms,0] * gmx_frc[:,:n_main_atoms,0] + gmx_frc[:,:n_main_atoms,1] * gmx_frc[:,:n_main_atoms,1] + gmx_frc[:,:n_main_atoms,2] * gmx_frc[:,:n_main_atoms,2]
+    gmx_frc = np.sqrt(gmx_frc) / 41.84
+    delta = gmx_frc - sponge_frc
+    delta = delta.reshape(-1)
+    error = np.mean(np.abs(delta))
+    Xprint(error)
+    assert error < 0.2
 
 def test_protein():
     """
@@ -84,6 +112,7 @@ def test_protein():
     for res in s.split():
         mol += Xponge.ResidueType.get_type(res)
     mol += Xponge.ResidueType.get_type("CALA")
+    n_main_atoms = len(mol.get_atoms())
 
     Path("protein").mkdir(exist_ok=True)
     Xponge.save_pdb(mol, "protein/protein.pdb")
@@ -105,6 +134,7 @@ constraint_algorithm = lincs
 constraints = h-bonds
 nsteps = 1000
 nstxout = 1
+nstfout = 1
 nstlog = 1
 coulombtype = PME
 vdw-modifier = None
@@ -120,8 +150,9 @@ DispCorr = Ener
 
     assert os.system("cd protein && Xponge converter -p protein_mass.txt -c run.trr -o run.dat > convert.log") == 0
     assert run("SPONGE -mode rerun -default_in_file_prefix protein/protein -crd protein/run.dat \
--mdout protein/mdout.txt -box protein/run.box > protein/rerun.log") == 0
+-mdout protein/mdout.txt -box protein/run.box -frc protein/force.dat > protein/rerun.log") == 0
 
+    _check_force("protein/run.trr", "protein/force.dat", n_main_atoms)
     gmx_mdout = _get_energies("protein/run.log")
     t = MdoutReader("protein/mdout.txt")
 
@@ -134,7 +165,7 @@ DispCorr = Ener
     _check_one_energy(gmx_mdout["CMAP Dih."], "protein_plot/Cmap", t.cmap)
     _check_one_energy(gmx_mdout["LJ-14"], "protein_plot/1-4 NB", t.nb14_LJ)
     _check_one_energy(gmx_mdout["Coulomb-14"], "protein_plot/1-4 EEL", t.nb14_EE)
-    _check_one_energy(gmx_mdout["LJ (SR)"] + gmx_mdout["Disper. corr."], "protein_plot/LJ", t.LJ)
+    _check_one_energy(gmx_mdout["LJ (SR)"] + gmx_mdout["Disper. corr."], "protein_plot/LJ", t.LJ_long + t.LJ_short)
     _check_one_energy(gmx_mdout["Coulomb (SR)"] + gmx_mdout["Coul. recip."], "protein_plot/PME", t.PME)
 
 def test_rna():
@@ -153,6 +184,7 @@ def test_rna():
     for res in s.split():
         mol += Xponge.ResidueType.get_type(res)
     mol += Xponge.ResidueType.get_type("C")
+    n_main_atoms = len(mol.get_atoms())
 
     Path("rna").mkdir(exist_ok=True)
     Xponge.save_pdb(mol, "rna/rna.pdb")
@@ -185,6 +217,7 @@ constraint_algorithm = lincs
 constraints = h-bonds
 nsteps = 1000
 nstxout = 1
+nstfout = 1
 nstlog = 1
 coulombtype = PME
 vdw-modifier = None
@@ -200,8 +233,9 @@ DispCorr = Ener
 
     assert os.system("cd rna && Xponge converter -p rna_mass.txt -c run.trr -o run.dat > convert.log") == 0
     assert run("SPONGE -mode rerun -default_in_file_prefix rna/rna -crd rna/run.dat \
--mdout rna/mdout.txt -box rna/run.box > rna/rerun.log") == 0
+-mdout rna/mdout.txt -box rna/run.box -frc rna/force.dat > rna/rerun.log") == 0
 
+    _check_force("rna/run.trr", "rna/force.dat", n_main_atoms)
     gmx_mdout = _get_energies("rna/run.log")
     t = MdoutReader("rna/mdout.txt")
 
@@ -213,7 +247,7 @@ DispCorr = Ener
     _check_one_energy(gmx_mdout["Improper Dih."], "rna_plot/Improper", t.improper_dihedral)
     _check_one_energy(gmx_mdout["LJ-14"], "rna_plot/1-4 NB", t.nb14_LJ)
     _check_one_energy(gmx_mdout["Coulomb-14"], "rna_plot/1-4 EEL", t.nb14_EE)
-    _check_one_energy(gmx_mdout["LJ (SR)"] + gmx_mdout["Disper. corr."], "rna_plot/LJ", t.LJ)
+    _check_one_energy(gmx_mdout["LJ (SR)"] + gmx_mdout["Disper. corr."], "rna_plot/LJ", t.LJ_long + t.LJ_short)
     _check_one_energy(gmx_mdout["Coulomb (SR)"] + gmx_mdout["Coul. recip."], "rna_plot/PME", t.PME)
 
 
@@ -233,6 +267,7 @@ def test_dna():
     for res in s.split():
         mol += Xponge.ResidueType.get_type(res)
     mol += Xponge.ResidueType.get_type("DC")
+    n_main_atoms = len(mol.get_atoms())
 
     Path("dna").mkdir(exist_ok=True)
     Xponge.save_pdb(mol, "dna/dna.pdb")
@@ -265,6 +300,7 @@ constraint_algorithm = lincs
 constraints = h-bonds
 nsteps = 1000
 nstxout = 1
+nstfout = 1
 nstlog = 1
 coulombtype = PME
 vdw-modifier = None
@@ -280,8 +316,9 @@ DispCorr = Ener
 
     assert os.system("cd dna && Xponge converter -p dna_mass.txt -c run.trr -o run.dat > convert.log") == 0
     assert run("SPONGE -mode rerun -default_in_file_prefix dna/dna -crd dna/run.dat \
--mdout dna/mdout.txt -box dna/run.box > dna/rerun.log") == 0
+-mdout dna/mdout.txt -box dna/run.box -frc dna/force.dat > dna/rerun.log") == 0
 
+    _check_force("dna/run.trr", "dna/force.dat", n_main_atoms)
     gmx_mdout = _get_energies("dna/run.log")
     t = MdoutReader("dna/mdout.txt")
 
@@ -293,5 +330,5 @@ DispCorr = Ener
     _check_one_energy(gmx_mdout["Improper Dih."], "dna_plot/Improper", t.improper_dihedral)
     _check_one_energy(gmx_mdout["LJ-14"], "dna_plot/1-4 NB", t.nb14_LJ)
     _check_one_energy(gmx_mdout["Coulomb-14"], "dna_plot/1-4 EEL", t.nb14_EE)
-    _check_one_energy(gmx_mdout["LJ (SR)"] + gmx_mdout["Disper. corr."], "dna_plot/LJ", t.LJ)
+    _check_one_energy(gmx_mdout["LJ (SR)"] + gmx_mdout["Disper. corr."], "dna_plot/LJ", t.LJ_short + t.LJ_long)
     _check_one_energy(gmx_mdout["Coulomb (SR)"] + gmx_mdout["Coul. recip."], "dna_plot/PME", t.PME)

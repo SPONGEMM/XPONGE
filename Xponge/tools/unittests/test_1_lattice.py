@@ -1,5 +1,5 @@
 """
-    This **module** includes unittests of the basic functions of Xponge.process
+    This **module** includes unittests of the basic functions of Xponge.process for lattice
 """
 import os
 

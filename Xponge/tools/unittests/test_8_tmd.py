@@ -325,11 +325,8 @@ TER     305      SER A  20                                                      
     Xponge.save_sponge_input(t, "trp_cage")
     cv = CVSystem(t)
     cv.add_cv_rmsd("RMSD", "protein and backbone")
-    cv.add_cv_density("rho")
-    cv.restrain("rho", 1e6, 1, reduce_step=1, stop_step=50000)
     cv.restrain("RMSD", 50, 0, max_step=50000, reduce_step=50000, stop_step=100000)
     cv.print("RMSD")
-    cv.print("rho")
     cv.output("cv.txt")
     assert run("SPONGE -default_in_file_prefix trp_cage -mode minimization -rst min > min.out") == 0
     assert run("SPONGE -default_in_file_prefix trp_cage -mode nvt \

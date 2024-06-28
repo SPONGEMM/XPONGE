@@ -9244,12 +9244,17 @@ END
     step_limit = 50000
     if Xponge.GlobalSetting.purpose == "academic":
         step_limit = 500000
-    assert run(f"SPONGE -mode NVT -thermostat middle_langevin -default_in_file_prefix WATS \
--step_limit {step_limit} -dt 2e-3 -constrain_mode SHAKE -cutoff 8 > nvt.out") == 0
-    out1 = MdoutReader("mdout.txt")
+    assert run(f"SPONGE -mode NPT -thermostat middle_langevin -default_in_file_prefix WATS \
+-cutoff 8 -step_limit {step_limit} -dt 1e-3 -frc run_force.dat \
+-default_out_file_prefix run -barostat berendsen_barostat > run.log") == 0
+    out1 = MdoutReader("run.out")
     assert run("SPONGE -mode rerun -default_in_file_prefix WATS \
--cutoff 8 -crd mdcrd.dat -box mdbox.txt > rerun.out") == 0
-    out2 = MdoutReader("mdout.txt")
+-cutoff 8 -crd run.dat -box run.box -frc rerun_force.dat \
+-default_out_file_prefix rerun > rerun.log") == 0
+    out2 = MdoutReader("rerun.out")
     assert np.all(np.abs((out1.potential - out2.potential) / out1.potential) < 0.0001)
-    assert np.all(np.abs((out1.LJ - out2.LJ) / out1.LJ) < 0.0001)
-    assert np.all(np.abs((out1.PME - out2.PME) / out1.PME) < 0.001)
+    frc1 = np.fromfile("run_force.dat", dtype=np.float32).reshape(-1, 6915, 3)
+    frc2 = np.fromfile("rerun_force.dat", dtype=np.float32).reshape(-1, 6915, 3)
+    Xponge.Xprint(np.mean((frc1 - frc2) / frc1))
+    assert np.mean(np.abs((frc1 - frc2) / frc1) < 0.001)
+

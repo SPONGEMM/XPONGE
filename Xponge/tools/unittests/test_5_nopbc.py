@@ -2,7 +2,7 @@
     This **module** gives the unit tests of the simulation for nopbc
 """
 
-__all__ = ["test_rerun", "test_cv_run"]
+__all__ = ["test_gb", "test_cv_run"]
 
 def _check_one_energy(amber_mdout, amber_name, sponge_out):
     """check one energy term"""
@@ -31,7 +31,24 @@ def _check_one_energy(amber_mdout, amber_name, sponge_out):
     plt.savefig(f"{amber_name}.png")
     plt.clf()
 
-def test_rerun():
+def _check_force():
+    """check the total force"""
+    from Xponge import Xprint
+    import numpy as np
+    from netCDF4 import Dataset
+    amber_frc = Dataset("mdfrc").variables["forces"][1:]
+    amber_frc = amber_frc[:,:,0] * amber_frc[:,:,0] + amber_frc[:,:,1] * amber_frc[:,:,1] + amber_frc[:,:,2] * amber_frc[:,:,2]
+    amber_frc = np.sqrt(amber_frc)
+    sponge_frc = np.fromfile("force.dat", dtype=np.float32).reshape(1000, -1, 3)[:-1]
+    sponge_frc = sponge_frc[:,:,0] * sponge_frc[:,:,0] + sponge_frc[:,:,1] * sponge_frc[:,:,1] + sponge_frc[:,:,2] * sponge_frc[:,:,2]
+    sponge_frc = np.sqrt(sponge_frc)
+    delta = amber_frc - sponge_frc
+    delta = delta.reshape(-1)
+    error = np.mean(np.abs(delta))
+    Xprint(error)
+    assert error < 0.05
+
+def test_gb():
     """
         test the single point energy for a general Born system
     """
@@ -64,14 +81,15 @@ quit""")
   temp0 = 300
   ntwx = 1
   ntpr = 1
+  ntwf = 1
 /
 """)
-    assert os.system("tleap > tleap.out 2> tleap.out") == 0
-    assert os.system("pmemd.cuda -i mdin -p t.parm7 -c t.rst7 -x amber.nc -O > pmemd.out 2> pmemd.out") == 0
+    assert os.system("tleap > tleap.out 2>&1") == 0
+    assert os.system("pmemd.cuda -i mdin -p t.parm7 -c t.rst7 -x amber.nc -O > pmemd.out 2>&1") == 0
     assert os.system("Xponge converter -p t.parm7 -c amber.nc -o amber.dat -of sponge_traj") == 0
 
     with open("amber.box", "w") as f:
-        f.write("999 999 999 90 90 90")
+        f.write("999 999 999 90 90 90\n" * 1000)
     mol = Xponge.ResidueType.get_type("ACE")
     for res in s.split():
         mol += Xponge.ResidueType.get_type(res)
@@ -79,8 +97,9 @@ quit""")
     gb.set_gb_radius(mol)
     Xponge.save_sponge_input(mol, "gb")
     assert run("SPONGE -mode rerun -default_in_file_prefix gb " + \
-               "-cutoff 999 -pbc 0 -crd amber.dat -box amber.box > rerun.out ") == 0
+               "-cutoff 999 -pbc 0 -crd amber.dat -box amber.box -frc force.dat > rerun.out ") == 0
 
+    _check_force()
     t = MdoutReader("mdout.txt")
     _check_one_energy("mdout", " EPtot", t.potential)
     _check_one_energy("mdout", " BOND", t.bond)

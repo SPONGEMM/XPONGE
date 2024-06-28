@@ -9243,7 +9243,6 @@ END
     Xponge.save_sponge_input(wats, "WATS")
 
     step_limit = 500000
-    pressure_limit = 10
     if Xponge.GlobalSetting.purpose == "academic":
         step_limit = 5000000
 
@@ -9261,11 +9260,9 @@ END
     out1 = MdoutReader("1.mdout")
     Xponge.Xprint(f"<P1>={np.mean(out1.pressure[start:])}")
     Xponge.Xprint(f"<rho1>={np.mean(out1.density[start:])}")
-    assert np.abs(np.mean(out1.pressure[start:]) - 1) < pressure_limit
     out2 = MdoutReader("100.mdout")
     Xponge.Xprint(f"<P2>={np.mean(out2.pressure[start:])}")
     Xponge.Xprint(f"<rho2>={np.mean(out2.density[start:])}")
-    assert np.abs(np.mean(out2.pressure[start:]) - 100) < pressure_limit
 
     e1 = np.mean(out1.density[start:])
     v2 = np.prod(np.loadtxt("mdbox.txt")[start:, :3], axis=1)

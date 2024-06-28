@@ -303,7 +303,7 @@ class _Meta1D(_CVBias):
 
     def to_string(self, folder):
         lines = [f"    {key} = {value}\n" for key, value in self.kwargs.items()]
-        return f"""meta1d
+        return f"""metad
 {{
     CV = {self.cv}
 {"".join(lines)}}}
@@ -605,27 +605,27 @@ class CVSystem:
             i = i + "_step"
             getattr(self.bias["restrain"], i).append(locals()[i])
 
-    def meta1d(self, name, dCV, CV_minimal, CV_maximum, welltemp_factor, height, sigma): #pylint: disable=unused-argument, invalid-name
+    def meta1d(self, name, CV_grid, CV_minimal, CV_maximum, CV_sigma, welltemp_factor, height): #pylint: disable=unused-argument, invalid-name
         """
            Add a CV to do metadynamics
 
            :param name: the name of the CV
-           :param dCV: the weight for meta1d
+           :param CV_grid: the number of grids for meta1d
            :param CV_minimal: the minimal value of the CV
            :param CV_maximum: the maximum value of the CV
+           :param CV_sigma: the sigma of the Gaussian potential to add
            :param welltemp_factor: the welltemfactor value of the CV
            :param height: the height of the Gaussian potential to add
-           :param sigma: the sigma of the Gaussian potential to add
         """
         if name not in self.cv:
             raise ValueError(f"{name} is not a valid CV")
-        if "meta1d" not in self.bias:
+        if "metad" not in self.bias:
             kwargs= {}
-            for i in ["dCV", "CV_minimal", "CV_maximum", "welltemp_factor", "height", "sigma"]:
+            for i in ["CV_grid", "CV_minimal", "CV_maximum", "welltemp_factor", "height", "CV_sigma"]:
                 kwargs[i] = locals()[i]
             if hasattr(self.cv[name], "period"):
                 kwargs["CV_period"] = self.cv[name].period
-            self.bias["meta1d"] = _Meta1D(name, **kwargs)
+            self.bias["metad"] = _Meta1D(name, **kwargs)
 
     def output(self, filename, folder="."):
         """

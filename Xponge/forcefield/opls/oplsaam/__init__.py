@@ -1,5 +1,5 @@
 """
-This **package** sets the basic configuration of charmm36-july2022 force field
+This **package** sets the basic configuration of OPLS-AA/m force field
 """
 import os
 from ....helper import source, Xprint

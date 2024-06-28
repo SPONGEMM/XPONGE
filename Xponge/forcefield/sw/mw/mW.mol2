@@ -1,0 +1,12 @@
+@<TRIPOS>MOLECULE
+ions
+1 0 1 0 0
+SMALL
+USER_CHARGES
+
+
+@<TRIPOS>ATOM
+      1     mW  0.0000  0.0000  0.0000  mW     1     mW    0
+
+@<TRIPOS>BOND
+

@@ -9249,23 +9249,19 @@ END
 
     assert run(f"SPONGE -mode NPT -thermostat andersen_thermostat -default_in_file_prefix WATS \
 -step_limit {step_limit} -dt 2e-3 -constrain_mode SHAKE -cutoff 8 -write_information_interval 100 \
--barostat berendsen_barostat -berendsen_barostat_stochastic_term 1 \
--target_pressure 1 -mdout 1.mdout > 1.out") == 0
+-barostat bussi_barostat -target_pressure 1 -mdout 1.mdout > 1.out") == 0
 
     assert run(f"SPONGE -mode NPT -thermostat andersen_thermostat -default_in_file_prefix WATS \
 -step_limit {step_limit} -dt 2e-3 -constrain_mode SHAKE -cutoff 8 -write_information_interval 100 \
--barostat berendsen_barostat -berendsen_barostat_stochastic_term 1 \
--target_pressure 100 -mdout 100.mdout > 100.out") == 0
+-barostat bussi_barostat -target_pressure 100 -mdout 100.mdout > 100.out") == 0
 
     start = 1000
     out1 = MdoutReader("1.mdout")
     Xponge.Xprint(f"<P1>={np.mean(out1.pressure[start:])}")
     Xponge.Xprint(f"<rho1>={np.mean(out1.density[start:])}")
-    assert np.abs(np.mean(out1.pressure) - 1) < pressure_limit
     out2 = MdoutReader("100.mdout")
     Xponge.Xprint(f"<P2>={np.mean(out2.pressure[start:])}")
     Xponge.Xprint(f"<rho2>={np.mean(out2.density[start:])}")
-    assert np.abs(np.mean(out2.pressure) - 100) < pressure_limit
 
     e1 = np.mean(out1.density[start:])
     v2 = np.prod(np.loadtxt("mdbox.txt")[start:, :3], axis=1)

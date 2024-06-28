@@ -53,3 +53,4 @@ def test_atomwise():
 name    mass    charge[e]   LJtype
 H       1.008   1.000       HW
 """)
+

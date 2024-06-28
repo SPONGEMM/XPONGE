@@ -2,10 +2,10 @@
     This **module** gives the unit tests of selective integrated enhancing sampling
 """
 
-__all__ = ["test_sits"]
+__all__ = ["test_sits1d", "test_sits2d"]
 
-def test_sits():
-    """ test SITS """
+def test_sits1d():
+    """ test SITS for 1-dimensional CV"""
     import numpy as np
     import matplotlib.pyplot as plt
     import Xponge
@@ -15,15 +15,19 @@ def test_sits():
     from Xponge.mdrun import run
     from Xponge.analysis import MdoutReader
     from scipy.stats import gaussian_kde
+    from pathlib import Path
 
-    min_command = "SPONGE -mode minimization -step_limit 10000 -default_in_file_prefix test \
-                   -cutoff 1 -skin 1 -neighbor_list_refresh_interval 100000 -rst min > temp.out"
+    Path("sits1d").mkdir(exist_ok=True)
 
-    run_command = "SPONGE -mode NVT -dt 1e-3 -default_in_file_prefix test \
-                   -sits_dihedral_in_file test_dihedral.txt \
+    min_command = "SPONGE -mode minimization -step_limit 10000 -default_in_file_prefix sits1d/test \
+                   -cutoff 1 -skin 1 -neighbor_list_refresh_interval 100000 -default_out_file_prefix sits1d/min \
+                   > temp.out"
+
+    run_command = "SPONGE -mode NVT -dt 1e-3 -default_in_file_prefix sits1d/test \
+                   -sits_dihedral_in_file sits1d/test_dihedral.txt \
                    -cutoff 1 -skin 1 -neighbor_list_refresh_interval 100000 \
-                   -thermostat andersen_thermostat -coordinate_in_file min_coordinate.txt \
-                   -cv_in_file cv.txt -write_information_interval 100"
+                   -thermostat andersen_thermostat -coordinate_in_file sits1d/min_coordinate.txt \
+                   -cv_in_file sits1d/cv.txt -default_out_file_prefix sits1d/out -write_information_interval 100"
 
     assign = Xponge.get_assignment_from_smiles("OO")
     hw = Xponge.AtomType.get_type("HW")
@@ -31,8 +35,8 @@ def test_sits():
                                  HW-HW-HW   50  1.7""")
     assign.atom_types = [hw, hw, hw, hw]
     tes = assign.to_residuetype("TES")
-    mol = Xponge.save_sponge_input(tes, "test")
-    with open("test_dihedral.txt", "w") as f:
+    mol = Xponge.save_sponge_input(tes, "sits1d/test")
+    with open("sits1d/test_dihedral.txt", "w") as f:
         f.write("""2
 2 0 1 3 2 15 0.4
 2 0 1 3 3 5 -0.6
@@ -41,7 +45,7 @@ def test_sits():
     cv = CVSystem(mol)
     cv.add_cv_dihedral("torsion", mol.atoms[2], mol.atoms[0], mol.atoms[1], mol.atoms[3])
     cv.print("torsion")
-    cv.output("cv.txt")
+    cv.output("sits1d/cv.txt")
 
     assert run(min_command) == 0
     assert run(run_command + " -SITS_mode observation -SITS_atom_numbers 4 -step_limit 20000 > temp.out") == 0
@@ -49,9 +53,9 @@ def test_sits():
 -SITS_T_low 100 -SITS_T_high 6000 -SITS_k_numbers 6000 -SITS_pe_b -0.0 -step_limit 100000 > temp.out") == 0
     assert run(run_command + " -SITS_mode production  -SITS_atom_numbers 4 \
 -SITS_T_low 100 -SITS_T_high 6000 -SITS_k_numbers 6000 -SITS_pe_b -0.0 \
--SITS_nk_in_file SITS_nk_rest.txt -step_limit 980000 > temp.out") == 0
+-SITS_nk_in_file sits1d/out_SITS_nk_rest.txt -step_limit 980000 > temp.out") == 0
 
-    t = MdoutReader("mdout.txt")
+    t = MdoutReader("sits1d/out.out")
     bias = t.SITS_bias
     t = t.torsion
     kt = -8.314 * 300 / 4184
@@ -71,3 +75,7 @@ def test_sits():
     plt.legend()
     plt.savefig("sits.png")
     plt.clf()
+
+def test_sits2d():
+    """ test SITS for 2-dimensional CV"""
+

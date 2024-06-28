@@ -570,7 +570,7 @@ N463   C220    1.575   1_455 S
     mol = lattice.create(box, region)
     Xponge.save_mol2(mol, "cof.mol2")
     Xponge.save_sponge_input(mol, "cof")
-    assert run("SPONGE  -default_in_file_prefix cof -mode NPT -dt 1e-3 \
+    assert run("SPONGE  -default_in_file_prefix cof -mode NPT -dt 1e-3 -default_out_file_prefix cof \
 -thermostat middle_langevin -barostat andersen_barostat -step_limit 5000 > cof1.out") == 0
     box = Xponge.BlockRegion(0, 0, 0,
         2 * lattice_info["cell_length"][0],
@@ -583,7 +583,7 @@ N463   C220    1.575   1_455 S
     mol = lattice.create(box, region)
     Xponge.save_mol2(mol, "cof2.mol2")
     Xponge.save_sponge_input(mol, "cof2")
-    assert run("SPONGE  -default_in_file_prefix cof2 -mode NPT -dt 1e-3 \
+    assert run("SPONGE  -default_in_file_prefix cof2 -mode NPT -dt 1e-3 -default_out_file_prefix cof2 \
 -thermostat middle_langevin -barostat andersen_barostat -step_limit 5000 > cof2.out") == 0
 
 def test_som():
@@ -592,7 +592,7 @@ def test_som():
     """
     import Xponge
     from Xponge.forcefield.amber import gaff
-    #from Xponge.mdrun import run
+    from Xponge.mdrun import run
 
     cif = StringIO(r"""data_2100348
 loop_
@@ -825,5 +825,8 @@ C1 C2 C3 C1 . 5 0.2(10)
     mol = lattice.create(box, region)
     Xponge.save_mol2(mol, "som.mol2")
     Xponge.save_sponge_input(mol, "som")
-    #assert run("SPONGE -default_in_file_prefix som -mode NPT -dt 1e-3 \
-#-thermostat middle_langevin -barostat andersen_barostat -step_limit 5000 > som.out") == 0
+    assert run("SPONGE -default_in_file_prefix som -mode minimization -default_out_file_prefix min \
+-step_limit 5000 > som.out") == 0
+    assert run("SPONGE -default_in_file_prefix som -mode NPT -dt 1e-3 -default_out_file_prefix som \
+-thermostat middle_langevin -barostat andersen_barostat -step_limit 5000 \
+-coordinate_in_file min_coordinate.txt > som.out") == 0

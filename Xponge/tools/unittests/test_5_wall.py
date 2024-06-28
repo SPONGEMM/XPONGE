@@ -9250,7 +9250,7 @@ def test_soft_wall():
     """
     from Xponge.mdrun import run
     with open("wats_soft_walls.txt", "w") as f:
-        f.write("""[[[ x_wall ]]]
+        f.write("""[[[ z_wall ]]]
 [[ potential ]]
 E = powf((z - 5.0f) * (z - 5.0f), -6.0f) + powf((55.0f - z) * (55.0f - z), -6.0f);
 [[ end ]]

@@ -32,6 +32,23 @@ def _check_one_energy(amber_mdout, amber_name, sponge_out):
     plt.savefig(f"{amber_name}.png")
     plt.clf()
 
+def _check_force():
+    """check the total force"""
+    from Xponge import Xprint
+    import numpy as np
+    from netCDF4 import Dataset
+    amber_frc = Dataset("mdfrc").variables["forces"][1:]
+    amber_frc = amber_frc[:,:,0] * amber_frc[:,:,0] + amber_frc[:,:,1] * amber_frc[:,:,1] + amber_frc[:,:,2] * amber_frc[:,:,2]
+    amber_frc = np.sqrt(amber_frc)
+    sponge_frc = np.fromfile("force.dat", dtype=np.float32).reshape(1000, -1, 3)[:-1]
+    sponge_frc = sponge_frc[:,:,0] * sponge_frc[:,:,0] + sponge_frc[:,:,1] * sponge_frc[:,:,1] + sponge_frc[:,:,2] * sponge_frc[:,:,2]
+    sponge_frc = np.sqrt(sponge_frc)
+    delta = amber_frc - sponge_frc
+    delta = delta.reshape(-1)
+    error = np.mean(np.abs(delta))
+    Xprint(error)
+    assert error < 0.01
+
 def test_ff14sb():
     """
         test the single point energy for residues
@@ -61,11 +78,12 @@ quit""")
   temp0 = 300
   ntwx = 1
   ntpr = 1
+  ntwf = 1
 /
 """)
     assert os.system("tleap > tleap.out 2>&1") == 0
-    assert run("SPONGE -mode minimization -amber_parm7 t.parm7 -amber_rst7 t.rst7 -rst min.rst7 \
--step_limit 2000 -minimization_dt_factor 5e-3 > min.out") == 0
+    assert run("SPONGE -mode minimization -amber_parm7 t.parm7 -amber_rst7 t.rst7 -rst min \
+-step_limit 2000 -dont_check_input 1  > min.out") == 0
     assert os.system("pmemd.cuda -i mdin -p t.parm7 -c min.rst7 -x amber.nc -O > pmemd.out 2>&1") == 0
     assert os.system("Xponge converter -p t.parm7 -c amber.nc -o amber.dat -of sponge_traj") == 0
 
@@ -77,15 +95,16 @@ quit""")
     mol += Xponge.ResidueType.get_type("NME")
     Xponge.add_solvent_box(mol, Xponge.ResidueType.get_type("WAT"), 20, n_solvent=n_solvent)
     Xponge.save_sponge_input(mol, "ff14sb")
-    assert run("SPONGE -mode rerun -default_in_file_prefix ff14sb " + \
-               "-cutoff 8 -crd amber.dat -box amber.box > rerun.out ") == 0
+    assert run("SPONGE -mode rerun -default_in_file_prefix ff14sb -dont_check_input 1 " + \
+               "-cutoff 8 -crd amber.dat -box amber.box -frc force.dat > rerun.out ") == 0
 
+    _check_force()
     t = MdoutReader("mdout.txt")
     _check_one_energy("mdout", " EPtot", t.potential)
     _check_one_energy("mdout", " BOND", t.bond)
     _check_one_energy("mdout", " ANGLE", t.angle)
     _check_one_energy("mdout", " DIHED", t.dihedral)
-    _check_one_energy("mdout", " VDWAALS", t.LJ)
+    _check_one_energy("mdout", " VDWAALS", t.LJ_long + t.LJ_short)
     _check_one_energy("mdout", " EELEC", t.PME)
     _check_one_energy("mdout", " 1-4 NB", t.nb14_LJ)
     _check_one_energy("mdout", " 1-4 EEL", t.nb14_EE)

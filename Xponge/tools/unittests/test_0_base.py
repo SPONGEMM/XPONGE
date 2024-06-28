@@ -1,9 +1,16 @@
 """
     This **module** includes unittests of the basic functions
 """
-__all__ = ["test_import",
+__all__ = ["test_hint",
+           "test_import",
            "test_assign",
            "test_molecule"]
+
+def test_hint():
+    "print the hint of the unittest system"
+    import Xponge
+    from Xponge.tools import unittests
+    Xponge.Xprint(unittests.__doc__)
 
 def test_import():
     """test importing modules"""
@@ -21,7 +28,7 @@ def test_assign():
     assign.Add_Atom("H2", 1, 0, 0)
 
 def test_molecule():
-    """test creating an assign by hand"""
+    """test creating a molecule by hand"""
     import Xponge
     import Xponge.forcefield.base.mass_base
     import Xponge.forcefield.base.charge_base
