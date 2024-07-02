@@ -29,9 +29,9 @@ def load_parameter_from_lammps(filename, folder, units, output=False):
             if line.startswith("#"):
                 continue
             values += line.split()
-    for i in range(0, len(values), 20):
-        toread += "-".join(values[13 * i: 13 * i + 2]) + " " + " ".join(values[13 * i + 3: 13 * i + 13]) + "\n"
-        toread += "-".join(values[13 * i: 13 * i + 3]) + " " + " ".join(values[13 * i + 3: 13 * i + 13]) + "\n"
+    for i in range(0, len(values), 13):
+        toread += "-".join(values[i: i + 2]) + " " + " ".join(values[i + 3: i + 13]) + "\n"
+        toread += "-".join(values[i: i + 3]) + " " + " ".join(values[i + 3: i + 13]) + "\n"
     if output:
         Xprint(toread)
     sw_base.SWType.New_From_String(toread)

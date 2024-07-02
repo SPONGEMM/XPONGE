@@ -30,8 +30,8 @@ def load_parameter_from_lammps(filename, folder, units, output=False):
                 continue
             values += line.split()
     for i in range(0, len(values), 20):
-        toread += "-".join(values[20 * i: 20 * i + 2]) + " " + " ".join(values[20 * i + 3: 20 * i + 20]) + "\n"
-        toread += "-".join(values[20 * i: 20 * i + 3]) + " " + " ".join(values[20 * i + 3: 20 * i + 20]) + "\n"
+        toread += "-".join(values[i: i + 2]) + " " + " ".join(values[i + 3: i + 20]) + "\n"
+        toread += "-".join(values[i: i + 3]) + " " + " ".join(values[i + 3: i + 20]) + "\n"
     if output:
         Xprint(toread)
     edip_base.EDIPType.New_From_String(toread)
