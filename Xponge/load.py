@@ -927,6 +927,14 @@ class GromacsTopologyIterator():
                 self.macro_define_stat.append(True)
             else:
                 self.macro_define_stat.append(False)
+        elif words[0] == "#ifndef":
+            macro = words[1]
+            if self.macro_define_stat and not self.macro_define_stat[-1]:
+                self.macro_define_stat.append(False)
+            elif macro not in self.defined_macros.keys():
+                self.macro_define_stat.append(True)
+            else:
+                self.macro_define_stat.append(False)
         elif words[0] == "#else":
             if len(self.macro_define_stat) <= 1 or self.macro_define_stat[-2]:
                 self.macro_define_stat[-1] = not self.macro_define_stat[-1]
@@ -1024,18 +1032,27 @@ def load_ffitp(filename, macros=None):
             else:
                 output["LJ"] = "name sigma[nm] epsilon[kJ/mol] \n"
                 output["nb14_extra"] = "name sigma[nm] epsilon[kJ/mol] kee\n"
-            fudge_lj = float(words[3])
-            fudge_qq = float(words[4])
-            if words[2] == "yes":
+            if len(words) > 3:
+                fudge_lj = float(words[3])
+            else:
+                fudge_lj = 1
+            if len(words) > 3:
+                fudge_qq = float(words[4])
+            else:
+                fudge_qq = 1
+            if len(words) > 2 and words[2] == "yes":
                 output["nb14"] += "X-X {fudgeLJ} {fudgeQQ}\n".format(fudgeLJ=fudge_lj, fudgeQQ=fudge_qq)
 
         elif iterator.flag == "atomtypes":
             words = line.split()
+            offset = 0
             if len(words) == 8:
                 output["bond_type_names"][words[0]] = words.pop(1)
-            output["atomtypes"] += "{type} {mass} {charge} {type}\n".format(type=words[0], mass=float(words[2]),
-                                                                            charge=float(words[3]))
-            output["LJ"] += "{type}-{type} {V} {W}\n".format(type=words[0], V=float(words[5]), W=float(words[6]))
+            elif len(words) == 6:
+                offset = 1
+            output["atomtypes"] += "{type} {mass} {charge} {type}\n".format(type=words[0], mass=float(words[2 - offset]),
+                                                                            charge=float(words[3 - offset]))
+            output["LJ"] += "{type}-{type} {V} {W}\n".format(type=words[0], V=float(words[5 - offset]), W=float(words[6 - offset]))
         elif iterator.flag == "pairtypes":
             words = line.split()
             if len(words) <= 3:
@@ -1137,6 +1154,7 @@ def _molitp_parse_atoms(line, current_mol, current_stat, heads, tails, head_pref
 def _molitp_parse_bonds(line, current_mol, current_stat):
     """ parse one line for bonds of a molitp file """
     words = line.split()
+    func = int(words[2])
     atom1 = current_stat[int(words[0])]
     atom2 = current_stat[int(words[1])]
     if atom1.residue == atom2.residue:
@@ -1145,7 +1163,26 @@ def _molitp_parse_bonds(line, current_mol, current_stat):
         atom1.residue.add_connectivity(atom1.name, atom2.name)
     else:
         current_mol.add_residue_link(atom1, atom2)
+    parser = GlobalSetting.get_gmx_bonded_type_parser("bond", func)
+    parser(words, current_mol, current_stat)
 
+def _molitp_build_system(current_stat, system):
+    """ Directly build the system from the molecules """
+    offset = 0
+    system.get_atoms()
+    for i in range(len(current_stat)):
+        mol, n = current_stat[i]
+        mol.built = True
+        mol.get_atoms()
+        for j in range(n):
+            for force_type, forces in mol.bonded_forces.items():
+                for force in forces:
+                    new_atoms = [system.atoms[offset + mol.atom_index[atom]] for atom in force.atoms]
+                    new_force = force.type.entity(new_atoms, force.type.getType("UNKNOWNS"))
+                    new_force.contents = {**force.contents}
+                    system.add_bonded_force(new_force)
+            offset += len(mol.atoms)
+    system.built = True
 
 def load_molitp(filename, water_replace=True, head_prefix="N", tail_prefix="C", macros=None):
     """
@@ -1190,10 +1227,13 @@ def load_molitp(filename, water_replace=True, head_prefix="N", tail_prefix="C", 
             _molitp_parse_bonds(line, current_mol, current_stat)
         elif iterator.flag == "system":
             sys = Molecule(name=line.strip())
+            current_stat.clear()
         elif iterator.flag == "molecules":
             words = line.split()
             mol = mols[words[0]]
             sys += mol * int(words[1])
+            current_stat[len(current_stat)] = [mol, int(words[1])]
+    _molitp_build_system(current_stat, sys)
     return sys, mols
 
 

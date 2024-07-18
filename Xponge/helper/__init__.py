@@ -161,6 +161,10 @@ class _GlobalSetting():
                                       "angle": {"degree": np.pi, "rad": 180}
                                       })
         setattr(self, "PDBResidueNameMap", {"head": Xdict(), "tail": Xdict(), "save": Xdict()})
+
+        # 所有GROMACS的成键种类
+        setattr(self, "GMXBondedType", Xdict(not_found_message="GMX Bonded term ({}) not supported. Did you import the proper force field?"))
+
         # 消息
         logger = logging.getLogger("Xponge")
         console_handler = logging.StreamHandler()
@@ -262,6 +266,32 @@ class _GlobalSetting():
         self.BondedForces.clear()
         for typename in types:
             self.BondedForces.append(self.BondedForcesMap[typename])
+
+    def get_gmx_bonded_type_parser(self, bonded_force, func):
+        """
+        This **function** is used to get the parsing function of the bonded type in GROMACS input.
+
+        :param bonded_force: GROMACS bonded force name
+        :param func: GROMACS bonded force function
+        :return: None
+        """
+        hint_string = f"{bonded_force} func={func}"
+        return self.GMXBondedType[hint_string]
+
+    def set_gmx_bonded_type_parser(self, bonded_force, func):
+        """
+        This **function** is used to set the parsing function of bonded type in GROMACS input.
+        It is recommended used as a **decorator**.
+
+        :param bonded_force: GROMACS bonded force name
+        :param func: GROMACS bonded force function
+        :return: None
+        """
+        hint_string = f"{bonded_force} func={func}"
+        def wrapper(parser):
+            self.GMXBondedType[hint_string] = parser
+            return parser
+        return wrapper
 
 set_classmethod_alternative_names(_GlobalSetting)
 

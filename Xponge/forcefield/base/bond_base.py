@@ -2,7 +2,7 @@
 This **module** is the basic setting for the force field format of harmonic bond
 """
 from ... import Generate_New_Bonded_Force_Type
-from ...helper import Molecule, set_global_alternative_names, Xdict
+from ...helper import Molecule, set_global_alternative_names, Xdict, GlobalSetting
 
 # pylint: disable=invalid-name
 BondType = Generate_New_Bonded_Force_Type("bond", "1-2", {"k": float, "b": float}, True)
@@ -70,5 +70,24 @@ def _do(self, sys_kwarg, ene_kwarg, use_pbc):
     ene_kwarg["bond"]["force_constant"].append(force_constants)
     ene_kwarg["bond"]["bond_length"].append(bond_lengths)
 
+@GlobalSetting.set_gmx_bonded_type_parser("bond", 1)
+def _gmx_parser(words, mol, stat):
+    """ parsing gmx """
+    atom1 = stat[int(words[0])]
+    atom2 = stat[int(words[1])]
+    if len(words) == 3:
+        string = f"{atom1.type}-{atom2.type}"
+        if string in BondType.get_all_types():
+            res.add_bonded_force(BondType.entity([atom1, atom2], BondType.getType(string)))
+        else:
+            string = f"{atom2.type}-{atom1.type}"
+            res.add_bonded_force(BondType.entity([atom1, atom2], BondType.getType(string)))
+    elif len(words) == 5:
+        new_force = BondType.entity([atom1, atom2], BondType.getType("UNKNOWNS"))
+        new_force.k = float(words[3])
+        new_force.b = float(words[4])
+        mol.add_bonded_force(new_force)
+    else:
+        raise ValueError(f"Only 3 or 5 words should be in the line '{' '.join(words)}'")
 
 set_global_alternative_names()
