@@ -270,10 +270,14 @@ def _pdb_add_residue(f, molecule, position_need, residue_type_map, ignore_hydrog
         if line.startswith("ATOM") or line.startswith("HETATM"):
             extra = line[16]
             insertion_code = line[26]
-            resindex = int(line[22:26])
+            resindex = _pdb_parse_atom_serial(line[22:26])
+            if resindex is None:
+                continue
             resname = line[17:20].strip()
             atomname = line[12:16].strip()
-            atom_index = int(line[6:11])
+            atom_index = _pdb_parse_atom_serial(line[6:11])
+            if atom_index is None:
+                continue
             x = float(line[30:38])
             y = float(line[38:46])
             z = float(line[46:54])
@@ -379,12 +383,50 @@ def _pdb_find_missing_residues(mol, sequences, chain, residue_type_map):
                     find_none_index = None
 
 
+def _pdb_hybrid36_decode(width, field):
+    """
+        decode hybrid-36 encoded integer field (e.g. PDB atom serial)
+    """
+    text = field.strip()
+    if not text:
+        raise ValueError("Empty hybrid-36 field")
+    first = text[0]
+    if first in " +-0123456789":
+        return int(text)
+    number = int(text, 36)
+    base = 10 ** width
+    offset = base - (10 * (36 ** (width - 1)))
+    if "A" <= first <= "Z":
+        return number + offset
+    if "a" <= first <= "z":
+        return number + offset + (26 * (36 ** (width - 1)))
+    raise ValueError(f"Invalid hybrid-36 field: {field!r}")
+
+
+def _pdb_parse_atom_serial(field):
+    """
+        parse PDB atom serial with possible hybrid-36 encoding
+    """
+    text = field.strip()
+    if not text:
+        return None
+    try:
+        if text[0] in " +-0123456789":
+            return int(text)
+        return _pdb_hybrid36_decode(len(field), field)
+    except ValueError as exc:
+        Xprint(f"Invalid atom serial {field!r}: {exc}", "WARNING")
+        return None
+
+
 def _pdb_connects(mol, connects, atom_map):
     """
         process the CONECT part of the pdb file
     """
     for connect in connects:
-        atom = int(connect[6:11])
+        atom = _pdb_parse_atom_serial(connect[6:11])
+        if atom is None:
+            continue
         if atom not in atom_map:
             Xprint(f"CONECT of {atom} is not valid \
 because {atom} is not found in the file", "WARNING")
@@ -395,7 +437,9 @@ because {atom} is not found in the file", "WARNING")
             to_connect = connect[i:i+5]
             if not to_connect.strip():
                 break
-            to_connect = int(to_connect)
+            to_connect = _pdb_parse_atom_serial(to_connect)
+            if to_connect is None:
+                continue
             if to_connect not in atom_map:
                 Xprint(f"CONECT of {atom} to {to_connect} is not valid \
 because {to_connect} is not found in the file", "WARNING")
@@ -446,7 +490,10 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
     with file as f:
         for line in f:
             if line.startswith("ATOM") or line.startswith("HETATM"):
-                resindex = int(line[22:26]) + insertion_count
+                resindex = _pdb_parse_atom_serial(line[22:26])
+                if resindex is None:
+                    continue
+                resindex += insertion_count
                 insertion_code = line[26]
                 chain_id = line[21]
                 if not chain_id.strip() or chain_id in chain_id_processed:

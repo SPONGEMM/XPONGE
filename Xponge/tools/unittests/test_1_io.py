@@ -5,6 +5,8 @@ from io import StringIO
 
 __all__ = ["test_pdb_general",
            "test_pdb_ssbond_link_and_conect",
+           "test_pdb_hybrid36_atom_serial",
+           "test_pdb_hybrid36_resseq",
            "test_mol2_general"]
 
 def test_pdb_general():
@@ -894,6 +896,39 @@ CONECT  805  798
     assert p.get_residue_link(p.residues[2].C, p.residues[3].N) is not None
     assert p.get_residue_link(p.residues[1].C, p.residues[2].N) is not None
     Xponge.save_pdb(p, "test.pdb")
+
+def test_pdb_hybrid36_atom_serial():
+    """
+        test loading PDB with hybrid-36 atom serials
+    """
+    import Xponge
+    import Xponge.forcefield.amber.ff14sb
+    s = StringIO(r"""
+ATOM  A0000  N   GLY A   1       0.000   0.000   0.000  1.00  0.00           N  
+ATOM  A0001  CA  ALA A   2       1.500   0.000   0.000  1.00  0.00           C  
+CONECTA0000A0001
+TER
+""")
+    p = Xponge.load_pdb(s, ignore_conect=False)
+    assert p.get_residue_link(p.residues[0].N, p.residues[1].CA) is not None
+
+def test_pdb_hybrid36_resseq():
+    """
+        test loading PDB with hybrid-36 residue sequence numbers
+    """
+    import Xponge
+    import Xponge.forcefield.amber.ff14sb
+    s = StringIO(r"""
+ATOM      1  N   GLY A A000      0.000   0.000   0.000  1.00  0.00           N  
+ATOM      2  CA  GLY A A000      1.500   0.000   0.000  1.00  0.00           C  
+ATOM      3  N   ALA A A001      3.000   0.000   0.000  1.00  0.00           N  
+ATOM      4  CA  ALA A A001      4.500   0.000   0.000  1.00  0.00           C  
+TER
+""")
+    p = Xponge.load_pdb(s)
+    assert len(p.residues) == 2
+    assert p.residues[0].name == "GLY"
+    assert p.residues[1].name == "ALA"
 
 def test_mol2_general():
     """
