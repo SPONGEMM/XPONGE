@@ -383,24 +383,47 @@ def _pdb_find_missing_residues(mol, sequences, chain, residue_type_map):
                     find_none_index = None
 
 
+_HY36_DIGITS_UPPER = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+_HY36_DIGITS_LOWER = _HY36_DIGITS_UPPER.lower()
+_HY36_UPPER_VALUES = {digit: value for value, digit in enumerate(_HY36_DIGITS_UPPER)}
+_HY36_LOWER_VALUES = {digit: value for value, digit in enumerate(_HY36_DIGITS_LOWER)}
+
+
+def _hy36_decode_pure(digits_values, text):
+    """
+        decode string using digits-values mapping
+    """
+    result = 0
+    base = len(digits_values)
+    for char in text:
+        result = result * base + digits_values[char]
+    return result
+
+
 def _pdb_hybrid36_decode(width, field):
     """
         decode hybrid-36 encoded integer field (e.g. PDB atom serial)
     """
-    text = field.strip()
-    if not text:
-        raise ValueError("Empty hybrid-36 field")
-    first = text[0]
-    if first in " +-0123456789":
-        return int(text)
-    number = int(text, 36)
-    base = 10 ** width
-    offset = base - (10 * (36 ** (width - 1)))
-    if "A" <= first <= "Z":
-        return number + offset
-    if "a" <= first <= "z":
-        return number + offset + (26 * (36 ** (width - 1)))
-    raise ValueError(f"Invalid hybrid-36 field: {field!r}")
+    if len(field) != width:
+        raise ValueError("invalid number literal.")
+    first = field[0]
+    if first in ("-", " ") or first.isdigit():
+        try:
+            return int(field)
+        except ValueError:
+            if field == " " * width:
+                return 0
+    elif first in _HY36_UPPER_VALUES:
+        try:
+            return _hy36_decode_pure(_HY36_UPPER_VALUES, field) - 10 * 36 ** (width - 1) + 10 ** width
+        except KeyError:
+            pass
+    elif first in _HY36_LOWER_VALUES:
+        try:
+            return _hy36_decode_pure(_HY36_LOWER_VALUES, field) + 16 * 36 ** (width - 1) + 10 ** width
+        except KeyError:
+            pass
+    raise ValueError("invalid number literal.")
 
 
 def _pdb_parse_atom_serial(field):

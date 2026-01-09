@@ -17,3 +17,8 @@ extra = [
     "rdkit>=2025.9.3",
     "xpongelib>=1.2.5.0",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]

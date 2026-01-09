@@ -903,14 +903,27 @@ def test_pdb_hybrid36_atom_serial():
     """
     import Xponge
     import Xponge.forcefield.amber.ff14sb
-    s = StringIO(r"""
-ATOM  A0000  N   GLY A   1       0.000   0.000   0.000  1.00  0.00           N  
-ATOM  A0001  CA  ALA A   2       1.500   0.000   0.000  1.00  0.00           C  
-CONECTA0000A0001
-TER
-""")
+    import Xponge.load as load
+    def _atom_line(serial, name, resname, chain, resseq, x, y, z, element):
+        return (f"ATOM  {serial:>5} {name:<4} {resname:>3} {chain:1}{resseq:>4}    "
+                f"{x:>8.3f}{y:>8.3f}{z:>8.3f}  1.00  0.00           {element:>2}\n")
+
+    s = StringIO(""
+                 + _atom_line("A0000", "N", "GLY", "A", "1", 0.0, 0.0, 0.0, "N")
+                 + _atom_line("A0001", "C", "GLY", "A", "1", 1.2, 0.0, 0.0, "C")
+                 + _atom_line("A0002", "N", "ALA", "A", "2", 2.4, 0.0, 0.0, "N")
+                 + _atom_line("A0003", "C", "ALA", "A", "2", 3.6, 0.0, 0.0, "C")
+                 + f"CONECT{'A0001':>5}{'A0002':>5}\n"
+                 + "TER\n")
     p = Xponge.load_pdb(s, ignore_conect=False)
-    assert p.get_residue_link(p.residues[0].N, p.residues[1].CA) is not None
+    assert load._pdb_parse_atom_serial("A0000") == 100000
+    assert load._pdb_parse_atom_serial("A0001") == 100001
+    p.get_atoms()
+    assert p.atom_index[p.residues[0].N] == 0
+    assert p.atom_index[p.residues[0].C] == 1
+    assert p.atom_index[p.residues[1].N] == 2
+    assert p.atom_index[p.residues[1].C] == 3
+    assert p.get_residue_link(p.residues[0].C, p.residues[1].N) is not None
 
 def test_pdb_hybrid36_resseq():
     """
@@ -918,17 +931,23 @@ def test_pdb_hybrid36_resseq():
     """
     import Xponge
     import Xponge.forcefield.amber.ff14sb
-    s = StringIO(r"""
-ATOM      1  N   GLY A A000      0.000   0.000   0.000  1.00  0.00           N  
-ATOM      2  CA  GLY A A000      1.500   0.000   0.000  1.00  0.00           C  
-ATOM      3  N   ALA A A001      3.000   0.000   0.000  1.00  0.00           N  
-ATOM      4  CA  ALA A A001      4.500   0.000   0.000  1.00  0.00           C  
-TER
-""")
+    import Xponge.load as load
+    def _atom_line(serial, name, resname, chain, resseq, x, y, z, element):
+        return (f"ATOM  {serial:>5} {name:<4} {resname:>3} {chain:1}{resseq:>4}    "
+                f"{x:>8.3f}{y:>8.3f}{z:>8.3f}  1.00  0.00           {element:>2}\n")
+
+    s = StringIO(""
+                 + _atom_line("1", "N", "GLY", "A", "A000", 0.0, 0.0, 0.0, "N")
+                 + _atom_line("2", "C", "GLY", "A", "A000", 1.2, 0.0, 0.0, "C")
+                 + _atom_line("3", "N", "ALA", "A", "A001", 2.4, 0.0, 0.0, "N")
+                 + _atom_line("4", "C", "ALA", "A", "A001", 3.6, 0.0, 0.0, "C")
+                 + "TER\n")
     p = Xponge.load_pdb(s)
+    assert load._pdb_parse_atom_serial("A000") == 10000
+    assert load._pdb_parse_atom_serial("A001") == 10001
     assert len(p.residues) == 2
-    assert p.residues[0].name == "GLY"
-    assert p.residues[1].name == "ALA"
+    assert p.residues[0].name == "NGLY"
+    assert p.residues[1].name == "CALA"
 
 def test_mol2_general():
     """
