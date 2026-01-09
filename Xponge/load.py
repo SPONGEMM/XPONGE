@@ -193,10 +193,21 @@ def _pdb_ssbond_before(chain, residue_type_map, ssbonds):
         change the residue name of the SS bonds to CYX
     """
     for ssbond in ssbonds:
-        res_a_index = chain[ssbond[15]][int(ssbond[17:21])]
-        residue_type_map[res_a_index] = "CYX"
-        res_b_index = chain[ssbond[29]][int(ssbond[31:35])]
-        residue_type_map[res_b_index] = "CYX"
+        res_a_index=chain[ssbond[15]][int(ssbond[17:21])]
+        if residue_type_map[res_a_index] in GlobalSetting.PDBResidueNameMap["head"].values():
+            residue_type_map[res_a_index] = "NCYX"
+        elif residue_type_map[res_a_index] in GlobalSetting.PDBResidueNameMap["tail"].values():
+            residue_type_map[res_a_index] = "CCYX"
+        else:
+            residue_type_map[res_a_index] = "CYX"
+            
+        res_b_index= chain[ssbond[29]][int(ssbond[31:35])]
+        if residue_type_map[res_b_index] in GlobalSetting.PDBResidueNameMap["head"].values():
+            residue_type_map[res_b_index] = "NCYX"
+        elif residue_type_map[res_b_index] in GlobalSetting.PDBResidueNameMap["tail"].values():
+            residue_type_map[res_b_index] = "CCYX"
+        else:
+            residue_type_map[res_b_index] = "CYX"
 
 
 def _pdb_ssbond_after(chain, ssbonds, molecule):

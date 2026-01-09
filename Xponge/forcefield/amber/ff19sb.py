@@ -67,6 +67,8 @@ GlobalSetting.HISMap["HIS"].update({"HIS": {"HID": "HID", "HIE": "HIE", "HIP": "
                                     "NHIS": {"HID": "NHID", "HIE": "NHIE", "HIP": "NHIP"}})
 
 ResidueType.get_type("CYX").connect_atoms["ssbond"] = "SG"
+ResidueType.get_type("NCYX").connect_atoms["ssbond"] = "SG"
+ResidueType.get_type("CCYX").connect_atoms["ssbond"] = "SG"
 
 Xprint("""Reference for ff19SB:
   Chuan Tian, Koushik Kasavajhala, Kellon A. A. Belfon, Lauren Raguette, He Huang, Angela N. Migues, John Bickel, Yuzhang Wang, Jorge Pincay, Qin Wu, and Carlos Simmerling
