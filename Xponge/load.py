@@ -1290,28 +1290,49 @@ def _molitp_parse_atoms(line, current_mol, current_stat, heads, tails, head_pref
             (existing_charge is not None and abs(existing_charge - expected_charge) > 1e-6)
         )
         if mismatch:
-            if not (is_head or is_tail):
+            if is_head or is_tail:
+                alt_base = resname
+            else:
                 Xprint(
                     f"ResidueType mismatch for {current_residue.type.name}.{atom_name} outside head/tail; "
                     f"auto-creating a new residue type.",
                     "WARNING",
                 )
                 alt_base = f"{current_residue.type.name}__{atom_name}_{atom_type_name}"
+            compatible_type = None
+            for name in ResidueType.get_all_types().keys():
+                if name == alt_base or name.startswith(alt_base + "_"):
+                    candidate = ResidueType.get_type(name)
+                    candidate_atom = candidate._name2atom.get(atom_name)
+                    if candidate_atom is None:
+                        continue
+                    if candidate_atom.type.name != atom_type_name:
+                        continue
+                    candidate_charge = candidate_atom.contents.get("charge")
+                    if candidate_charge is None:
+                        candidate_charge = candidate_atom.contents.get("charge[e]")
+                    if candidate_charge is not None and abs(candidate_charge - expected_charge) > 1e-6:
+                        continue
+                    compatible_type = candidate
+                    break
+            if compatible_type is not None:
+                current_residue.set_type(compatible_type, add_missing_atoms=False)
+                current_stat[current_residue] = True
+                existing_atom = current_residue.type._name2atom.get(atom_name)
             else:
-                alt_base = resname
-            alt_resname = alt_base
-            suffix = 1
-            while alt_resname in ResidueType.get_all_types():
-                alt_resname = f"{alt_base}_{suffix}"
-                suffix += 1
-            new_res_type = current_residue.type.deepcopy(alt_resname)
-            set_real_global_variable(alt_resname, new_res_type)
-            conflict_atom = new_res_type.name2atom(atom_name)
-            conflict_atom.type = AtomType.get_type(atom_type_name)
-            conflict_atom.Update(**{"charge[e]": expected_charge})
-            current_residue.set_type(new_res_type, add_missing_atoms=False)
-            current_stat[current_residue] = True
-            existing_atom = current_residue.type._name2atom.get(atom_name)
+                alt_resname = alt_base
+                suffix = 1
+                while alt_resname in ResidueType.get_all_types():
+                    alt_resname = f"{alt_base}_{suffix}"
+                    suffix += 1
+                new_res_type = current_residue.type.deepcopy(alt_resname)
+                set_real_global_variable(alt_resname, new_res_type)
+                conflict_atom = new_res_type.name2atom(atom_name)
+                conflict_atom.type = AtomType.get_type(atom_type_name)
+                conflict_atom.Update(**{"charge[e]": expected_charge})
+                current_residue.set_type(new_res_type, add_missing_atoms=False)
+                current_stat[current_residue] = True
+                existing_atom = current_residue.type._name2atom.get(atom_name)
     if current_stat["new_res_type"] or existing_atom is None:
         current_residue.type.Add_Atom(atom_name, atom_type, 0, 0, 0)
         current_residue.type.atoms[-1].Update(**{"charge[e]": expected_charge})
