@@ -1052,7 +1052,7 @@ class GromacsTopologyIterator():
         return line
 
 
-def _ffitp_dihedrals(line, output):
+def _ffitp_dihedrals(line, buffers):
     """
 
     :param line:
@@ -1062,7 +1062,7 @@ def _ffitp_dihedrals(line, output):
     words = line.split()
     func = words[4]
     if func == "1":
-        output["dihedrals"] += "-".join(words[:4]) + " " + " ".join(words[5:]) + " 0\n"
+        buffers["dihedrals"].append("-".join(words[:4]) + " " + " ".join(words[5:]) + " 0\n")
     elif func == "2":
         temp = [words[1], words[2], words[0], words[3]]
         temp2 = [words[1], words[2], words[3], words[0]]
@@ -1072,14 +1072,16 @@ def _ffitp_dihedrals(line, output):
             temp = temp2
         elif words[3] == "CN3T":
             temp = temp2
-        output["impropers"] += "-".join(temp) + " {b} {k}".format(b=float(words[5]), k=float(words[6]) / 2) + "\n"
+        buffers["impropers"].append(
+            "-".join(temp) + " {b} {k}".format(b=float(words[5]), k=float(words[6]) / 2) + "\n"
+        )
     elif func == "3":
-        output["RB_dihedrals"] += "-".join(words[:4]) + " " + " ".join(words[5:]) + "\n"
+        buffers["RB_dihedrals"].append("-".join(words[:4]) + " " + " ".join(words[5:]) + "\n")
     elif func == "4":
-        output["periodic_impropers"] += "-".join(words[:4]) + " " + " ".join(words[5:]) + "\n"
+        buffers["periodic_impropers"].append("-".join(words[:4]) + " " + " ".join(words[5:]) + "\n")
     elif func == "9":
         for i in range(5, len(words), 20):
-            output["dihedrals"] += "-".join(words[:4]) + " " + " ".join(words[i:i + 3]) + " 0\n"
+            buffers["dihedrals"].append("-".join(words[:4]) + " " + " ".join(words[i:i + 3]) + " 0\n")
     else:
         raise NotImplementedError(f"Unsupported dihedral function type {func} for line:\n{line}")
 
@@ -1098,15 +1100,17 @@ def load_ffitp(filename, macros=None):
     """
     iterator = GromacsTopologyIterator(filename, macros)
     output = Xdict()
-    output["nb14"] = "name  kLJ  kee\n"
-    output["atomtypes"] = "name mass charge[e] LJtype\n"
-    output["bonds"] = "name b[nm] k[kJ/mol·nm^-2]\n"
-    output["angles"] = "name b[degree] k[kJ/mol·rad^-2]\n"
-    output["Urey-Bradley"] = "name b[degree] k[kJ/mol·rad^-2] r13[nm] kUB[kJ/mol·nm^-2]\n"
-    output["dihedrals"] = "name phi0[degree] k[kJ/mol] periodicity  reset\n"
-    output["periodic_impropers"] = "name phi0[degree] k[kJ/mol] periodicity\n"
-    output["impropers"] = "name phi0[degree] k[kJ/mol·rad^-2]\n"
-    output["RB_dihedrals"] = "name c0[kJ/mol] c1[kJ/mol] c2[kJ/mol] c3[kJ/mol] c4[kJ/mol] c5[kJ/mol]\n"
+    buffers = {
+        "nb14": ["name  kLJ  kee\n"],
+        "atomtypes": ["name mass charge[e] LJtype\n"],
+        "bonds": ["name b[nm] k[kJ/mol·nm^-2]\n"],
+        "angles": ["name b[degree] k[kJ/mol·rad^-2]\n"],
+        "Urey-Bradley": ["name b[degree] k[kJ/mol·rad^-2] r13[nm] kUB[kJ/mol·nm^-2]\n"],
+        "dihedrals": ["name phi0[degree] k[kJ/mol] periodicity  reset\n"],
+        "periodic_impropers": ["name phi0[degree] k[kJ/mol] periodicity\n"],
+        "impropers": ["name phi0[degree] k[kJ/mol·rad^-2]\n"],
+        "RB_dihedrals": ["name c0[kJ/mol] c1[kJ/mol] c2[kJ/mol] c3[kJ/mol] c4[kJ/mol] c5[kJ/mol]\n"],
+    }
     output["cmaps"] = Xdict()
     output["bond_type_names"] = Xdict(not_found_message="The bond type of {} can not be found")
     for line in iterator:
@@ -1116,11 +1120,11 @@ def load_ffitp(filename, macros=None):
             words = line.split()
             assert int(words[0]) == 1, "SPONGE Only supports Lennard-Jones now"
             if int(words[1]) == 1:
-                output["LJ"] = "name A[kJ/mol·nm^6] B[kJ/mol·nm^12]\n"
-                output["nb14_extra"] = "name A[kJ/mol·nm^6] B[kJ/mol·nm^12] kee\n"
+                buffers["LJ"] = ["name A[kJ/mol·nm^6] B[kJ/mol·nm^12]\n"]
+                buffers["nb14_extra"] = ["name A[kJ/mol·nm^6] B[kJ/mol·nm^12] kee\n"]
             else:
-                output["LJ"] = "name sigma[nm] epsilon[kJ/mol] \n"
-                output["nb14_extra"] = "name sigma[nm] epsilon[kJ/mol] kee\n"
+                buffers["LJ"] = ["name sigma[nm] epsilon[kJ/mol] \n"]
+                buffers["nb14_extra"] = ["name sigma[nm] epsilon[kJ/mol] kee\n"]
             if len(words) > 3:
                 fudge_lj = float(words[3])
             else:
@@ -1130,7 +1134,7 @@ def load_ffitp(filename, macros=None):
             else:
                 fudge_qq = 1
             if len(words) > 2 and words[2] == "yes":
-                output["nb14"] += "X-X {fudgeLJ} {fudgeQQ}\n".format(fudgeLJ=fudge_lj, fudgeQQ=fudge_qq)
+                buffers["nb14"].append("X-X {fudgeLJ} {fudgeQQ}\n".format(fudgeLJ=fudge_lj, fudgeQQ=fudge_qq))
 
         elif iterator.flag == "atomtypes":
             words = line.split()
@@ -1139,53 +1143,70 @@ def load_ffitp(filename, macros=None):
                 output["bond_type_names"][words[0]] = words.pop(1)
             elif len(words) == 6:
                 offset = 1
-            output["atomtypes"] += "{type} {mass} {charge} {type}\n".format(type=words[0], mass=float(words[2 - offset]),
-                                                                            charge=float(words[3 - offset]))
-            output["LJ"] += "{type}-{type} {V} {W}\n".format(type=words[0], V=float(words[5 - offset]), W=float(words[6 - offset]))
+            buffers["atomtypes"].append(
+                "{type} {mass} {charge} {type}\n".format(
+                    type=words[0], mass=float(words[2 - offset]), charge=float(words[3 - offset])
+                )
+            )
+            buffers["LJ"].append(
+                "{type}-{type} {V} {W}\n".format(type=words[0], V=float(words[5 - offset]), W=float(words[6 - offset]))
+            )
         elif iterator.flag == "pairtypes":
             words = line.split()
             if len(words) <= 3:
-                output["nb14"] += "{atom1}-{atom2} {kLJ} {kee}\n".format(atom1=words[0], atom2=words[1], kLJ=fudge_lj,
-                                                                         kee=fudge_qq)
+                buffers["nb14"].append(
+                    "{atom1}-{atom2} {kLJ} {kee}\n".format(
+                        atom1=words[0], atom2=words[1], kLJ=fudge_lj, kee=fudge_qq
+                    )
+                )
             elif words[2] == "1":
-                output["nb14_extra"] += "{atom1}-{atom2} {V} {W} {kee}\n".format(atom1=words[0], atom2=words[1],
-                                                                                 V=float(words[3]), W=float(words[4]),
-                                                                                 kee=fudge_qq)
-                output["nb14"] += "{atom1}-{atom2} 0 0\n".format(atom1=words[0], atom2=words[1])
+                buffers["nb14_extra"].append(
+                    "{atom1}-{atom2} {V} {W} {kee}\n".format(
+                        atom1=words[0], atom2=words[1], V=float(words[3]), W=float(words[4]), kee=fudge_qq
+                    )
+                )
+                buffers["nb14"].append("{atom1}-{atom2} 0 0\n".format(atom1=words[0], atom2=words[1]))
             elif words[2] == "2":
                 raise NotImplementedError
         elif iterator.flag == "bondtypes":
             words = line.split()
             func = words[2]
             if func == "1":
-                output["bonds"] += "{atom1}-{atom2} {b} {k}\n".format(atom1=words[0], atom2=words[1], b=float(words[3]),
-                                                                      k=float(words[4]) / 2)
+                buffers["bonds"].append(
+                    "{atom1}-{atom2} {b} {k}\n".format(
+                        atom1=words[0], atom2=words[1], b=float(words[3]), k=float(words[4]) / 2
+                    )
+                )
             else:
                 raise NotImplementedError
         elif iterator.flag == "angletypes":
             words = line.split()
             func = words[3]
             if func == "1":
-                output["angles"] += "-".join(words[:3]) + " {b} {k}".format(b=float(words[4]),
-                                                                            k=float(words[5]) / 2) + "\n"
+                buffers["angles"].append(
+                    "-".join(words[:3]) + " {b} {k}".format(b=float(words[4]), k=float(words[5]) / 2) + "\n"
+                )
             elif func == "5":
-                output["Urey-Bradley"] += "-".join(words[:3]) + " {b} {k} {b2} {k2}".format(b=float(words[4]),
-                                                                                            k=float(words[5]) / 2,
-                                                                                            b2=float(words[6]),
-                                                                                            k2=float(
-                                                                                                words[7]) / 2) + "\n"
+                buffers["Urey-Bradley"].append(
+                    "-".join(words[:3]) + " {b} {k} {b2} {k2}".format(
+                        b=float(words[4]), k=float(words[5]) / 2, b2=float(words[6]), k2=float(words[7]) / 2
+                    ) + "\n"
+                )
             else:
                 raise NotImplementedError
         elif iterator.flag == "dihedraltypes":
-            _ffitp_dihedrals(line, output)
+            _ffitp_dihedrals(line, buffers)
         elif iterator.flag == "cmaptypes":
             words = line.split()
             output["cmaps"]["-".join(words[:5])] = {"resolution": int(words[7]),
                                                     "parameters": list(map(lambda x: float(x) / 4.184, words[8:]))}
         elif iterator.flag == "nonbond_params":
             words = line.split()
-            output["LJ"] += "{type1}-{type2} {V} {W}\n".format(type1=words[0], type2=words[1], V=float(words[3]),
-                                                               W=float(words[4]))
+            buffers["LJ"].append(
+                "{type1}-{type2} {V} {W}\n".format(type1=words[0], type2=words[1], V=float(words[3]), W=float(words[4]))
+            )
+    for key, value in buffers.items():
+        output[key] = "".join(value)
     return output
 
 def _molitp_find_tail_residue(filename, macros, water_replace):
