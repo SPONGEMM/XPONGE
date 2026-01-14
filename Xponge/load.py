@@ -1260,9 +1260,11 @@ def _molitp_parse_atoms(line, current_mol, current_stat, heads, tails, head_pref
     nr = int(words[0])
     resnr = int(words[2])
     resname = words[3]
-    if tails[current_mol.name] != heads[current_mol.name] and resnr == heads[current_mol.name]:
+    is_head = tails[current_mol.name] != heads[current_mol.name] and resnr == heads[current_mol.name]
+    is_tail = tails[current_mol.name] != heads[current_mol.name] and resnr == tails[current_mol.name]
+    if is_head:
         resname = head_prefix + resname
-    if tails[current_mol.name] != heads[current_mol.name] and resnr == tails[current_mol.name]:
+    if is_tail:
         resname = tail_prefix + resname
     atom_type = words[1]
     atom_name = words[4]
@@ -1279,24 +1281,41 @@ def _molitp_parse_atoms(line, current_mol, current_stat, heads, tails, head_pref
     atom_type_name = atom_type if isinstance(atom_type, str) else atom_type.name
     expected_charge = float(words[6])
     existing_atom = current_residue.type._name2atom.get(atom_name)
+    if existing_atom is not None:
+        existing_charge = existing_atom.contents.get("charge")
+        if existing_charge is None:
+            existing_charge = existing_atom.contents.get("charge[e]")
+        mismatch = (
+            existing_atom.type.name != atom_type_name or
+            (existing_charge is not None and abs(existing_charge - expected_charge) > 1e-6)
+        )
+        if mismatch:
+            if not (is_head or is_tail):
+                Xprint(
+                    f"ResidueType mismatch for {current_residue.type.name}.{atom_name} outside head/tail; "
+                    f"auto-creating a new residue type.",
+                    "WARNING",
+                )
+                alt_base = f"{current_residue.type.name}__{atom_name}_{atom_type_name}"
+            else:
+                alt_base = resname
+            alt_resname = alt_base
+            suffix = 1
+            while alt_resname in ResidueType.get_all_types():
+                alt_resname = f"{alt_base}_{suffix}"
+                suffix += 1
+            new_res_type = current_residue.type.deepcopy(alt_resname)
+            set_real_global_variable(alt_resname, new_res_type)
+            conflict_atom = new_res_type.name2atom(atom_name)
+            conflict_atom.type = AtomType.get_type(atom_type_name)
+            conflict_atom.Update(**{"charge[e]": expected_charge})
+            current_residue.set_type(new_res_type, add_missing_atoms=False)
+            current_stat[current_residue] = True
+            existing_atom = current_residue.type._name2atom.get(atom_name)
     if current_stat["new_res_type"] or existing_atom is None:
         current_residue.type.Add_Atom(atom_name, atom_type, 0, 0, 0)
         current_residue.type.atoms[-1].Update(**{"charge[e]": expected_charge})
         current_stat[current_residue] = True
-    else:
-        if existing_atom.type.name != atom_type_name:
-            raise ValueError(
-                f"Inconsistent atom type for {current_residue.type.name}.{atom_name}: "
-                f"{existing_atom.type.name} vs {atom_type_name}"
-            )
-        existing_charge = existing_atom.contents.get("charge")
-        if existing_charge is None:
-            existing_charge = existing_atom.contents.get("charge[e]")
-        if existing_charge is not None and abs(existing_charge - expected_charge) > 1e-6:
-            raise ValueError(
-                f"Inconsistent atom charge for {current_residue.type.name}.{atom_name}: "
-                f"{existing_charge} vs {expected_charge}"
-            )
     current_residue.Add_Atom(atom_name, atom_type, 0, 0, 0)
     current_residue.atoms[-1].Update(**{"charge[e]": float(words[6])})
     current_stat[nr] = current_residue.atoms[-1]
