@@ -18,9 +18,9 @@ def load_parameter_from_lammps(filename, folder, units, output=False):
     if units not in ("real", "metal"):
         raise NotImplementedError("The units can only be 'real' or 'metal' now")
     elif units == "real":
-        toread = "name A  B  a  c alpha   beta   eta gamma   l    mu   rho   sigma   Q0  u1  u2  u3  u4\n"
+        toread = ["name A  B  a  c alpha   beta   eta gamma   l    mu   rho   sigma   Q0  u1  u2  u3  u4\n"]
     else:
-        toread = "name A[eV] B a c alpha   beta   eta gamma   l[eV]  mu   rho   sigma   Q0  u1   u2   u3   u4\n"
+        toread = ["name A[eV] B a c alpha   beta   eta gamma   l[eV]  mu   rho   sigma   Q0  u1   u2   u3   u4\n"]
     filename = os.path.join(folder, filename)
     values = []
     with open(filename) as f:
@@ -28,11 +28,11 @@ def load_parameter_from_lammps(filename, folder, units, output=False):
             line = line.strip()
             if line.startswith("#"):
                 continue
-            values += line.split()
+            values.extend(line.split())
     for i in range(0, len(values), 20):
-        toread += "-".join(values[i: i + 2]) + " " + " ".join(values[i + 3: i + 20]) + "\n"
-        toread += "-".join(values[i: i + 3]) + " " + " ".join(values[i + 3: i + 20]) + "\n"
+        toread.append("-".join(values[i: i + 2]) + " " + " ".join(values[i + 3: i + 20]) + "\n")
+        toread.append("-".join(values[i: i + 3]) + " " + " ".join(values[i + 3: i + 20]) + "\n")
+    toread = "".join(toread)
     if output:
         Xprint(toread)
     edip_base.EDIPType.New_From_String(toread)
-

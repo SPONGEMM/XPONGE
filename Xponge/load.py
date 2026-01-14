@@ -697,20 +697,20 @@ def load_frcmod(filename, nbtype="RE"):
         f.readline()
         flag = None
         atom_types = {}  # 元素符号和质量
-        bonds = "name  k[kcal/mol·A^-2]    b[A]\n"
-        angles = "name  k[kcal/mol·rad^-2]    b[degree]\n"
-        propers = "name  k[kcal/mol]    phi0[degree]    periodicity    reset\n"
+        bonds = ["name  k[kcal/mol·A^-2]    b[A]\n"]
+        angles = ["name  k[kcal/mol·rad^-2]    b[degree]\n"]
+        propers = ["name  k[kcal/mol]    phi0[degree]    periodicity    reset\n"]
         reset = 1
-        impropers = "name  k[kcal/mol]    phi0[degree]    periodicity\n"
+        impropers = ["name  k[kcal/mol]    phi0[degree]    periodicity\n"]
         cmap = {}
         cmap_flag = None
         temp_cmp = {"residues": []}
         if nbtype == "SK":
             raise NotImplementedError
         if nbtype == "AC":
-            ljs = "name A[kcal/mol·A^-12]   B[kcal/mol·A^-6]\n"
+            ljs = ["name A[kcal/mol·A^-12]   B[kcal/mol·A^-6]\n"]
         elif nbtype == "RE":
-            ljs = "name rmin[A]   epsilon[kcal/mol]\n"
+            ljs = ["name rmin[A]   epsilon[kcal/mol]\n"]
 
         for line in f:
             if not line.strip():
@@ -722,35 +722,46 @@ def load_frcmod(filename, nbtype="RE"):
                 atom_types[words[0]] = words[1]
             elif flag[:4] == "BOND":
                 atoms, words = _frcmod_atoms_words(line, 5)
-                bonds += "-".join(atoms) + "\t" + words[0] + "\t" + words[1] + "\n"
+                bonds.append("-".join(atoms) + "\t" + words[0] + "\t" + words[1] + "\n")
             elif flag[:4] == "ANGL":
                 atoms, words = _frcmod_atoms_words(line, 8)
-                angles += "-".join(atoms) + "\t" + words[0] + "\t" + words[1] + "\n"
+                angles.append("-".join(atoms) + "\t" + words[0] + "\t" + words[1] + "\n")
             elif flag[:4] == "DIHE":
                 atoms, words = _frcmod_atoms_words(line, 11)
-                propers += "-".join(atoms) + "\t" + str(float(words[1]) / int(words[0])) + "\t" + words[2] + "\t" + str(
-                    abs(int(float(words[3])))) + "\t" + str(reset) + "\n"
+                propers.append(
+                    "-".join(atoms) + "\t" + str(float(words[1]) / int(words[0])) + "\t" + words[2] + "\t" + str(
+                        abs(int(float(words[3])))) + "\t" + str(reset) + "\n"
+                )
                 if int(float(words[3])) < 0:
                     reset = 0
                 else:
                     reset = 1
             elif flag[:4] == "IMPR":
                 atoms, words = _frcmod_atoms_words(line, 11)
-                impropers += "-".join(atoms) + "\t" + words[0] + "\t" + words[1] + "\t" + str(
-                    int(float(words[2]))) + "\n"
+                impropers.append(
+                    "-".join(atoms) + "\t" + words[0] + "\t" + words[1] + "\t" + str(int(float(words[2]))) + "\n"
+                )
             elif flag[:4] == "NONB":
                 words = line.split()
-                ljs += words[0] + "-" + words[0] + "\t" + words[1] + "\t" + words[2] + "\n"
+                ljs.append(words[0] + "-" + words[0] + "\t" + words[1] + "\t" + words[2] + "\n")
             elif flag[:4] == "CMAP":
                 temp_cmp, cmap_flag = _frcmod_cmap(line, cmap, temp_cmp, cmap_flag)
 
     for res in temp_cmp["residues"]:
         cmap[f"C-N-{res}@XC-C-N"] = {"resolution": temp_cmp["info"]["resolution"],
                                      "parameters": temp_cmp["info"]["parameters"]}
-    atoms = "name  mass  LJtype\n"
+    atoms = ["name  mass  LJtype\n"]
     for atom, mass in atom_types.items():
-        atoms += atom + "\t" + mass + "\t" + atom + "\n"
-    toret = [atoms, bonds, angles, propers, impropers, ljs, cmap]
+        atoms.append(atom + "\t" + mass + "\t" + atom + "\n")
+    toret = [
+        "".join(atoms),
+        "".join(bonds),
+        "".join(angles),
+        "".join(propers),
+        "".join(impropers),
+        "".join(ljs),
+        cmap,
+    ]
     return toret
 
 
@@ -766,7 +777,7 @@ def _parmdat_read_harmonic_bonds(f, bonds, n):
         if not line.strip():
             break
         atoms, words = _frcmod_atoms_words(line, n)
-        bonds += "-".join(atoms) + "\t" + words[0] + "\t" + words[1] + "\n"
+        bonds.append("-".join(atoms) + "\t" + words[0] + "\t" + words[1] + "\n")
     return bonds
 
 
@@ -791,39 +802,42 @@ def load_parmdat(filename):
             lj_types[words[0]] = words[0]
         f.readline()
         # 读键长
-        bonds = "name  k[kcal/mol·A^-2]    b[A]\n"
+        bonds = ["name  k[kcal/mol·A^-2]    b[A]\n"]
         bonds = _parmdat_read_harmonic_bonds(f, bonds, 5)
 
         # 读键角
-        angles = "name  k[kcal/mol·rad^-2]    b[degree]\n"
+        angles = ["name  k[kcal/mol·rad^-2]    b[degree]\n"]
         angles = _parmdat_read_harmonic_bonds(f, angles, 8)
 
         # 读恰当二面角
         reset = 1
-        propers = "name  k[kcal/mol]    phi0[degree]    periodicity    reset\n"
-        nb14s = "name    kLJ     kee\n"
+        propers = ["name  k[kcal/mol]    phi0[degree]    periodicity    reset\n"]
+        nb14s = ["name    kLJ     kee\n"]
         atoms = None
         for line in f:
             if not line.strip():
                 break
             last_atoms = atoms
             atoms, words = _frcmod_atoms_words(line, 11, last_atoms)
-            nb14s += _frcmod_nb14(line, atoms)
-            propers += "-".join(atoms) + "\t" + str(float(words[1]) / int(words[0])) + "\t" + words[2] + "\t" + str(
-                abs(int(float(words[3])))) + "\t" + str(reset) + "\n"
+            nb14s.append(_frcmod_nb14(line, atoms))
+            propers.append(
+                "-".join(atoms) + "\t" + str(float(words[1]) / int(words[0])) + "\t" + words[2] + "\t" + str(
+                    abs(int(float(words[3])))) + "\t" + str(reset) + "\n"
+            )
             if int(float(words[3])) < 0:
                 reset = 0
             else:
                 reset = 1
 
         # 读非恰当二面角
-        impropers = "name  k[kcal/mol]    phi0[degree]    periodicity\n"
+        impropers = ["name  k[kcal/mol]    phi0[degree]    periodicity\n"]
         for line in f:
             if not line.strip():
                 break
             atoms, words = _frcmod_atoms_words(line, 11)
-            impropers += "-".join(atoms) + "\t" + words[0] + "\t" + words[1] + "\t" + str(
-                int(float(words[2]))) + "\n"
+            impropers.append(
+                "-".join(atoms) + "\t" + words[0] + "\t" + words[1] + "\t" + str(int(float(words[2]))) + "\n"
+            )
 
         # 跳过水的信息
         f.readline()
@@ -843,20 +857,28 @@ def load_parmdat(filename):
         if word == "SK":
             raise NotImplementedError
         if word == "AC":
-            ljs = "name A[kcal/mol·A^-12]   B[kcal/mol·A^-6]\n"
+            ljs = ["name A[kcal/mol·A^-12]   B[kcal/mol·A^-6]\n"]
         elif word == "RE":
-            ljs = "name rmin[A]   epsilon[kcal/mol]\n"
+            ljs = ["name rmin[A]   epsilon[kcal/mol]\n"]
 
         for line in f:
             if not line.strip():
                 break
             words = line.split()
-            ljs += words[0] + "-" + words[0] + "\t" + words[1] + "\t" + words[2] + "\n"
+            ljs.append(words[0] + "-" + words[0] + "\t" + words[1] + "\t" + words[2] + "\n")
 
-    atoms = "name  mass  LJtype\n"
+    atoms = ["name  mass  LJtype\n"]
     for atom, mass in atom_types.items():
-        atoms += atom + "\t" + mass + "\t" + lj_types[atom] + "\n"
-    toret = [atoms, bonds, angles, propers, impropers, ljs, nb14s]
+        atoms.append(atom + "\t" + mass + "\t" + lj_types[atom] + "\n")
+    toret = [
+        "".join(atoms),
+        "".join(bonds),
+        "".join(angles),
+        "".join(propers),
+        "".join(impropers),
+        "".join(ljs),
+        "".join(nb14s),
+    ]
     return toret
 
 
@@ -1254,9 +1276,27 @@ def _molitp_parse_atoms(line, current_mol, current_stat, heads, tails, head_pref
         if current_stat["new_res_type"]:
             current_stat[current_mol.residues[-1]] = True
     current_residue = current_mol.residues[-1]
-    if current_stat["new_res_type"]:
+    atom_type_name = atom_type if isinstance(atom_type, str) else atom_type.name
+    expected_charge = float(words[6])
+    existing_atom = current_residue.type._name2atom.get(atom_name)
+    if current_stat["new_res_type"] or existing_atom is None:
         current_residue.type.Add_Atom(atom_name, atom_type, 0, 0, 0)
-        current_residue.type.atoms[-1].Update(**{"charge[e]": float(words[6])})
+        current_residue.type.atoms[-1].Update(**{"charge[e]": expected_charge})
+        current_stat[current_residue] = True
+    else:
+        if existing_atom.type.name != atom_type_name:
+            raise ValueError(
+                f"Inconsistent atom type for {current_residue.type.name}.{atom_name}: "
+                f"{existing_atom.type.name} vs {atom_type_name}"
+            )
+        existing_charge = existing_atom.contents.get("charge")
+        if existing_charge is None:
+            existing_charge = existing_atom.contents.get("charge[e]")
+        if existing_charge is not None and abs(existing_charge - expected_charge) > 1e-6:
+            raise ValueError(
+                f"Inconsistent atom charge for {current_residue.type.name}.{atom_name}: "
+                f"{existing_charge} vs {expected_charge}"
+            )
     current_residue.Add_Atom(atom_name, atom_type, 0, 0, 0)
     current_residue.atoms[-1].Update(**{"charge[e]": float(words[6])})
     current_stat[nr] = current_residue.atoms[-1]
