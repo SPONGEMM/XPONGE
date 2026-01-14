@@ -161,6 +161,8 @@ class _GlobalSetting():
                                       "angle": {"degree": np.pi, "rad": 180}
                                       })
         setattr(self, "PDBResidueNameMap", {"head": Xdict(), "tail": Xdict(), "save": Xdict()})
+        # Extra search paths for GROMACS include files (e.g., ffitp/itp)
+        setattr(self, "GMXIncludePaths", [])
 
         # 所有GROMACS的成键种类
         setattr(self, "GMXBondedType", Xdict(not_found_message="GMX Bonded term ({}) not supported. Did you import the proper force field?"))

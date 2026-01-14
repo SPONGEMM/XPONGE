@@ -8,7 +8,11 @@ from ..base import charge_base, mass_base, lj_base, bond_base
 lj_base.LJType.combining_method_A = lj_base.Lorentz_Berthelot_For_A
 lj_base.LJType.combining_method_B = lj_base.Lorentz_Berthelot_For_B
 
-MARTINI_DATA_DIR = os.path.join(os.path.dirname(__file__), "martini_v300")
+
+MARTINI_DATA_DIR = os.path.join(os.path.dirname(__file__), "martini300")
+
+if MARTINI_DATA_DIR not in GlobalSetting.GMXIncludePaths:
+    GlobalSetting.GMXIncludePaths.append(MARTINI_DATA_DIR)
 
 def load_parameter_from_ffitp(filename, folder):
     """
@@ -25,13 +29,4 @@ def load_parameter_from_ffitp(filename, folder):
     lj_base.LJType.New_From_String(output["LJ"])
 
 
-for _itp in (
-    "martini_v3.0.0.itp",
-    "martini_v3.0.0_ions_v1.itp",
-    "martini_v3.0.0_solvents_v1.itp",
-    "martini_v3.0.0_small_molecules_v1.itp",
-    "martini_v3.0.0_sugars_v1.itp",
-    "martini_v3.0.0_phospholipids_v1.itp",
-    "martini_v3.0.0_nucleobases_v1.itp",
-):
-    load_parameter_from_ffitp(_itp, MARTINI_DATA_DIR)
+

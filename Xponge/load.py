@@ -968,6 +968,14 @@ class GromacsTopologyIterator():
         else:
             filename = os.path.abspath(filename.replace('"', ''))
 
+        if not os.path.exists(filename):
+            base_name = os.path.basename(filename)
+            for include_dir in GlobalSetting.GMXIncludePaths:
+                candidate = os.path.abspath(os.path.join(include_dir, base_name))
+                if os.path.exists(candidate):
+                    filename = candidate
+                    break
+
         f = Xopen(filename, "r")
         self.files.append(f)
         self.filenames.append(filename)
