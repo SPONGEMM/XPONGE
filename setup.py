@@ -20,6 +20,19 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     package_data = {"":['*.mol2', '*.frcmod', '*.dat', '*.itp']},
     install_requires = ["numpy"],
+    extras_require = {
+        "extra": [
+            "geometric>=1.1",
+            "matplotlib>=3.10.8",
+            "mdanalysis>=2.10.0",
+            "pyscf>=2.11.0",
+            "rdkit>=2025.9.3",
+            "xpongelib>=1.2.5.0",
+        ],
+        "dev": [
+            "pytest>=9.0.2",
+        ],
+    },
     entry_points = {
         "console_scripts": ["Xponge = Xponge.__main__:main", 
                             "Xponge.mdrun = Xponge.mdrun.__main__:main"] },
