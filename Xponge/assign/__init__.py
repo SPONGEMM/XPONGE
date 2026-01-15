@@ -869,6 +869,11 @@ the marker "ar" will be added to the aromatic bond.
         """
         if not isinstance(filename, str):
             raise TypeError("filename needed to save an assignment as a mol2 file")
+        if atomtype and atomtype.lower() != "sybyl":
+            raise ValueError(
+                "save_as_mol2 only supports atomtype='sybyl'; "
+                f"got {atomtype!r}. Use a sybyl type or save with a different format."
+            )
         import Xponge.forcefield.sybyl #pylint: disable=unused-import
         if atomtype:
             atom_types = self.determine_atom_type(atomtype)
