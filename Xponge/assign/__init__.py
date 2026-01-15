@@ -142,16 +142,15 @@ class _RING():
         :param assign:
         :return:
         """
-        current_path = []
-        current_path_sons = Xdict()
-        current_work = []
         have_found_rings = set([])
         for atom0 in range(len(assign.atoms)):
-            current_path.append(atom0)
+            current_path = [atom0]
+            current_path_sons = Xdict()
+            current_work = []
             current_work.extend([[atom, atom0] for atom in assign.bonds[atom0].keys()])
             current_path_sons[atom0] = len(assign.bonds[atom0])
             current_path_father = []
-            while current_path:
+            while current_path and current_work:
                 work_atom, from_atom = current_work.pop()
                 current_path.append(work_atom)
                 current_path_father.append(from_atom)

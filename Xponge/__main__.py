@@ -2,7 +2,7 @@
 This **module** defines the terminal commands
 """
 import argparse
-from . import tools
+from Xponge import tools
 
 def _mytest(subparsers):
     """
@@ -296,7 +296,7 @@ def main():
     args = parser.parse_args()
 
     if args.version:
-        from . import __version__
+        from Xponge import __version__
         print(__version__)
     elif hasattr(args, "func"):
         args.func(args)

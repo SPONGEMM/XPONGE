@@ -8,3 +8,6 @@ Xponge/.idea
 Xponge/mdrun/BIN_PATH.dat
 docs/Xponge文档/*
 bin/*
+
+# temp files
+tmp/*
