@@ -73,15 +73,27 @@ def _do(self, sys_kwarg, ene_kwarg, use_pbc):
 @GlobalSetting.set_gmx_bonded_type_parser("bond", 1)
 def _gmx_parser(words, mol, stat):
     """ parsing gmx """
+    def _type_name(type_):
+        return type_ if isinstance(type_, str) else type_.name
+
     atom1 = stat[int(words[0])]
     atom2 = stat[int(words[1])]
     if len(words) == 3:
-        string = f"{atom1.type}-{atom2.type}"
+        type1 = _type_name(atom1.type)
+        type2 = _type_name(atom2.type)
+        string = f"{type1}-{type2}"
+        reversed_string = f"{type2}-{type1}"
         if string in BondType.get_all_types():
-            res.add_bonded_force(BondType.entity([atom1, atom2], BondType.getType(string)))
+            mol.add_bonded_force(BondType.entity([atom1, atom2], BondType.getType(string)))
+        elif reversed_string in BondType.get_all_types():
+            mol.add_bonded_force(BondType.entity([atom1, atom2], BondType.getType(reversed_string)))
         else:
-            string = f"{atom2.type}-{atom1.type}"
-            res.add_bonded_force(BondType.entity([atom1, atom2], BondType.getType(string)))
+            raise KeyError(
+                "Bonded Force Type "
+                f"{string} (or {reversed_string}) not found. "
+                "Did you import the proper force field / load bondtypes, "
+                "or provide explicit bond parameters (5 columns) in the [ bonds ] section?"
+            )
     elif len(words) == 5:
         new_force = BondType.entity([atom1, atom2], BondType.getType("UNKNOWNS"))
         new_force.k = float(words[3])

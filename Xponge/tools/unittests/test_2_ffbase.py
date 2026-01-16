@@ -3,7 +3,8 @@
 """
 
 __all__ = ["test_lj",
-           "test_atomwise"]
+           "test_atomwise",
+           "test_bond_gmx_parser"]
 
 def test_lj():
     """
@@ -54,3 +55,52 @@ name    mass    charge[e]   LJtype
 H       1.008   1.000       HW
 """)
 
+def test_bond_gmx_parser():
+    """
+        test the gmx bond parser uses `mol` not an undefined name
+    """
+    from Xponge.forcefield.base.bond_base import BondType, _gmx_parser
+
+    class DummyAtomType:
+        def __init__(self, name):
+            self.name = name
+        def __repr__(self):
+            return f"Type of Atom: {self.name}"
+
+    class DummyAtom:
+        def __init__(self, type_):
+            self.type = type_
+
+    class DummyMol:
+        def __init__(self):
+            self.forces = []
+        def add_bonded_force(self, force):
+            self.forces.append(force)
+
+    BondType.New_From_String("""
+name k b
+XTBOND_A-XTBOND_B 100.0 1.5
+XTBOND_D-XTBOND_C 200.0 1.6
+""")
+
+    # Direct match branch
+    mol1 = DummyMol()
+    stat1 = {1: DummyAtom(DummyAtomType("XTBOND_A")), 2: DummyAtom(DummyAtomType("XTBOND_B"))}
+    _gmx_parser(["1", "2", "1"], mol1, stat1)
+    assert len(mol1.forces) == 1
+
+    # Reverse match branch
+    mol2 = DummyMol()
+    stat2 = {1: DummyAtom(DummyAtomType("XTBOND_C")), 2: DummyAtom(DummyAtomType("XTBOND_D"))}
+    _gmx_parser(["1", "2", "1"], mol2, stat2)
+    assert len(mol2.forces) == 1
+
+    # Missing type should raise a clear error
+    mol3 = DummyMol()
+    stat3 = {1: DummyAtom(DummyAtomType("XTBOND_MISSING")), 2: DummyAtom(DummyAtomType("XTBOND_ALSO_MISSING"))}
+    try:
+        _gmx_parser(["1", "2", "1"], mol3, stat3)
+    except KeyError:
+        pass
+    else:
+        raise AssertionError("Expected KeyError for missing bond type")
