@@ -10,7 +10,7 @@ from ..base import charge_base, mass_base, lj_base, bond_base, angle_base, \
 lj_base.LJType.combining_method_A = lj_base.Good_Hope_For_A
 lj_base.LJType.combining_method_B = lj_base.Good_Hope_For_B
 
-GlobalSetting.Set_Invisible_Bonded_Forces(["dihedral"])
+#GlobalSetting.Set_Invisible_Bonded_Forces(["dihedral"])
 
 OPLS_BOND_TYPE_MAP = {}
 
@@ -25,15 +25,20 @@ rb_dihedral_base.ProperType.Type_Name_Getter(opls_type_name)
 
 exclude_base.Exclude(4)
 
-def load_parameter_from_ffitp(filename, folder):
+def load_parameter_from_ffitp(filename, folder, reset=True):
     """
     This **function** is used to get opls force field parameters from GROMACS ffitp
 
     :param filename: the name of the input file
     :param prefix: the folder of the file
+    :param reset: whether to clear existing dihedral types before loading
     :return: None
     """
     filename = os.path.join(folder, filename)
+    if reset:
+        dihedral_base.ProperType.Clear_Type()
+        dihedral_base.ImproperType.Clear_Type()
+        rb_dihedral_base.ProperType.Clear_Type()
     output = load_ffitp(filename)
 
     AtomType.New_From_String(output["atomtypes"])

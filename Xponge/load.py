@@ -1427,6 +1427,297 @@ def load_molitp(filename, water_replace=True, head_prefix="N", tail_prefix="C", 
     return sys, mols
 
 
+##########################################################################
+# CHARMM PSF Format
+##########################################################################
+_PSF_SECTION_RE = re.compile(r"^\s*(\d+)\s+!([A-Za-z0-9]+)")
+
+
+def _psf_read_ints(fileobj, count):
+    """Read ``count`` integers from a PSF section."""
+    ints = []
+    while len(ints) < count:
+        line = fileobj.readline()
+        if not line:
+            raise EOFError("Unexpected EOF while reading PSF section")
+        ints.extend([int(i) for i in line.split()])
+    return ints
+
+
+def _psf_get_atom_type(atom_type_name):
+    """Get AtomType instance, creating a minimal one when missing."""
+    try:
+        return AtomType.get_type(atom_type_name)
+    except KeyError:
+        AtomType.New_From_String(f"name\n{atom_type_name}")
+        return AtomType.get_type(atom_type_name)
+
+
+def _psf_set_charge(atom, value):
+    """Set charge if the AtomType exposes a charge field."""
+    if "charge[e]" in atom.contents:
+        atom.Update(**{"charge[e]": value})
+    elif "charge" in atom.contents:
+        atom.Update(**{"charge": value})
+
+
+def _psf_get_charge(atom):
+    """Get charge if present on the Atom instance."""
+    if "charge[e]" in atom.contents:
+        return atom.contents.get("charge[e]")
+    if "charge" in atom.contents:
+        return atom.contents.get("charge")
+    return None
+
+
+def _psf_parse_atom(line, current_mol, current_stat, residue_index_map, residue_newtype_map):
+    """Parse one atom record in PSF and update molecule/residue state."""
+    words = line.split()
+    if len(words) < 8:
+        raise ValueError(f"Bad PSF atom line: {line.rstrip()}")
+    atom_index = int(words[0])
+    segid = words[1]
+    resnr = int(words[2])
+    resname = words[3]
+    atom_name = words[4]
+    atom_type_name = words[5]
+    charge = float(words[6])
+
+    res_key = (segid, resnr, resname)
+    if current_stat.get("res_key") != res_key:
+        current_stat["res_key"] = res_key
+        current_stat["new_res_type"] = False
+        if resname not in ResidueType.get_all_types():
+            set_real_global_variable(resname, ResidueType(name=resname))
+            current_stat["new_res_type"] = True
+        current_mol.add_residue(Residue(ResidueType.get_type(resname)))
+        current_residue = current_mol.residues[-1]
+        residue_index_map[current_residue] = len(current_mol.residues) - 1
+        residue_newtype_map[current_residue] = current_stat["new_res_type"]
+        current_stat[current_residue] = current_stat["new_res_type"]
+        current_stat["resnr"] = resnr
+    else:
+        current_residue = current_mol.residues[-1]
+
+    atom_type = _psf_get_atom_type(atom_type_name)
+    expected_charge = charge
+    existing_atom = current_residue.type._name2atom.get(atom_name)
+    if existing_atom is not None:
+        existing_charge = existing_atom.contents.get("charge")
+        if existing_charge is None:
+            existing_charge = existing_atom.contents.get("charge[e]")
+        mismatch = (
+            existing_atom.type.name != atom_type.name or
+            (existing_charge is not None and abs(existing_charge - expected_charge) > 1e-6)
+        )
+        if mismatch:
+            alt_base = current_residue.type.name
+            compatible_type = None
+            for name in ResidueType.get_all_types().keys():
+                if name == alt_base or name.startswith(alt_base + "_"):
+                    candidate = ResidueType.get_type(name)
+                    candidate_atom = candidate._name2atom.get(atom_name)
+                    if candidate_atom is None:
+                        continue
+                    if candidate_atom.type.name != atom_type.name:
+                        continue
+                    candidate_charge = candidate_atom.contents.get("charge")
+                    if candidate_charge is None:
+                        candidate_charge = candidate_atom.contents.get("charge[e]")
+                    if candidate_charge is not None and abs(candidate_charge - expected_charge) > 1e-6:
+                        continue
+                    compatible_type = candidate
+                    break
+            if compatible_type is not None:
+                current_residue.set_type(compatible_type, add_missing_atoms=False)
+                residue_newtype_map[current_residue] = True
+                current_stat[current_residue] = True
+                existing_atom = current_residue.type._name2atom.get(atom_name)
+            else:
+                alt_resname = alt_base
+                suffix = 1
+                while alt_resname in ResidueType.get_all_types():
+                    alt_resname = f"{alt_base}_{suffix}"
+                    suffix += 1
+                new_res_type = current_residue.type.deepcopy(alt_resname)
+                set_real_global_variable(alt_resname, new_res_type)
+                conflict_atom = new_res_type.name2atom(atom_name)
+                conflict_atom.type = atom_type
+                _psf_set_charge(conflict_atom, expected_charge)
+                current_residue.set_type(new_res_type, add_missing_atoms=False)
+                residue_newtype_map[current_residue] = True
+                current_stat[current_residue] = True
+                existing_atom = current_residue.type._name2atom.get(atom_name)
+
+    if current_stat.get(current_residue) or existing_atom is None:
+        current_residue.type.Add_Atom(atom_name, atom_type, 0, 0, 0)
+        _psf_set_charge(current_residue.type.atoms[-1], expected_charge)
+        current_stat[current_residue] = True
+    current_residue.Add_Atom(atom_name, atom_type, 0, 0, 0)
+    _psf_set_charge(current_residue.atoms[-1], expected_charge)
+    current_stat[atom_index] = current_residue.atoms[-1]
+
+
+def _psf_add_bond(atom1, atom2, current_mol, residue_index_map, residue_newtype_map):
+    """Add bond connectivity from PSF indices."""
+    if atom1.residue == atom2.residue:
+        if residue_newtype_map.get(atom1.residue, False):
+            atom1.residue.type.add_connectivity(atom1.name, atom2.name)
+        atom1.residue.add_connectivity(atom1.name, atom2.name)
+    else:
+        current_mol.add_residue_link(atom1, atom2)
+        index_diff = residue_index_map[atom1.residue] - residue_index_map[atom2.residue]
+        if abs(index_diff) == 1:
+            if residue_newtype_map.get(atom1.residue, False):
+                if index_diff < 0:
+                    atom1.residue.type.tail = atom1.name
+                else:
+                    atom1.residue.type.head = atom1.name
+            if residue_newtype_map.get(atom2.residue, False):
+                if index_diff < 0:
+                    atom2.residue.type.head = atom2.name
+                else:
+                    atom2.residue.type.tail = atom2.name
+
+
+def _psf_split_by_connectivity(current_mol):
+    """Split molecule into connected components using atom connectivity."""
+    adjacency = Xdict(not_found_method=lambda key: set())
+    for residue in current_mol.residues:
+        for atom, partners in residue.connectivity.items():
+            for partner in partners:
+                adjacency[atom].add(partner)
+                adjacency[partner].add(atom)
+    for link in current_mol.residue_links:
+        adjacency[link.atom1].add(link.atom2)
+        adjacency[link.atom2].add(link.atom1)
+
+    components = {}
+    visited = set()
+    comp_id = 0
+    for residue in current_mol.residues:
+        for atom in residue.atoms:
+            if atom in visited:
+                continue
+            comp_id += 1
+            stack = [atom]
+            components[atom] = comp_id
+            visited.add(atom)
+            while stack:
+                cur = stack.pop()
+                for nxt in adjacency[cur]:
+                    if nxt in visited:
+                        continue
+                    visited.add(nxt)
+                    components[nxt] = comp_id
+                    stack.append(nxt)
+
+    mols = Xdict()
+    comp_to_mol = {}
+    comp_to_atom_map = {}
+    for residue in current_mol.residues:
+        if not residue.atoms:
+            continue
+        comp = components.get(residue.atoms[0], None)
+        if comp is None:
+            continue
+        if comp not in comp_to_mol:
+            new_name = f"{current_mol.name}_{comp}"
+            new_mol = Molecule(name=new_name)
+            comp_to_mol[comp] = new_mol
+            mols[new_name] = new_mol
+            comp_to_atom_map[comp] = {}
+        new_mol = comp_to_mol[comp]
+        new_res = Residue(residue.type)
+        for atom in residue.atoms:
+            new_res.Add_Atom(atom.name, atom.type, atom.x, atom.y, atom.z)
+            charge = _psf_get_charge(atom)
+            if charge is not None:
+                _psf_set_charge(new_res.atoms[-1], charge)
+            comp_to_atom_map[comp][atom] = new_res.atoms[-1]
+        for atom, partners in residue.connectivity.items():
+            for partner in partners:
+                new_res.Add_Connectivity(atom.name, partner.name)
+        new_mol.Add_Residue(new_res)
+
+    for link in current_mol.residue_links:
+        comp = components.get(link.atom1, None)
+        if comp is None:
+            continue
+        atom_map = comp_to_atom_map[comp]
+        if link.atom1 in atom_map and link.atom2 in atom_map:
+            comp_to_mol[comp].Add_Residue_Link(atom_map[link.atom1], atom_map[link.atom2])
+
+    return mols
+
+
+def load_molpsf(filename, split_by="connectivity"):
+    """
+    This **function** is used to load a PSF file (topology only).
+
+    :param filename: the name of the PSF file
+    :param split_by: whether to split molecules ("connectivity" or None)
+    :return: 1. a Molecule representing the system
+             2. an Xdict mapping molecule names to Molecule
+    """
+    if not isinstance(filename, io.IOBase):
+        fileobj = open(filename, "r")
+    else:
+        fileobj = filename
+
+    with fileobj as f:
+        header = f.readline()
+        if not header.strip().startswith("PSF"):
+            raise ValueError("Not a PSF file")
+
+        mol_name = os.path.splitext(os.path.basename(getattr(f, "name", "psf")))[0] or "psf"
+        current_mol = Molecule(name=mol_name)
+        mols = Xdict()
+        mols[mol_name] = current_mol
+
+        current_stat = Xdict(not_found_method=lambda key: None)
+        residue_index_map = {}
+        residue_newtype_map = {}
+
+        line = f.readline()
+        while line:
+            if not line.strip():
+                line = f.readline()
+                continue
+            match = _PSF_SECTION_RE.match(line)
+            if not match:
+                line = f.readline()
+                continue
+            count = int(match.group(1))
+            section = match.group(2).upper()
+
+            if section == "NTITLE":
+                for _ in range(count):
+                    f.readline()
+            elif section == "NATOM":
+                for _ in range(count):
+                    atom_line = f.readline()
+                    if not atom_line:
+                        raise EOFError("Unexpected EOF while reading NATOM section")
+                    _psf_parse_atom(atom_line, current_mol, current_stat,
+                                    residue_index_map, residue_newtype_map)
+            elif section == "NBOND":
+                bonds = _psf_read_ints(f, count * 2)
+                for i in range(0, len(bonds), 2):
+                    atom1 = current_stat.get(bonds[i])
+                    atom2 = current_stat.get(bonds[i + 1])
+                    if atom1 is None or atom2 is None:
+                        continue
+                    _psf_add_bond(atom1, atom2, current_mol,
+                                  residue_index_map, residue_newtype_map)
+
+            line = f.readline()
+
+    if split_by == "connectivity":
+        mols = _psf_split_by_connectivity(current_mol)
+    return current_mol, mols
+
+
 def load_gro(filename, mol=None):
     """
     This **function** is used to read the GROMACS coordinate file
