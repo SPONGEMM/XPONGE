@@ -613,9 +613,9 @@ def save_mol2(cls, filename=None):
         bonds = []
         for res in cls.residues:
             for atom1, atom1_con in res.type.connectivity.items():
-                atom1_index = cls.atom_index[res.name2atom(atom1.name)] + 1
+                atom1_index = cls.atom_index[res.atoms[res.type.atom2index(atom1)]] + 1
                 for atom2 in atom1_con:
-                    atom2_index = cls.atom_index[res.name2atom(atom2.name)] + 1
+                    atom2_index = cls.atom_index[res.atoms[res.type.atom2index(atom2)]] + 1
                     if atom1_index < atom2_index:
                         bonds.append("%6d %6d" % (atom1_index, atom2_index))
 

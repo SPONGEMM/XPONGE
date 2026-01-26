@@ -1,5 +1,6 @@
 LICENSE
 README.md
+pyproject.toml
 setup.py
 Xponge/__init__.py
 Xponge/__main__.py
@@ -9,7 +10,6 @@ Xponge/process.py
 Xponge.egg-info/PKG-INFO
 Xponge.egg-info/SOURCES.txt
 Xponge.egg-info/dependency_links.txt
-Xponge.egg-info/entry_points.txt
 Xponge.egg-info/requires.txt
 Xponge.egg-info/top_level.txt
 Xponge/analysis/__init__.py
@@ -91,6 +91,7 @@ Xponge/forcefield/base/bond_base.py
 Xponge/forcefield/base/charge_base.py
 Xponge/forcefield/base/cmap_base.py
 Xponge/forcefield/base/dihedral_base.py
+Xponge/forcefield/base/edip_base.py
 Xponge/forcefield/base/exclude_base.py
 Xponge/forcefield/base/improper_base.py
 Xponge/forcefield/base/listed_force_base.py
@@ -100,6 +101,7 @@ Xponge/forcefield/base/nb14_base.py
 Xponge/forcefield/base/nb14_extra_base.py
 Xponge/forcefield/base/rb_dihedral_base.py
 Xponge/forcefield/base/soft_bond_base.py
+Xponge/forcefield/base/sw_base.py
 Xponge/forcefield/base/ub_angle_base.py
 Xponge/forcefield/base/virtual_atom_base.py
 Xponge/forcefield/charmm/__init__.py
@@ -132,6 +134,18 @@ Xponge/forcefield/charmm/charmm36/protein.mol2
 Xponge/forcefield/charmm/charmm36/protein.py
 Xponge/forcefield/charmm/charmm36/rna.mol2
 Xponge/forcefield/charmm/charmm36/rna.py
+Xponge/forcefield/edip/__init__.py
+Xponge/forcefield/edip/si/Si.mol2
+Xponge/forcefield/edip/si/__init__.py
+Xponge/forcefield/martini/__init__.py
+Xponge/forcefield/martini/martini300/__init__.py
+Xponge/forcefield/martini/martini300/martini_v3.0.0.itp
+Xponge/forcefield/martini/martini300/martini_v3.0.0_ions_v1.itp
+Xponge/forcefield/martini/martini300/martini_v3.0.0_nucleobases_v1.itp
+Xponge/forcefield/martini/martini300/martini_v3.0.0_phospholipids_v1.itp
+Xponge/forcefield/martini/martini300/martini_v3.0.0_small_molecules_v1.itp
+Xponge/forcefield/martini/martini300/martini_v3.0.0_solvents_v1.itp
+Xponge/forcefield/martini/martini300/martini_v3.0.0_sugars_v1.itp
 Xponge/forcefield/opls/__init__.py
 Xponge/forcefield/opls/tip4p.py
 Xponge/forcefield/opls/tip4pew.mol2
@@ -147,6 +161,9 @@ Xponge/forcefield/special/__init__.py
 Xponge/forcefield/special/fep.py
 Xponge/forcefield/special/gb.py
 Xponge/forcefield/special/min.py
+Xponge/forcefield/sw/__init__.py
+Xponge/forcefield/sw/mw/__init__.py
+Xponge/forcefield/sw/mw/mW.mol2
 Xponge/forcefield/sybyl/__init__.py
 Xponge/helper/__init__.py
 Xponge/helper/cv.py
@@ -169,15 +186,18 @@ Xponge/tools/unittests/test_1_assign.py
 Xponge/tools/unittests/test_1_charge.py
 Xponge/tools/unittests/test_1_cif.py
 Xponge/tools/unittests/test_1_helper.py
+Xponge/tools/unittests/test_1_hybrid36.py
 Xponge/tools/unittests/test_1_io.py
 Xponge/tools/unittests/test_1_lattice.py
 Xponge/tools/unittests/test_1_process.py
+Xponge/tools/unittests/test_1_sasa.py
 Xponge/tools/unittests/test_2_ffbase.py
 Xponge/tools/unittests/test_3_bsc1.py
 Xponge/tools/unittests/test_3_charmm27.py
 Xponge/tools/unittests/test_3_charmm36.py
 Xponge/tools/unittests/test_3_ff14sb.py
 Xponge/tools/unittests/test_3_ff19sb.py
+Xponge/tools/unittests/test_3_mw.py
 Xponge/tools/unittests/test_3_ol3.py
 Xponge/tools/unittests/test_3_oplsaam.py
 Xponge/tools/unittests/test_4_large_system_efficiency.py
@@ -201,7 +221,7 @@ Xponge/tools/unittests/test_6_nose_hoover_chain.py
 Xponge/tools/unittests/test_6_rdf.py
 Xponge/tools/unittests/test_7_msd.py
 Xponge/tools/unittests/test_7_tip4p.py
-Xponge/tools/unittests/test_8_meta1d.py
+Xponge/tools/unittests/test_8_metadynamics.py
 Xponge/tools/unittests/test_8_sits.py
 Xponge/tools/unittests/test_8_tmd.py
 Xponge/tools/unittests/test_8_umbrella.py
