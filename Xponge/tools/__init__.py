@@ -9,6 +9,17 @@ from ..helper import source, GlobalSetting, Xopen, Xprint
 from ..mdrun import run
 from .unittests import mytest
 
+def traj_analysis(args):
+    """
+    This **function** runs post-analysis for SPONGE trajectories.
+
+    :param args: arguments from argparse
+    :return: None
+    """
+    from .traj_analysis import run_traj_cli
+
+    run_traj_cli(args)
+
 def converter(args):
     """
     This **function** converts the format of coordinate file

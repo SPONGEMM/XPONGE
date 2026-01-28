@@ -8,6 +8,10 @@ dependencies = [
     "numpy<2",
 ]
 
+[project.scripts]
+Xponge = "Xponge.__main__:main"
+"Xponge.mdrun" = "Xponge.mdrun.__main__:main"
+
 [project.optional-dependencies]
 extra = [
     "geometric>=1.1",

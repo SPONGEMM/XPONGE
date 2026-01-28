@@ -85,6 +85,56 @@ def _exgen(subparsers):
     exgen.set_defaults(func=tools.exgen)
 
 
+def _traj_analysis(subparsers):
+    """
+
+    :param subparsers:
+    :return:
+    """
+    traj = subparsers.add_parser("traj", help="post-analysis for SPONGE trajectories (cpptraj-like)")
+    traj.add_argument("-p", "--topo", dest="topo", required=True, help="the topology file")
+    traj.add_argument("-c", "--traj", dest="traj", required=True, help="the trajectory file")
+    traj.add_argument("-b", "--box", dest="box", help="the box file for SPONGE trajectory")
+    traj.add_argument("-o", "--outdir", default=".", help="the output directory")
+    traj.add_argument("--dt-ps", dest="dt_ps", type=float, help="time step between frames in ps")
+    traj.add_argument("--dt-ns", dest="dt_ns", type=float, help="time step between frames in ns")
+    traj.add_argument("-i", "--input", help="cpptraj-like command file")
+    sub = traj.add_subparsers(dest="analysis_cmd", help="analysis subcommands")
+
+    rmsd = sub.add_parser("rmsd", help="compute RMSD")
+    rmsd.add_argument("-s", "--selection", default="backbone", help="MDAnalysis selection")
+
+    rmsf = sub.add_parser("rmsf", help="compute RMSF")
+    rmsf.add_argument("-s", "--selection", default="backbone and name CA", help="MDAnalysis selection")
+
+    rgyr = sub.add_parser("rgyr", help="compute radius of gyration")
+    rgyr.add_argument("-s", "--selection", default="protein and backbone", help="MDAnalysis selection")
+
+    hbond = sub.add_parser("hbond", help="analyze hydrogen bonds")
+    hbond.add_argument("-s", "--selection", default="all", help="selection for output naming")
+    hbond.add_argument("--between", help="comma-separated selections for HydrogenBondAnalysis")
+    hbond.add_argument("--update-select", dest="update_select", action="store_true", default=None,
+                       help="force update of selections each frame")
+    hbond.add_argument("--no-update-select", dest="update_select", action="store_false",
+                       help="disable selection updates each frame")
+
+    pca = sub.add_parser("pca", help="perform PCA")
+    pca.add_argument("-n", "--n-components", dest="n_components", default=2, type=int, help="number of components")
+    pca.add_argument("-s", "--selection", default="backbone", help="MDAnalysis selection")
+
+    fes = sub.add_parser("fes", help="compute free energy surface")
+    fes.add_argument("--cv1", required=True, help="CV1 spec, e.g. rmsd:backbone")
+    fes.add_argument("--cv2", required=True, help="CV2 spec, e.g. rgyr:protein and backbone")
+    fes.add_argument("--bins", default=50, type=int, help="number of histogram bins")
+    fes.add_argument("--temperature", default=300, type=float, help="temperature in K")
+
+    extract = sub.add_parser("extract_pdb", help="extract PDBs at given times")
+    extract.add_argument("--times", nargs="+", type=float, required=True, help="times in ns")
+    extract.add_argument("-s", "--selection", default="all", help="MDAnalysis selection")
+
+    traj.set_defaults(func=tools.traj_analysis)
+
+
 def _name2name(subparsers):
     """
 
@@ -288,6 +338,7 @@ def main():
     _mytest(subparsers)
     _maskgen(subparsers)
     _exgen(subparsers)
+    _traj_analysis(subparsers)
     _name2name(subparsers)
     _mol2rfe(subparsers)
     _converter(subparsers)
