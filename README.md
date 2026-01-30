@@ -122,6 +122,58 @@ Then we can see `out.pdb` in VMD:
 
 All can be seen [here](https://spongemm.cn/%E6%96%87%E6%A1%A3/Xponge%E6%96%87%E6%A1%A3/Xponge).
 
+## CLI quick start (trajectory analysis)
+
+The `Xponge traj` subcommand provides cpptraj-like post-analysis for SPONGE trajectories.
+
+Basic syntax:
+
+```
+Xponge traj -p TOPO -c TRAJ -b BOX -o OUTDIR <analysis> [options]
+```
+
+Common analyses:
+
+```
+# RMSD
+Xponge traj -p top.txt -c mdcrd.dat -b mdbox.txt -o out rmsd -s "backbone" --dt-ps 1
+
+# RMSF
+Xponge traj -p top.txt -c mdcrd.dat -b mdbox.txt -o out rmsf -s "backbone and name CA"
+
+# Radius of gyration
+Xponge traj -p top.txt -c mdcrd.dat -b mdbox.txt -o out rgyr -s "protein and backbone" --dt-ps 1
+
+# Hydrogen bonds
+Xponge traj -p top.txt -c mdcrd.dat -b mdbox.txt -o out hbond --between "protein,resname SOL" --dt-ps 1
+
+# PCA
+Xponge traj -p top.txt -c mdcrd.dat -b mdbox.txt -o out pca -n 2 -s "backbone"
+
+# Free energy surface (CVs: rmsd:SELECTION, rgyr:SELECTION)
+Xponge traj -p top.txt -c mdcrd.dat -b mdbox.txt -o out fes --cv1 "rmsd:backbone" --cv2 "rgyr:protein and backbone" --bins 20 --temperature 300
+
+# Extract PDBs at specific times (ns)
+Xponge traj -p top.txt -c mdcrd.dat -b mdbox.txt -o out extract_pdb --times 0 0.1 0.2 --dt-ps 1 -s "all"
+```
+
+cpptraj-like command file:
+
+```
+# analysis.in
+rmsd selection="backbone" dt_ps=1
+rmsf selection="backbone and name CA"
+rgyr selection="protein and backbone" dt_ps=1
+hbond between="protein,resname SOL" dt_ps=1
+pca n=2 selection="backbone"
+fes cv1="rmsd:backbone" cv2="rgyr:protein and backbone" bins=20 temp=300
+extract_pdb times=0,0.1,0.2 selection="all" dt_ps=1
+
+Xponge traj -p top.txt -c mdcrd.dat -b mdbox.txt -o out -i analysis.in
+```
+
+Outputs are written as PNG figures and JSON data files in `OUTDIR`.
+
 ## Contribution Guideline
 
 If you want to contribute to the main codebase or report some issues, see [here](https://spongemm.cn/zh/%E8%B4%A1%E7%8C%AE) for the guides.
