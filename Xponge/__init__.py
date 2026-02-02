@@ -188,14 +188,16 @@ def _initialize():
         else:
             crd = self.get_atom_coordinates()
             box_length = list(np.max(crd, axis=0) - np.min(crd, axis=0) + 6)
+        box_angle = self.box_angle if hasattr(self, "box_angle") and self.box_angle is not None else [90.0, 90.0, 90.0]
+        box = [box_length[0], box_length[1], box_length[2], box_angle[0], box_angle[1], box_angle[2]]
         if "coordinate" not in sys_kwarg:
             sys_kwarg["coordinate"] = [self.get_atom_coordinates().tolist()]
             sys_kwarg["atoms"] = [[atom.name for atom in self.atoms]]
-            sys_kwarg["pbc_box"] = [box_length]
+            sys_kwarg["pbc_box"] = [box]
         else:
             sys_kwarg["coordinate"].append(self.get_atom_coordinates().tolist())
             sys_kwarg["atoms"].append([atom.name for atom in self.atoms])
-            sys_kwarg["pbc_box"].append(box_length)
+            sys_kwarg["pbc_box"].append(box)
 
     Molecule.Set_MindSponge_Todo("coordinate")(_do_initial)
 

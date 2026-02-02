@@ -1,10 +1,12 @@
 Metadata-Version: 2.4
 Name: Xponge
-Version: 0.1.0
-Summary: Add your description here
-Home-page: https://gitee.com/gao_hyp_xyj_admin/xponge
-Author: Yijie Xia
-Author-email: yijiexia@pku.edu.cn
+Version: 1.5b1
+Summary: A Python package to perform pre- and post-processing of molecular simulations
+Author-email: Yijie Xia <yijiexia@pku.edu.cn>
+Project-URL: Homepage, https://gitee.com/gao_hyp_xyj_admin/xponge
+Classifier: Programming Language :: Python :: 3 :: Only
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Operating System :: OS Independent
 Requires-Python: >=3.6
 Description-Content-Type: text/markdown
 License-File: LICENSE
@@ -17,11 +19,7 @@ Requires-Dist: pubchempy>=1.0.5; extra == "extra"
 Requires-Dist: pyscf>=2.11.0; extra == "extra"
 Requires-Dist: rdkit>=2025.9.3; extra == "extra"
 Requires-Dist: xpongelib>=1.2.5.0; extra == "extra"
-Dynamic: author
-Dynamic: author-email
-Dynamic: home-page
 Dynamic: license-file
-Dynamic: requires-python
 
 # Welcome to Use Xponge!
 
