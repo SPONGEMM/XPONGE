@@ -129,8 +129,13 @@ The `Xponge traj` subcommand provides cpptraj-like post-analysis for SPONGE traj
 Basic syntax:
 
 ```
-Xponge traj -p TOPO -c TRAJ -b BOX -o OUTDIR <analysis> [options]
+Xponge traj -p TOPO -c TRAJ [-c TRAJ ...] -b BOX [-b BOX ...] -o OUTDIR <analysis> [options]
 ```
+
+Notes:
+- `-c/--traj` and `-b/--box` are repeatable; use `-b` once for a single box file or repeat it to match each trajectory.
+- In `-i/--input` command files, `traj=`/`box=` accept comma-separated lists.
+- When multiple `-c` are provided with a subcommand (no `-i`), analyses run per trajectory and outputs go into subfolders named by trajectory basename plus a short hash.
 
 Common analyses:
 
@@ -155,6 +160,9 @@ Xponge traj -p top.txt -c mdcrd.dat -b mdbox.txt -o out fes --cv1 "rmsd:backbone
 
 # Extract PDBs at specific times (ns)
 Xponge traj -p top.txt -c mdcrd.dat -b mdbox.txt -o out extract_pdb --times 0 0.1 0.2 --dt-ps 1 -s "all"
+
+# multiple trajectories
+Xponge traj -p top.txt -c mdcrd_1.dat -c mdcrd_2.dat -b mdbox_1.txt -b mdbox_2.txt -o out rmsd -s "backbone" --dt-ps 1
 ```
 
 cpptraj-like command file:
@@ -168,6 +176,9 @@ hbond between="protein,resname SOL" dt_ps=1
 pca n=2 selection="backbone"
 fes cv1="rmsd:backbone" cv2="rgyr:protein and backbone" bins=20 temp=300
 extract_pdb times=0,0.1,0.2 selection="all" dt_ps=1
+
+# Optional per-line trajectory/box override (comma-separated for multiple)
+rmsd selection="backbone" dt_ps=1 traj="mdcrd_1.dat,mdcrd_2.dat" box="mdbox_1.txt,mdbox_2.txt"
 
 Xponge traj -p top.txt -c mdcrd.dat -b mdbox.txt -o out -i analysis.in
 ```

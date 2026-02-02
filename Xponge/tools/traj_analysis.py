@@ -25,14 +25,59 @@ def load_Sponge_trajectory(topo, traj, box):
     import MDAnalysis as mda
     import Xponge.analysis.md_analysis as xmda
 
-    if box:
-        return mda.Universe(topo, traj, format=xmda.SpongeTrajectoryReader, box=box)
-    return mda.Universe(topo, traj, format=xmda.SpongeTrajectoryReader)
+    traj_list = _split_paths(traj)
+    if not traj_list:
+        raise ValueError("Trajectory file is required.")
+
+    if len(traj_list) == 1:
+        traj_path = traj_list[0]
+        if box:
+            if isinstance(box, (list, tuple)) and len(box) == 1:
+                box = box[0]
+            return mda.Universe(topo, traj_path, format=xmda.SpongeTrajectoryReader, box=box)
+        return mda.Universe(topo, traj_path, format=xmda.SpongeTrajectoryReader)
+
+    if not box:
+        raise ValueError("Box file is required for Sponge trajectories.")
+    if isinstance(box, (list, tuple)):
+        if len(box) == 1:
+            return mda.Universe(topo, traj_list, format=xmda.SpongeTrajectoryReader, box=box[0])
+        if len(box) != len(traj_list):
+            raise ValueError("Number of box files must match trajectories or be a single box file.")
+        filenames = [
+            (traj, xmda.SpongeTrajectoryReader.with_arguments(box=box_item))
+            for traj, box_item in zip(traj_list, box)
+        ]
+        return mda.Universe(topo, filenames)
+    return mda.Universe(topo, traj_list, format=xmda.SpongeTrajectoryReader, box=box)
 
 
 def _selection_suffix(selection: str) -> str:
     value = (selection or "all").strip() or "all"
     return hashlib.sha1(value.encode("utf-8")).hexdigest()[:6]
+
+
+def _traj_label(traj_path: str, index: int) -> str:
+    base = os.path.basename(traj_path) if traj_path else ""
+    name, _ = os.path.splitext(base)
+    name = name.strip() or f"traj{index + 1}"
+    if traj_path:
+        suffix = hashlib.sha1(traj_path.encode("utf-8")).hexdigest()[:6]
+    else:
+        suffix = hashlib.sha1(str(index).encode("utf-8")).hexdigest()[:6]
+    return f"{name}-{suffix}"
+
+
+def _split_paths(value):
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        return [str(item).strip() for item in value if str(item).strip()]
+    if isinstance(value, str):
+        if "," in value:
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return [value.strip()] if value.strip() else []
+    return [str(value).strip()] if str(value).strip() else []
 
 
 def json_filename_for_selection(base_name: str, selection: str) -> str:
@@ -41,6 +86,12 @@ def json_filename_for_selection(base_name: str, selection: str) -> str:
 
 def plot_filename_for_selection(base_name: str, selection: str) -> str:
     return f"{base_name}_{_selection_suffix(selection)}.png"
+
+
+def _rmsd_values(rmsd_analysis):
+    if hasattr(rmsd_analysis, "results") and hasattr(rmsd_analysis.results, "rmsd"):
+        return rmsd_analysis.results.rmsd
+    return rmsd_analysis.rmsd
 
 
 def perform_pca(u, n_components=2, selection="backbone", outdir="."):
@@ -100,7 +151,7 @@ def compute_rmsf(u, outdir=".", selection="backbone and name CA"):
     ag = u.select_atoms(selection)
     rmsf_analysis = RMSF(ag)
     rmsf_analysis.run()
-    values = rmsf_analysis.rmsf
+    values = rmsf_analysis.results.rmsf
     plt.figure()
     plt.plot(values)
     plt.xlabel("Atom Index")
@@ -123,7 +174,7 @@ def rmsd_calculator(topo_path, traj_path, box_path, selection, delta_t_ns, outdi
     ag = u.select_atoms(selection)
     rmsd = rms.RMSD(ag, superposition=True, ref_frame=0)
     rmsd.run()
-    rmsds = np.array(rmsd.rmsd[:, 2])
+    rmsds = np.array(_rmsd_values(rmsd)[:, 2])
     plt.figure()
     time = np.arange(len(rmsds)) * delta_t_ns
     plt.plot(time, rmsds, label="RMSD")
@@ -236,17 +287,33 @@ def analyze_hydrogen_bonds(u, delta_t_ps, between, selection="all", outdir=".", 
 
 
 def _resolve_box_path(traj_path, box_path):
-    if box_path:
+    traj_list = _split_paths(traj_path)
+    if not traj_list:
         return box_path
-    dirname, basename = os.path.split(traj_path)
-    if basename == "mdcrd.dat":
-        candidate = "mdbox.txt"
-    else:
-        candidate = basename.replace(".dat", ".box")
-    candidate = os.path.join(dirname, candidate)
-    if os.path.exists(candidate):
-        return candidate
-    return None
+
+    box_list = _split_paths(box_path) if box_path is not None else []
+    if box_list:
+        if len(box_list) == 1 or len(box_list) == len(traj_list):
+            return box_list[0] if len(box_list) == 1 else box_list
+        raise ValueError("Number of box files must match trajectories or be a single box file.")
+
+    resolved = []
+    for traj in traj_list:
+        dirname, basename = os.path.split(traj)
+        if basename == "mdcrd.dat":
+            candidate = "mdbox.txt"
+        else:
+            candidate = basename.replace(".dat", ".box")
+        candidate = os.path.join(dirname, candidate)
+        resolved.append(candidate if os.path.exists(candidate) else None)
+
+    if len(traj_list) == 1:
+        return resolved[0]
+    missing = [traj_list[i] for i, item in enumerate(resolved) if item is None]
+    if missing:
+        missing_list = ", ".join(missing)
+        raise ValueError(f"Box file not found for trajectories: {missing_list}. Please provide -b/--box.")
+    return resolved
 
 
 def _resolve_dt_ns(dt_ns, dt_ps):
@@ -286,7 +353,7 @@ def _cv_from_spec(spec):
             ag = u.select_atoms(selection)
             rmsd = rms.RMSD(ag, superposition=True, ref_frame=0)
             rmsd.run()
-            return np.array(rmsd.rmsd[:, 2])
+            return np.array(_rmsd_values(rmsd)[:, 2])
 
         return _cv
     if name == "rgyr":
@@ -326,24 +393,35 @@ def _run_script(u, args):
             key, value = token.split("=", 1)
             kwargs[key.strip().lower()] = value
         outdir = kwargs.get("outdir", args.outdir)
+        traj_spec = args.traj
+        box_spec = args.box
+        line_traj = kwargs.get("traj")
+        line_box = kwargs.get("box")
+        if line_traj is not None or line_box is not None:
+            traj_spec = line_traj if line_traj is not None else args.traj
+            box_spec = line_box if line_box is not None else args.box
+            box_spec = _resolve_box_path(traj_spec, box_spec)
+            line_u = load_Sponge_trajectory(args.topo, traj_spec, box_spec)
+        else:
+            line_u = u
         if cmd == "rmsd":
             selection = kwargs.get("selection", "backbone")
             dt_ns = float(kwargs["dt_ns"]) if "dt_ns" in kwargs else args.dt_ns
             dt_ps = float(kwargs["dt_ps"]) if "dt_ps" in kwargs else args.dt_ps
             delta_t_ns = _resolve_dt_ns(dt_ns, dt_ps)
-            u.trajectory[0]
-            rmsd_calculator(args.topo, args.traj, args.box, selection, delta_t_ns, outdir=outdir, universe=u)
+            line_u.trajectory[0]
+            rmsd_calculator(args.topo, traj_spec, box_spec, selection, delta_t_ns, outdir=outdir, universe=line_u)
         elif cmd == "rmsf":
             selection = kwargs.get("selection", "backbone and name CA")
-            u.trajectory[0]
-            compute_rmsf(u, outdir=outdir, selection=selection)
+            line_u.trajectory[0]
+            compute_rmsf(line_u, outdir=outdir, selection=selection)
         elif cmd == "rgyr":
             selection = kwargs.get("selection", "protein and backbone")
             dt_ps = float(kwargs["dt_ps"]) if "dt_ps" in kwargs else args.dt_ps
             dt_ns = float(kwargs["dt_ns"]) if "dt_ns" in kwargs else args.dt_ns
             delta_t_ps = _resolve_dt_ps(dt_ps, dt_ns)
-            u.trajectory[0]
-            compute_radius_of_gyration(u, delta_t_ps, outdir=outdir, selection=selection)
+            line_u.trajectory[0]
+            compute_radius_of_gyration(line_u, delta_t_ps, outdir=outdir, selection=selection)
         elif cmd == "hbond":
             selection = kwargs.get("selection", "all")
             between = kwargs.get("between", None)
@@ -351,9 +429,9 @@ def _run_script(u, args):
             dt_ns = float(kwargs["dt_ns"]) if "dt_ns" in kwargs else args.dt_ns
             delta_t_ps = _resolve_dt_ps(dt_ps, dt_ns)
             update_select = kwargs.get("update_select", None)
-            u.trajectory[0]
+            line_u.trajectory[0]
             analyze_hydrogen_bonds(
-                u,
+                line_u,
                 delta_t_ps,
                 between,
                 selection=selection,
@@ -363,16 +441,16 @@ def _run_script(u, args):
         elif cmd == "pca":
             n_components = int(kwargs.get("n_components", kwargs.get("n", 2)))
             selection = kwargs.get("selection", "backbone")
-            u.trajectory[0]
-            perform_pca(u, n_components=n_components, selection=selection, outdir=outdir)
+            line_u.trajectory[0]
+            perform_pca(line_u, n_components=n_components, selection=selection, outdir=outdir)
         elif cmd == "fes":
             cv1 = kwargs.get("cv1", "")
             cv2 = kwargs.get("cv2", "")
             bins = int(kwargs.get("bins", 50))
             temp = float(kwargs.get("temperature", kwargs.get("temp", 300)))
-            u.trajectory[0]
+            line_u.trajectory[0]
             compute_free_energy_surface(
-                u,
+                line_u,
                 _cv_from_spec(cv1),
                 _cv_from_spec(cv2),
                 bins=bins,
@@ -385,81 +463,99 @@ def _run_script(u, args):
             dt_ns = float(kwargs["dt_ns"]) if "dt_ns" in kwargs else args.dt_ns
             dt_ps = float(kwargs["dt_ps"]) if "dt_ps" in kwargs else args.dt_ps
             delta_t_ns = _resolve_dt_ns(dt_ns, dt_ps)
-            u.trajectory[0]
+            line_u.trajectory[0]
             extract_pdb(
                 args.topo,
-                args.traj,
-                args.box,
+                traj_spec,
+                box_spec,
                 times,
                 delta_t_ns,
                 selection=selection,
                 outdir=outdir,
-                universe=u,
+                universe=line_u,
             )
         else:
             raise ValueError(f"Unsupported command in script: {cmd}")
 
 
 def run_traj_cli(args):
+    args.traj = _split_paths(args.traj)
     box_path = _resolve_box_path(args.traj, args.box)
     args.box = box_path
     os.makedirs(args.outdir, exist_ok=True)
-    u = load_Sponge_trajectory(args.topo, args.traj, args.box)
+    traj_list = _split_paths(args.traj)
+    if not traj_list:
+        raise ValueError("Trajectory file is required.")
+    if isinstance(args.box, (list, tuple)):
+        box_list = list(args.box)
+    else:
+        box_list = [args.box] * len(traj_list)
 
-    if args.input:
-        _run_script(u, args)
+    def _run_single(traj_path, box_path, outdir):
+        u = load_Sponge_trajectory(args.topo, traj_path, box_path)
+        if args.input:
+            _run_script(u, args)
+            return
+        if not args.analysis_cmd:
+            raise ValueError("Please provide a subcommand or use -i/--input.")
+        if args.analysis_cmd == "rmsd":
+            delta_t_ns = _resolve_dt_ns(args.dt_ns, args.dt_ps)
+            u.trajectory[0]
+            rmsd_calculator(args.topo, traj_path, box_path, args.selection, delta_t_ns, outdir=outdir, universe=u)
+        elif args.analysis_cmd == "rmsf":
+            u.trajectory[0]
+            compute_rmsf(u, outdir=outdir, selection=args.selection)
+        elif args.analysis_cmd == "rgyr":
+            delta_t_ps = _resolve_dt_ps(args.dt_ps, args.dt_ns)
+            u.trajectory[0]
+            compute_radius_of_gyration(u, delta_t_ps, outdir=outdir, selection=args.selection)
+        elif args.analysis_cmd == "hbond":
+            delta_t_ps = _resolve_dt_ps(args.dt_ps, args.dt_ns)
+            u.trajectory[0]
+            analyze_hydrogen_bonds(
+                u,
+                delta_t_ps,
+                args.between,
+                selection=args.selection,
+                outdir=outdir,
+                update_select=args.update_select,
+            )
+        elif args.analysis_cmd == "pca":
+            u.trajectory[0]
+            perform_pca(u, n_components=args.n_components, selection=args.selection, outdir=outdir)
+        elif args.analysis_cmd == "fes":
+            u.trajectory[0]
+            compute_free_energy_surface(
+                u,
+                _cv_from_spec(args.cv1),
+                _cv_from_spec(args.cv2),
+                bins=args.bins,
+                temperature=args.temperature,
+                outdir=outdir,
+            )
+        elif args.analysis_cmd == "extract_pdb":
+            delta_t_ns = _resolve_dt_ns(args.dt_ns, args.dt_ps)
+            u.trajectory[0]
+            extract_pdb(
+                args.topo,
+                traj_path,
+                box_path,
+                args.times,
+                delta_t_ns,
+                selection=args.selection,
+                outdir=outdir,
+                universe=u,
+            )
+        else:
+            raise ValueError(f"Unsupported subcommand: {args.analysis_cmd}")
+
+    if len(traj_list) > 1 and not args.input:
+        for idx, traj_path in enumerate(traj_list):
+            box_path = box_list[idx] if idx < len(box_list) else None
+            label = _traj_label(traj_path, idx)
+            outdir = os.path.join(args.outdir, label)
+            os.makedirs(outdir, exist_ok=True)
+            _run_single(traj_path, box_path, outdir)
         return
 
-    if not args.analysis_cmd:
-        raise ValueError("Please provide a subcommand or use -i/--input.")
-
-    if args.analysis_cmd == "rmsd":
-        delta_t_ns = _resolve_dt_ns(args.dt_ns, args.dt_ps)
-        u.trajectory[0]
-        rmsd_calculator(args.topo, args.traj, args.box, args.selection, delta_t_ns, outdir=args.outdir, universe=u)
-    elif args.analysis_cmd == "rmsf":
-        u.trajectory[0]
-        compute_rmsf(u, outdir=args.outdir, selection=args.selection)
-    elif args.analysis_cmd == "rgyr":
-        delta_t_ps = _resolve_dt_ps(args.dt_ps, args.dt_ns)
-        u.trajectory[0]
-        compute_radius_of_gyration(u, delta_t_ps, outdir=args.outdir, selection=args.selection)
-    elif args.analysis_cmd == "hbond":
-        delta_t_ps = _resolve_dt_ps(args.dt_ps, args.dt_ns)
-        u.trajectory[0]
-        analyze_hydrogen_bonds(
-            u,
-            delta_t_ps,
-            args.between,
-            selection=args.selection,
-            outdir=args.outdir,
-            update_select=args.update_select,
-        )
-    elif args.analysis_cmd == "pca":
-        u.trajectory[0]
-        perform_pca(u, n_components=args.n_components, selection=args.selection, outdir=args.outdir)
-    elif args.analysis_cmd == "fes":
-        u.trajectory[0]
-        compute_free_energy_surface(
-            u,
-            _cv_from_spec(args.cv1),
-            _cv_from_spec(args.cv2),
-            bins=args.bins,
-            temperature=args.temperature,
-            outdir=args.outdir,
-        )
-    elif args.analysis_cmd == "extract_pdb":
-        delta_t_ns = _resolve_dt_ns(args.dt_ns, args.dt_ps)
-        u.trajectory[0]
-        extract_pdb(
-            args.topo,
-            args.traj,
-            args.box,
-            args.times,
-            delta_t_ns,
-            selection=args.selection,
-            outdir=args.outdir,
-            universe=u,
-        )
-    else:
-        raise ValueError(f"Unsupported subcommand: {args.analysis_cmd}")
+    _run_single(traj_list[0], box_list[0], args.outdir)

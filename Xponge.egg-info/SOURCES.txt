@@ -228,3 +228,6 @@ Xponge/tools/unittests/test_8_sits.py
 Xponge/tools/unittests/test_8_tmd.py
 Xponge/tools/unittests/test_8_umbrella.py
 Xponge/tools/unittests/test_9_fep.py
+docs/get_docstrings.py
+tmp/C6H6.mol2
+tmp/convert_out.mol2

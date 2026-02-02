@@ -93,8 +93,21 @@ def _traj_analysis(subparsers):
     """
     traj = subparsers.add_parser("traj", help="post-analysis for SPONGE trajectories (cpptraj-like)")
     traj.add_argument("-p", "--topo", dest="topo", required=True, help="the topology file")
-    traj.add_argument("-c", "--traj", dest="traj", required=True, help="the trajectory file")
-    traj.add_argument("-b", "--box", dest="box", help="the box file for SPONGE trajectory")
+    traj.add_argument(
+        "-c",
+        "--traj",
+        dest="traj",
+        required=True,
+        action="append",
+        help="the trajectory file (repeatable)",
+    )
+    traj.add_argument(
+        "-b",
+        "--box",
+        dest="box",
+        action="append",
+        help="the box file for SPONGE trajectory (repeatable)",
+    )
     traj.add_argument("-o", "--outdir", default=".", help="the output directory")
     traj.add_argument("--dt-ps", dest="dt_ps", type=float, help="time step between frames in ps")
     traj.add_argument("--dt-ns", dest="dt_ns", type=float, help="time step between frames in ns")

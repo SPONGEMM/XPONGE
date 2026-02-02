@@ -3,7 +3,7 @@ numpy<2
 [extra]
 geometric>=1.1
 matplotlib>=3.10.8
-mdanalysis>=2.10.0
+mdanalysis>=2.9.0
 pubchempy>=1.0.5
 pyscf>=2.11.0
 rdkit>=2025.9.3

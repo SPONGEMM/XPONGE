@@ -1,27 +1,25 @@
 Metadata-Version: 2.4
 Name: Xponge
-Version: 0.1.0
-Summary: Add your description here
-Home-page: https://gitee.com/gao_hyp_xyj_admin/xponge
-Author: Yijie Xia
-Author-email: yijiexia@pku.edu.cn
-Requires-Python: >=3.6
+Version: 1.5b1
+Summary: A Python package to perform pre- and post-processing of molecular simulations
+Author-email: Yijie Xia <yijiexia@pku.edu.cn>
+Project-URL: Homepage, https://gitee.com/gao_hyp_xyj_admin/xponge
+Classifier: Programming Language :: Python :: 3 :: Only
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.10
 Description-Content-Type: text/markdown
 License-File: LICENSE
 Requires-Dist: numpy<2
 Provides-Extra: extra
 Requires-Dist: geometric>=1.1; extra == "extra"
 Requires-Dist: matplotlib>=3.10.8; extra == "extra"
-Requires-Dist: mdanalysis>=2.10.0; extra == "extra"
+Requires-Dist: mdanalysis>=2.9.0; extra == "extra"
 Requires-Dist: pubchempy>=1.0.5; extra == "extra"
 Requires-Dist: pyscf>=2.11.0; extra == "extra"
 Requires-Dist: rdkit>=2025.9.3; extra == "extra"
 Requires-Dist: xpongelib>=1.2.5.0; extra == "extra"
-Dynamic: author
-Dynamic: author-email
-Dynamic: home-page
 Dynamic: license-file
-Dynamic: requires-python
 
 # Welcome to Use Xponge!
 
@@ -154,8 +152,12 @@ The `Xponge traj` subcommand provides cpptraj-like post-analysis for SPONGE traj
 Basic syntax:
 
 ```
-Xponge traj -p TOPO -c TRAJ -b BOX -o OUTDIR <analysis> [options]
+Xponge traj -p TOPO -c TRAJ [-c TRAJ ...] -b BOX [-b BOX ...] -o OUTDIR <analysis> [options]
 ```
+
+Notes:
+- `-c/--traj` and `-b/--box` are repeatable; use `-b` once for a single box file or repeat it to match each trajectory.
+- In `-i/--input` command files, `traj=`/`box=` accept comma-separated lists.
 
 Common analyses:
 
@@ -193,6 +195,9 @@ hbond between="protein,resname SOL" dt_ps=1
 pca n=2 selection="backbone"
 fes cv1="rmsd:backbone" cv2="rgyr:protein and backbone" bins=20 temp=300
 extract_pdb times=0,0.1,0.2 selection="all" dt_ps=1
+
+# Optional per-line trajectory/box override (comma-separated for multiple)
+rmsd selection="backbone" dt_ps=1 traj="mdcrd_1.dat,mdcrd_2.dat" box="mdbox_1.txt,mdbox_2.txt"
 
 Xponge traj -p top.txt -c mdcrd.dat -b mdbox.txt -o out -i analysis.in
 ```
