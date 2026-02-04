@@ -516,15 +516,16 @@ def _pdb_residue_link(cls: Molecule, chain_ids: Xdict, chains: Xdict, r2i: Xdict
                 a.name == res_a.type.connect_atoms["ssbond"] and \
                 b.name == res_b.type.connect_atoms["ssbond"]:
             ssbonds.append("CYX {0:1s} {1:4d}    CYX {2:1s} {3:4d}\n".format(
-                chain_a, chains_inverse[chain_a][res_index_a] + 1, chain_b, chains_inverse[chain_b][res_index_b] + 1))
+                chain_a, chains_inverse[chain_a][res_index_a + 1],
+                chain_b, chains_inverse[chain_b][res_index_b + 1]))
         else:
             save_names = GlobalSetting.PDBResidueNameMap["save"]
             name_a = save_names[res_a.name] if res_a.name in save_names else res_a.name
             name_b = save_names[res_b.name] if res_b.name in save_names else res_b.name
             links.append("LINK        {0:^4s} {1:3s} {2:1s}{3:4d}                \
 {4:^4s} {5:3s} {6:1s}{7:4d}\n".format(
-    a.name, name_a, chain_a, chains_inverse[chain_a][res_index_a],
-    b.name, name_b, chain_b, chains_inverse[chain_b][res_index_b]))
+    a.name, name_a, chain_a, chains_inverse[chain_a][res_index_a + 1],
+    b.name, name_b, chain_b, chains_inverse[chain_b][res_index_b + 1]))
     if ssbonds:
         ssbonds.sort()
         towrite += "".join(["SSBOND {0:3d} ".format(i + 1) + ssbond for i, ssbond in enumerate(ssbonds)])
