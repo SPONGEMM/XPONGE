@@ -6,7 +6,7 @@ from itertools import product
 from warnings import warn
 from . import assign
 from .helper import AbstractMolecule, ResidueType, Molecule, Residue, GlobalSetting, Xopen, Xdict, \
-    set_global_alternative_names
+    set_global_alternative_names, guess_element_from_mass
 
 
 def _analyze_connectivity(cls):
@@ -487,6 +487,35 @@ def _pdb_sequence(cls: Molecule, chains: Xdict):
     return towrite
 
 
+def _pdb_guess_element(atom):
+    """
+        Guess element symbol for PDB output.
+    """
+    element = getattr(atom, "element", None)
+    if not element:
+        element = getattr(getattr(atom, "type", None), "element", None)
+    if not element:
+        mass = getattr(atom, "mass", None)
+        if mass is not None and mass > 0:
+            try:
+                element = guess_element_from_mass(mass)
+            except Exception:
+                element = None
+    if not element:
+        name = atom.name if hasattr(atom, "name") else ""
+        letters = "".join([c for c in name if c.isalpha()])
+        if letters:
+            if len(letters) >= 2 and letters[1].islower():
+                element = letters[0].upper() + letters[1].lower()
+            else:
+                element = letters[0].upper()
+        else:
+            element = "X"
+    if len(element) == 1:
+        return f"{element:>2}"
+    return f"{element[:2]:>2}"
+
+
 def _pdb_residue_link(cls: Molecule, chain_ids: Xdict, chains: Xdict, r2i: Xdict):
     """
         Process the residue links
@@ -580,11 +609,12 @@ def save_pdb(cls, filename=None, write_cryst1=True):
             resid = r2i[atom.residue]
             if resname in GlobalSetting.PDBResidueNameMap["save"]:
                 resname = GlobalSetting.PDBResidueNameMap["save"][resname]
+            element = _pdb_guess_element(atom)
             towrite += "ATOM  %5d %4s %3s %1s%4d    %8.3f%8.3f%8.3f%17s%2s\n" % (
                 (a2i[atom] + 1) % 100000, atom.name,
                 resname, chain_ids[resid],
                 (resid - chain_residue0) % 10000,
-                atom.x, atom.y, atom.z, " ", " ")
+                atom.x, atom.y, atom.z, " ", element)
             if atom == atom.residue.atoms[-1] and resid in ter_res:
                 towrite += "TER\n"
                 if resid - real_chain_residue0 != 1 or resid + 1 in ter_res:
