@@ -8,7 +8,7 @@ from itertools import product
 import numpy as np
 from .helper import get_rotate_matrix, ResidueType, Molecule, Residue, set_global_alternative_names, Xdict, \
     GlobalSetting, Xopen, Xprint
-from .helper.math import get_basis_vectors_from_length_and_angle
+from .helper.math import get_basis_vectors_from_length_and_angle, get_length_angle_from_basis_vectors
 from .build import save_sponge_input
 from .load import load_coordinate
 from .forcefield.special.min import save_min_bonded_parameters, do_not_save_min_bonded_parameters
@@ -749,8 +749,9 @@ class Lattice:
             if cell_length is not None:
                 self.cell_length = cell_length
             if cell_angle is not None:
-                self.cell_angle = np.array(cell_angle)
-            assert np.all(self.cell_angle <= 90), "the cell angle should be not greater than 90 degree"
+                self.cell_angle = np.array(cell_angle, dtype=float)
+            assert np.all((self.cell_angle > 0) & (self.cell_angle < 180)), \
+                "the cell angle should be in the range (0, 180)"
             if spacing is not None:
                 self.spacing = spacing
             if basis_position is not None:
@@ -819,16 +820,35 @@ class Lattice:
         """
         This **function** is used to create basis molecules to the region in the box
 
-        :param box: the box of the system
+        :param box: the box of the system, a ``BlockRegion`` or ``PrismRegion``
         :param region: the region to create the basis_molecule
         :param mol: if ``mol`` the Molecule instance is provided, basis molecules will be added to ``mol``
         :return: a new Molecule instance, or the Molecule instance ``mol``
         """
-        if not isinstance(box, BlockRegion) or box.side == "out":
-            raise ValueError("Box should only be a BlockRegion with side == 'in' !")
+        if not isinstance(box, (BlockRegion, PrismRegion)) or box.side == "out":
+            raise ValueError("Box should only be a BlockRegion or PrismRegion with side == 'in' !")
         if not mol:
             mol = Molecule("unnamed")
-        mol.box_length = [box.x_high - box.x_low, box.y_high - box.y_low, box.z_high - box.z_low]
+        if isinstance(box, PrismRegion):
+            box_length, box_angle = get_length_angle_from_basis_vectors(box.l1, box.l2, box.l3)
+            mol.box_length = box_length
+            mol.box_angle = box_angle
+            vertices = np.array([box.l0,
+                                 box.l0 + box.l1,
+                                 box.l0 + box.l2,
+                                 box.l0 + box.l3,
+                                 box.l0 + box.l1 + box.l2,
+                                 box.l0 + box.l1 + box.l3,
+                                 box.l0 + box.l2 + box.l3,
+                                 box.l0 + box.l1 + box.l2 + box.l3])
+            x_low, y_low, z_low = np.min(vertices, axis=0)
+            x_high, y_high, z_high = np.max(vertices, axis=0)
+            periodic_box = BlockRegion(x_low, y_low, z_low, x_high, y_high, z_high, boundary=True)
+        else:
+            mol.box_length = [box.x_high - box.x_low, box.y_high - box.y_low, box.z_high - box.z_low]
+            x_low, y_low, z_low = box.x_low, box.y_low, box.z_low
+            x_high, y_high, z_high = box.x_high, box.y_high, box.z_high
+            periodic_box = box
         basis_mol = self.basis_molecule
         res_len = -1
         if isinstance(basis_mol, Molecule):
@@ -842,20 +862,20 @@ class Lattice:
         bps = np.array([[bvs[0][0] * basis[0] + bvs[1][0] * basis[1] + bvs[2][0] * basis[2],
                          bvs[1][1] * basis[1] + bvs[2][1] * basis[2],  bvs[2][2] * basis[2]]
                          for basis in self.basis_position])
-        x_init = box.x_low + self.origin[0]
-        y_init = box.y_low + self.origin[1]
-        z0 = box.z_low + self.origin[2]
+        x_init = x_low + self.origin[0]
+        y_init = y_low + self.origin[1]
+        z0 = z_low + self.origin[2]
         x1, y1, z1 = np.min([[atom.x, atom.y, atom.z] for atom in basis_mol.atoms], axis=0)
-        while z0 < box.z_high:
+        while z0 < z_high:
             y0 = y_init
-            while y0 < box.y_high:
+            while y0 < y_high:
                 x0 = x_init
-                while x0 < box.x_high:
+                while x0 < x_high:
                     for basis in bps:
                         x2 = basis[0] + x0
                         y2 = basis[1] + y0
                         z2 = basis[2] + z0
-                        self._judge_region(x1, y1, z1, x2, y2, z2, region, mol, basis_mol, res_len, box)
+                        self._judge_region(x1, y1, z1, x2, y2, z2, region, mol, basis_mol, res_len, periodic_box)
                     x0 += bvs[0][0]
                 x_init += bvs[1][0]
                 x_init %= bvs[0][0]

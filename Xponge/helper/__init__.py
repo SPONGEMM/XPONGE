@@ -24,7 +24,7 @@ from .namespace import set_real_global_variable, remove_real_global_variable, se
     set_dict_value_alternative_name, set_global_alternative_names, source
 
 from .math import get_rotate_matrix, get_fibonacci_grid, guess_element_from_mass, kabsch, \
-    get_basis_vectors_from_length_and_angle
+    get_basis_vectors_from_length_and_angle, get_length_angle_from_basis_vectors
 
 
 class Xdict(dict):

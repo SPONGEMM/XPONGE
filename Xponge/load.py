@@ -9,6 +9,7 @@ import numpy as np
 
 from .helper import Molecule, Residue, ResidueType, AtomType, GlobalSetting, Xdict, Xopen, \
     set_real_global_variable, set_global_alternative_names, Xprint
+from .helper.math import get_length_angle_from_basis_vectors
 
 
 ##########################################################################
@@ -489,7 +490,7 @@ because {to_connect} and {atom} is in one residue", "WARNING")
 
 
 def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
-             ignore_unknown_name=False, ignore_seqres=True, ignore_conect=True):
+             ignore_unknown_name=False, ignore_seqres=True, ignore_conect=True, read_cryst1=True):
     """
     This **function** is used to load a pdb file
 
@@ -500,6 +501,7 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
     :param ignore_unknown_name: do not read the atom with an unknown name **New From 1.2.6.4**
     :param ignore_seqres: do not read the SEQRES lines **New From 1.2.6.7**
     :param ignore_conect: do not read the CONECT lines **New From 1.2.6.7**
+    :param read_cryst1: read the CRYST1 line to set box length and angle
     :return: a Molecule instance
     """
     if not isinstance(file, io.IOBase):
@@ -521,8 +523,21 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
     current_resname = None
     chain_id_processed = set()
     current_histone_information = {"DeltaH": False, "EpsilonH": False}
+    cryst1 = None
     with file as f:
         for line in f:
+            if read_cryst1 and line.startswith("CRYST1"):
+                try:
+                    a = float(line[6:15])
+                    b = float(line[15:24])
+                    c = float(line[24:33])
+                    alpha = float(line[33:40])
+                    beta = float(line[40:47])
+                    gamma = float(line[47:54])
+                    cryst1 = ([a, b, c], [alpha, beta, gamma])
+                except ValueError:
+                    Xprint(f"Invalid CRYST1 line: {line.strip()}", "WARNING")
+                continue
             if line.startswith("ATOM") or line.startswith("HETATM"):
                 resindex = _pdb_parse_atom_serial(line[22:26])
                 if resindex is None:
@@ -595,6 +610,9 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
         _pdb_link_after(chain, links, molecule)
         _pdb_find_missing_residues(molecule, sequences, chain, residue_type_map)
         _pdb_connects(molecule, connects, atom_map)
+        if cryst1 is not None:
+            molecule.box_length = cryst1[0]
+            molecule.box_angle = cryst1[1]
 
     return molecule
 
@@ -1718,12 +1736,13 @@ def load_molpsf(filename, split_by="connectivity"):
     return current_mol, mols
 
 
-def load_gro(filename, mol=None):
+def load_gro(filename, mol=None, read_box_angle=True):
     """
     This **function** is used to read the GROMACS coordinate file
 
     :param filename: the coordinate file to load
     :param mol: the molecule or residue to load the coordinate into
+    :param read_box_angle: read the box angle information when provided
     :return: two numpy arrays, representing the coordinates and the box information respectively
     """
     with Xopen(filename, "r") as f:
@@ -1736,16 +1755,31 @@ def load_gro(filename, mol=None):
             crd[i][1] = float(line[28:36]) * 10
             crd[i][2] = float(line[36:44]) * 10
         line = f.readline().split()
-        if len(line) != 3:
-            raise NotImplementedError("SPONGE now can only perform simulations in an orthongonal box")
-        box = np.array([float(line[0]), float(line[1]), float(line[2]), 9, 9, 9]) * 10
+        if len(line) == 3:
+            box_length = [float(line[0]) * 10, float(line[1]) * 10, float(line[2]) * 10]
+            box_angle = [90.0, 90.0, 90.0]
+        elif len(line) == 9:
+            vals = list(map(float, line))
+            # GROMACS triclinic box: v1x v2y v3z v1y v1z v2x v2z v3x v3y
+            v1 = [vals[0], vals[3], vals[4]]
+            v2 = [vals[5], vals[1], vals[6]]
+            v3 = [vals[7], vals[8], vals[2]]
+            box_length, box_angle = get_length_angle_from_basis_vectors(v1, v2, v3, angle_in_degree=True)
+            box_length = [i * 10 for i in box_length]
+        else:
+            raise NotImplementedError("Unsupported GRO box format")
+        if not read_box_angle:
+            box_angle = [90.0, 90.0, 90.0]
+        box = np.array([box_length[0], box_length[1], box_length[2],
+                        box_angle[0], box_angle[1], box_angle[2]], dtype=float)
     if mol:
         for i, atom in enumerate(mol.get_atoms()):
             atom.x = crd[i][0]
             atom.y = crd[i][1]
             atom.z = crd[i][2]
         if isinstance(mol, Molecule):
-            mol.box_length = box[:3]
+            mol.box_length = box[:3].tolist()
+            mol.box_angle = box[3:].tolist()
     return crd, box
 
 set_global_alternative_names()

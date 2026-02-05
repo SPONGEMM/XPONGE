@@ -148,4 +148,36 @@ def get_basis_vectors_from_length_and_angle(a, b, c, alpha, beta, gamma, angle_i
     return basis
 
 
+def get_length_angle_from_basis_vectors(v1, v2, v3, angle_in_degree=True):
+    """
+    This **function** gets the cell lengths and angles from the basis vectors.
+
+    :param v1: the first basis vector
+    :param v2: the second basis vector
+    :param v3: the third basis vector
+    :param angle_in_degree: whether the unit of the angles is degree, True for default.
+    :return: a tuple of (lengths, angles)
+    """
+    v1 = np.array(v1, dtype=float)
+    v2 = np.array(v2, dtype=float)
+    v3 = np.array(v3, dtype=float)
+    a = np.linalg.norm(v1)
+    b = np.linalg.norm(v2)
+    c = np.linalg.norm(v3)
+    if a == 0 or b == 0 or c == 0:
+        raise ValueError("Basis vectors should not be zero.")
+    cos_alpha = np.dot(v2, v3) / (b * c)
+    cos_beta = np.dot(v1, v3) / (a * c)
+    cos_gamma = np.dot(v1, v2) / (a * b)
+    cos_alpha = np.clip(cos_alpha, -1.0, 1.0)
+    cos_beta = np.clip(cos_beta, -1.0, 1.0)
+    cos_gamma = np.clip(cos_gamma, -1.0, 1.0)
+    alpha = np.arccos(cos_alpha)
+    beta = np.arccos(cos_beta)
+    gamma = np.arccos(cos_gamma)
+    if angle_in_degree:
+        alpha, beta, gamma = np.degrees(alpha), np.degrees(beta), np.degrees(gamma)
+    return [a, b, c], [alpha, beta, gamma]
+
+
 set_global_alternative_names()

@@ -2,4 +2,4 @@ README_PICTURE
 Xponge
 build
 docs
-tmp
+test

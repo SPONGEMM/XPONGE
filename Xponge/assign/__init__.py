@@ -1249,14 +1249,15 @@ def _parse_cif_symops(symops, lattice_info):
     lattice_info["basis_position"] = [[eval(op) for op in symop.split(",") if symop] #pylint:disable=eval-used
                                         for symop in symops.split("\n")]
 
-def get_assignment_from_cif(file, total_charge=0, orthogonal_threshold=5):
+def get_assignment_from_cif(file, total_charge=0, orthogonal_threshold=None, keep_cell_angle=True):
     """
     This **function** gets an Assign instance and a preprocessed lattice information from a cif file
 
     :param file: the name of the input file or an instance of io.IOBase
     :param total_charge: the total charge of the molecule used when aligning bond orders. 0 for default.
     :param orthogonal_threshold: cell angle with the difference less than \
-this parameter will be considered to be orthogonal (in degree, and 5 for default)
+this parameter will be considered to be orthogonal (in degree). If None, do not snap to 90.
+    :param keep_cell_angle: whether to keep the cell angles from the CIF file
     :return: the Assign instance and a dict which stores the preprocessed lattice information
     """
     assign = None
@@ -1286,12 +1287,16 @@ this parameter will be considered to be orthogonal (in degree, and 5 for default
         alpha = _cif_find_box_information("cell_angle_alpha", contents, filename)
         beta = _cif_find_box_information("cell_angle_beta", contents, filename)
         gamma = _cif_find_box_information("cell_angle_gamma", contents, filename)
-        if abs(alpha - 90) < orthogonal_threshold:
-            alpha = 90
-        if abs(beta - 90) < orthogonal_threshold:
-            beta = 90
-        if abs(gamma - 90) < orthogonal_threshold:
-            gamma = 90
+        if not keep_cell_angle:
+            alpha, beta, gamma = 90, 90, 90
+        else:
+            if orthogonal_threshold is not None:
+                if abs(alpha - 90) < orthogonal_threshold:
+                    alpha = 90
+                if abs(beta - 90) < orthogonal_threshold:
+                    beta = 90
+                if abs(gamma - 90) < orthogonal_threshold:
+                    gamma = 90
         lattice_info["cell_angle"] = [alpha, beta, gamma]
         basis = get_basis_vectors_from_length_and_angle(la, lb, lc, alpha, beta, gamma)
         n_atom, atom_info = _cif_get_loop_with_keyword("atom_site_type_symbol", contents)
