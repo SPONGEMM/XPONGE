@@ -610,11 +610,11 @@ def save_pdb(cls, filename=None, write_cryst1=True):
             if resname in GlobalSetting.PDBResidueNameMap["save"]:
                 resname = GlobalSetting.PDBResidueNameMap["save"][resname]
             element = _pdb_guess_element(atom)
-            towrite += "ATOM  %5d %4s %3s %1s%4d    %8.3f%8.3f%8.3f%17s%2s\n" % (
+            towrite += "ATOM  %5d %4s %3s %1s%4d    %8.3f%8.3f%8.3f%6.2f%6.2f          %2s\n" % (
                 (a2i[atom] + 1) % 100000, atom.name,
                 resname, chain_ids[resid],
                 (resid - chain_residue0) % 10000,
-                atom.x, atom.y, atom.z, " ", element)
+                atom.x, atom.y, atom.z, 1.00, 0.00, element)
             if atom == atom.residue.atoms[-1] and resid in ter_res:
                 towrite += "TER\n"
                 if resid - real_chain_residue0 != 1 or resid + 1 in ter_res:

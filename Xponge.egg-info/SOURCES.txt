@@ -228,3 +228,13 @@ Xponge/tools/unittests/test_8_sits.py
 Xponge/tools/unittests/test_8_tmd.py
 Xponge/tools/unittests/test_8_umbrella.py
 Xponge/tools/unittests/test_9_fep.py
+docs/get_docstrings.py
+test/cro.mol2
+test/cro4.frcmod
+test/cro4.mol2
+test/cro5.mol2
+test/croH.mol2
+test/croh.mol2
+test/pro.frcmod
+test/test_star/ps.itp
+test/test_star/test_construct.py
