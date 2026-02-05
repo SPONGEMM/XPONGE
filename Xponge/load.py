@@ -1581,7 +1581,7 @@ def _psf_add_bond(atom1, atom2, current_mol, residue_index_map, residue_newtype_
     if atom1.residue == atom2.residue:
         if residue_newtype_map.get(atom1.residue, False):
             atom1.residue.type.add_connectivity(atom1.name, atom2.name)
-        atom1.residue.add_connectivity(atom1.name, atom2.name)
+        atom1.residue.add_connectivity(atom1, atom2)
     else:
         current_mol.add_residue_link(atom1, atom2)
         index_diff = residue_index_map[atom1.residue] - residue_index_map[atom2.residue]
@@ -1669,6 +1669,65 @@ def _psf_split_by_connectivity(current_mol):
     return mols
 
 
+def _psf_split_residues_by_connectivity(current_mol):
+    """Split residues containing multiple disconnected components (e.g., repeated resnr water)."""
+    linked_atoms = set()
+    for link in current_mol.residue_links:
+        linked_atoms.add(link.atom1)
+        linked_atoms.add(link.atom2)
+
+    new_residues = []
+    for residue in current_mol.residues:
+        if not residue.atoms:
+            new_residues.append(residue)
+            continue
+        if any(atom in linked_atoms for atom in residue.atoms):
+            new_residues.append(residue)
+            continue
+        bond_count = sum(len(partners) for partners in residue.connectivity.values())
+        if bond_count == 0:
+            new_residues.append(residue)
+            continue
+
+        visited = set()
+        components = []
+        for atom in residue.atoms:
+            if atom in visited:
+                continue
+            stack = [atom]
+            visited.add(atom)
+            comp = []
+            while stack:
+                cur = stack.pop()
+                comp.append(cur)
+                for nxt in residue.connectivity.get(cur, []):
+                    if nxt in visited:
+                        continue
+                    visited.add(nxt)
+                    stack.append(nxt)
+            components.append(comp)
+
+        if len(components) <= 1:
+            new_residues.append(residue)
+            continue
+
+        for comp in components:
+            new_res = Residue(residue.type)
+            old_to_new = {}
+            for atom in comp:
+                new_res.Add_Atom(atom.name, atom.type, atom.x, atom.y, atom.z)
+                new_atom = new_res.atoms[-1]
+                new_atom.contents = dict(atom.contents.items())
+                old_to_new[atom] = new_atom
+            for atom in comp:
+                for partner in residue.connectivity.get(atom, []):
+                    if partner in old_to_new:
+                        new_res.Add_Connectivity(old_to_new[atom].name, old_to_new[partner].name)
+            new_residues.append(new_res)
+
+    current_mol.residues = new_residues
+
+
 def load_molpsf(filename, split_by="connectivity"):
     """
     This **function** is used to load a PSF file (topology only).
@@ -1731,6 +1790,7 @@ def load_molpsf(filename, split_by="connectivity"):
 
             line = f.readline()
 
+    _psf_split_residues_by_connectivity(current_mol)
     if split_by == "connectivity":
         mols = _psf_split_by_connectivity(current_mol)
     return current_mol, mols
