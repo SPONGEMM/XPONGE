@@ -5,12 +5,64 @@ import os
 import shutil
 import numpy as np
 import matplotlib.pyplot as plt
-from gamda.special import MBAR
 from scipy.stats import gaussian_kde
 from .. import kb
 from ..mdrun import run
 from ..helper import Xopen
 from ..analysis import MdoutReader
+
+try:
+    from gamda.special import MBAR
+except ImportError:
+    from pymbar import MBAR as _PyMBAR
+
+    class _ArrayWithGet:
+        """A light wrapper to mimic cupy-like `.get()` on numpy arrays."""
+
+        def __init__(self, arr):
+            self._arr = np.asarray(arr)
+
+        def __array__(self, dtype=None):
+            return np.asarray(self._arr, dtype=dtype)
+
+        def __getitem__(self, key):
+            return _ArrayWithGet(self._arr[key])
+
+        def get(self):
+            return self._arr
+
+    class MBAR:  # pylint: disable=too-few-public-methods
+        """Fallback MBAR implementation based on pymbar."""
+
+        def __init__(self, enes, weights, beta, _n_bootstrap):
+            self._enes = np.asarray(enes, dtype=np.float64)
+            self._weights = np.asarray(weights, dtype=np.float64)
+            self._beta = float(beta)
+            self.f = None
+
+        def run(self):
+            n_lambda, _, frame = self._enes.shape
+            n_total = n_lambda * frame
+            u_kn = np.zeros((n_lambda, n_total), dtype=np.float64)
+            n_k = np.full(n_lambda, frame, dtype=np.int64)
+            # Flatten energies by trajectory blocks: (i, t) -> i * frame + t
+            for i in range(n_lambda):
+                start = i * frame
+                end = start + frame
+                w = self._weights[i]
+                if w.ndim == 0:
+                    w = np.full(frame, float(w), dtype=np.float64)
+                # A simple reweighting-factor correction in reduced-energy space.
+                # weight is expected positive.
+                corr = -np.log(np.clip(w, 1e-12, None))
+                for j in range(n_lambda):
+                    u_kn[j, start:end] = self._beta * self._enes[i, j, :] + corr
+
+            mbar = _PyMBAR(u_kn, n_k, verbose=False)
+            delta_f = mbar.compute_free_energy_differences()["Delta_f"]
+            # Store kcal/mol free energies relative to state 0 as shape (1, n_lambda).
+            f0 = delta_f[0, :] / self._beta
+            self.f = _ArrayWithGet(f0.reshape(1, -1))
 
 def _rerun_ith_traj_with_jth_forcefield(args, i, j):
     """rerun the i-th trajecotry using the j-th forcefield"""
