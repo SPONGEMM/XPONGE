@@ -38,9 +38,10 @@ except ImportError:
             self._enes = np.asarray(enes, dtype=np.float64)
             self._weights = np.asarray(weights, dtype=np.float64)
             self._beta = float(beta)
+            self._n_bootstrap = max(int(_n_bootstrap), 1)
             self.f = None
 
-        def run(self):
+        def _compute_single_f(self, sample_indices):
             n_lambda, _, frame = self._enes.shape
             n_total = n_lambda * frame
             u_kn = np.zeros((n_lambda, n_total), dtype=np.float64)
@@ -49,20 +50,42 @@ except ImportError:
             for i in range(n_lambda):
                 start = i * frame
                 end = start + frame
-                w = self._weights[i]
+                idx = sample_indices[i]
+                w = self._weights[i, idx]
                 if w.ndim == 0:
                     w = np.full(frame, float(w), dtype=np.float64)
                 # A simple reweighting-factor correction in reduced-energy space.
                 # weight is expected positive.
                 corr = -np.log(np.clip(w, 1e-12, None))
                 for j in range(n_lambda):
-                    u_kn[j, start:end] = self._beta * self._enes[i, j, :] + corr
+                    u_kn[j, start:end] = self._beta * self._enes[i, j, idx] + corr
 
             mbar = _PyMBAR(u_kn, n_k, verbose=False)
             delta_f = mbar.compute_free_energy_differences()["Delta_f"]
-            # Store kcal/mol free energies relative to state 0 as shape (1, n_lambda).
-            f0 = delta_f[0, :] / self._beta
-            self.f = _ArrayWithGet(f0.reshape(1, -1))
+            # Return kcal/mol free energies relative to state 0.
+            return delta_f[0, :] / self._beta
+
+        def run(self):
+            n_lambda, _, frame = self._enes.shape
+            rng = np.random.default_rng()
+            samples = []
+            max_attempts = max(self._n_bootstrap * 3, 10)
+
+            for _ in range(max_attempts):
+                if len(samples) >= self._n_bootstrap:
+                    break
+                sample_indices = rng.integers(0, frame, size=(n_lambda, frame), endpoint=False)
+                try:
+                    samples.append(self._compute_single_f(sample_indices))
+                except Exception:
+                    continue
+
+            if not samples:
+                # If all bootstrap resamples fail, fallback to the full trajectory estimate.
+                sample_indices = np.tile(np.arange(frame, dtype=np.int64), (n_lambda, 1))
+                samples.append(self._compute_single_f(sample_indices))
+
+            self.f = _ArrayWithGet(np.asarray(samples, dtype=np.float64))
 
 def _rerun_ith_traj_with_jth_forcefield(args, i, j):
     """rerun the i-th trajecotry using the j-th forcefield"""
