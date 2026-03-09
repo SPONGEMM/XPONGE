@@ -118,12 +118,19 @@ def mbar_analysis(args):
     f.write("\n".join(
         [f"{i}\t\t{fe[i+1] - fe[i]: .2f}\t\t\t{fe[i+1]: .2f}\t\t\t{error[i+1]:.2f}" for i in range(args.nl)]))
     f.close()
-    ans = mbar.f[:, -1].get()
-    kernel = gaussian_kde(ans, bw_method=1)
-    x = np.linspace(np.min(ans), np.max(ans), 1024)
-    y = kernel(x)
-    plt.plot(x, y)
+    ans = np.asarray(mbar.f[:, -1].get(), dtype=np.float64).reshape(-1)
+    # gaussian_kde needs at least two non-identical samples.
+    # Fallback MBAR may only provide one estimate.
+    if ans.size >= 2 and np.std(ans) > 0:
+        kernel = gaussian_kde(ans, bw_method=1)
+        x = np.linspace(np.min(ans), np.max(ans), 1024)
+        y = kernel(x)
+        plt.plot(x, y)
+        plt.ylabel("Probability")
+    else:
+        center = float(ans[0]) if ans.size else float(fe[-1])
+        plt.axvline(center, color="C0")
+        plt.ylabel("Probability (single estimate)")
     plt.xlabel("Free Energy [kcal/mol]")
-    plt.ylabel("Probability")
     plt.savefig("MBAR.png")
     plt.clf()
