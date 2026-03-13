@@ -516,6 +516,16 @@ def _pdb_guess_element(atom):
     return f"{element[:2]:>2}"
 
 
+def _pdb_float_or_default(value, default):
+    """
+        Convert an optional PDB numeric field to float with a fallback.
+    """
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _pdb_residue_link(cls: Molecule, chain_ids: Xdict, chains: Xdict, r2i: Xdict):
     """
         Process the residue links
@@ -609,12 +619,15 @@ def save_pdb(cls, filename=None, write_cryst1=True):
             resid = r2i[atom.residue]
             if resname in GlobalSetting.PDBResidueNameMap["save"]:
                 resname = GlobalSetting.PDBResidueNameMap["save"][resname]
+            occupancy = _pdb_float_or_default(getattr(atom, "occupancy", None), 1.00)
+            temp_factor = _pdb_float_or_default(
+                getattr(atom, "temp_factor", getattr(atom, "bfactor", None)), 0.00)
             element = _pdb_guess_element(atom)
             towrite += "ATOM  %5d %4s %3s %1s%4d    %8.3f%8.3f%8.3f%6.2f%6.2f          %2s\n" % (
                 (a2i[atom] + 1) % 100000, atom.name,
                 resname, chain_ids[resid],
                 (resid - chain_residue0) % 10000,
-                atom.x, atom.y, atom.z, 1.00, 0.00, element)
+                atom.x, atom.y, atom.z, occupancy, temp_factor, element)
             if atom == atom.residue.atoms[-1] and resid in ter_res:
                 towrite += "TER\n"
                 if resid - real_chain_residue0 != 1 or resid + 1 in ter_res:

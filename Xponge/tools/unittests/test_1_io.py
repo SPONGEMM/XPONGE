@@ -7,6 +7,7 @@ __all__ = ["test_pdb_general",
            "test_pdb_ssbond_link_and_conect",
            "test_pdb_hybrid36_atom_serial",
            "test_pdb_hybrid36_resseq",
+           "test_pdb_export_metadata",
            "test_mol2_general"]
 
 def test_pdb_general():
@@ -948,6 +949,42 @@ def test_pdb_hybrid36_resseq():
     assert len(p.residues) == 2
     assert p.residues[0].name == "NGLY"
     assert p.residues[1].name == "CALA"
+
+def test_pdb_export_metadata(tmp_path):
+    """
+        test exporting occupancy, temperature factor and element to pdb
+    """
+    import Xponge
+    import Xponge.forcefield.base.mass_base
+    import Xponge.forcefield.base.charge_base
+
+    Xponge.AtomType.New_From_String(r"""
+name  mass   charge[e]
+XMTC  12.00  0.00
+XMTH   1.008 0.00
+""")
+    residue_type = Xponge.ResidueType(name="XMT")
+    residue_type.add_atom("C1", "XMTC", 0.0, 0.0, 0.0)
+    residue_type.add_atom("H1", "XMTH", 1.0, 0.0, 0.0)
+    mol = Xponge.Molecule(name="META")
+    mol.add_residue(residue_type)
+
+    atom0, atom1 = mol.residues[0].atoms
+    atom0.occupancy = 0.25
+    atom0.temp_factor = 12.34
+    atom0.element = "Zn"
+
+    outfile = tmp_path / "meta.pdb"
+    Xponge.save_pdb(mol, str(outfile))
+
+    atom_lines = [line for line in outfile.read_text().splitlines() if line.startswith("ATOM")]
+    assert len(atom_lines) == 2
+    assert atom_lines[0][54:60] == "  0.25"
+    assert atom_lines[0][60:66] == " 12.34"
+    assert atom_lines[0][76:78] == "Zn"
+    assert atom_lines[1][54:60] == "  1.00"
+    assert atom_lines[1][60:66] == "  0.00"
+    assert atom_lines[1][76:78] == " H"
 
 def test_mol2_general():
     """
