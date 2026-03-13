@@ -1,0 +1,1 @@
+Codebase is Python with mostly snake_case function names, light or no type hints, and doctring-heavy style using sentence-style docstrings such as `This **function** ...`. CLI code is imperative and simple. Avoid unnecessary refactors; preserve existing naming and branching style. README documents user-facing CLI behavior and should be updated when CLI semantics change.

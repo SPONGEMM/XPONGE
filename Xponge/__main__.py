@@ -111,6 +111,13 @@ def _traj_analysis(subparsers):
     traj.add_argument("-o", "--outdir", default=".", help="the output directory")
     traj.add_argument("--dt-ps", dest="dt_ps", type=float, help="time step between frames in ps")
     traj.add_argument("--dt-ns", dest="dt_ns", type=float, help="time step between frames in ns")
+    traj.add_argument(
+        "--traj-mode",
+        dest="traj_mode",
+        choices=["separate", "concat"],
+        default="separate",
+        help="how to interpret multiple trajectories: analyze each separately or concatenate successive segments",
+    )
     traj.add_argument("-i", "--input", help="cpptraj-like command file")
     sub = traj.add_subparsers(dest="analysis_cmd", help="analysis subcommands")
 
@@ -146,6 +153,20 @@ def _traj_analysis(subparsers):
     extract.add_argument("-s", "--selection", default="all", help="MDAnalysis selection")
 
     traj.set_defaults(func=tools.traj_analysis)
+
+
+def _json2csv(subparsers):
+    """
+
+    :param subparsers:
+    :return:
+    """
+    json2csv = subparsers.add_parser("json2csv", help="convert supported Xponge JSON outputs to CSV")
+    json2csv.add_argument("-i", "--input", required=True, help="a JSON file or a directory containing JSON files")
+    json2csv.add_argument("-o", "--output",
+                          help="output CSV file for single input JSON, or output directory for directory input")
+    json2csv.add_argument("-r", "--recursive", action="store_true", help="search JSON files recursively in directories")
+    json2csv.set_defaults(func=tools.json2csv)
 
 
 def _name2name(subparsers):
@@ -352,6 +373,7 @@ def main():
     _maskgen(subparsers)
     _exgen(subparsers)
     _traj_analysis(subparsers)
+    _json2csv(subparsers)
     _name2name(subparsers)
     _mol2rfe(subparsers)
     _converter(subparsers)

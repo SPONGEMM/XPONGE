@@ -20,6 +20,18 @@ def traj_analysis(args):
 
     run_traj_cli(args)
 
+
+def json2csv(args):
+    """
+    This **function** converts supported Xponge JSON outputs to CSV files.
+
+    :param args: arguments from argparse
+    :return: None
+    """
+    from .json2csv import json2csv as run_json2csv
+
+    run_json2csv(args)
+
 def converter(args):
     """
     This **function** converts the format of coordinate file

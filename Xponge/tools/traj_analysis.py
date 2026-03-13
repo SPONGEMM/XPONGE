@@ -377,6 +377,13 @@ def _parse_times(value):
     return [float(v) for v in str(value).split(",") if str(v).strip()]
 
 
+def _resolve_traj_mode(value, default="separate"):
+    mode = default if value is None else str(value).strip().lower()
+    if mode not in {"separate", "concat"}:
+        raise ValueError(f"Unsupported traj_mode: {value}. Use 'separate' or 'concat'.")
+    return mode
+
+
 def _run_script(u, args):
     with open(args.input, "r") as f:
         lines = f.readlines()
@@ -395,12 +402,17 @@ def _run_script(u, args):
         outdir = kwargs.get("outdir", args.outdir)
         traj_spec = args.traj
         box_spec = args.box
+        traj_mode = _resolve_traj_mode(kwargs.get("traj_mode"), args.traj_mode)
         line_traj = kwargs.get("traj")
         line_box = kwargs.get("box")
         if line_traj is not None or line_box is not None:
             traj_spec = line_traj if line_traj is not None else args.traj
             box_spec = line_box if line_box is not None else args.box
             box_spec = _resolve_box_path(traj_spec, box_spec)
+            traj_items = _split_paths(traj_spec)
+            if len(traj_items) > 1 and traj_mode == "separate":
+                raise ValueError("Script line traj_mode=separate does not support multiple trajectories in one line. "
+                                 "Use traj_mode=concat or split analyses into multiple lines.")
             line_u = load_Sponge_trajectory(args.topo, traj_spec, box_spec)
         else:
             line_u = u
@@ -482,6 +494,7 @@ def run_traj_cli(args):
     args.traj = _split_paths(args.traj)
     box_path = _resolve_box_path(args.traj, args.box)
     args.box = box_path
+    args.traj_mode = _resolve_traj_mode(getattr(args, "traj_mode", None), "separate")
     os.makedirs(args.outdir, exist_ok=True)
     traj_list = _split_paths(args.traj)
     if not traj_list:
@@ -549,13 +562,17 @@ def run_traj_cli(args):
         else:
             raise ValueError(f"Unsupported subcommand: {args.analysis_cmd}")
 
-    if len(traj_list) > 1 and not args.input:
-        for idx, traj_path in enumerate(traj_list):
-            box_path = box_list[idx] if idx < len(box_list) else None
-            label = _traj_label(traj_path, idx)
-            outdir = os.path.join(args.outdir, label)
-            os.makedirs(outdir, exist_ok=True)
-            _run_single(traj_path, box_path, outdir)
+    if len(traj_list) > 1:
+        if args.traj_mode == "separate":
+            for idx, traj_path in enumerate(traj_list):
+                box_path = box_list[idx] if idx < len(box_list) else None
+                label = _traj_label(traj_path, idx)
+                outdir = os.path.join(args.outdir, label)
+                os.makedirs(outdir, exist_ok=True)
+                _run_single(traj_path, box_path, outdir)
+            return
+
+        _run_single(traj_list, box_list if len(box_list) > 1 else box_list[0], args.outdir)
         return
 
     _run_single(traj_list[0], box_list[0], args.outdir)

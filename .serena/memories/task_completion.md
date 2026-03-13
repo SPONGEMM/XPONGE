@@ -1,0 +1,1 @@
+After code changes, at minimum run the most relevant targeted test or CLI smoke check. For CLI behavior changes, also verify README/help text remains aligned with actual semantics. There is no obvious dedicated formatter config in the inspected files; use existing style and keep patches narrow.
