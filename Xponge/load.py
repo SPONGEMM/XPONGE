@@ -216,8 +216,12 @@ def _pdb_ssbond_after(chain, ssbonds, molecule):
         connect the SS bonds
     """
     for ssbond in ssbonds:
-        res_a_index = chain[ssbond[15]][int(ssbond[17:21])]
-        res_b_index = chain[ssbond[29]][int(ssbond[31:35])]
+        res_a_pdb = _pdb_parse_atom_serial(ssbond[17:21])
+        res_b_pdb = _pdb_parse_atom_serial(ssbond[31:35])
+        if res_a_pdb is None or res_b_pdb is None:
+            continue
+        res_a_index = chain[ssbond[15]][res_a_pdb]
+        res_b_index = chain[ssbond[29]][res_b_pdb]
         if res_a_index > res_b_index:
             res_a_index, res_b_index = res_b_index, res_a_index
         res_a = molecule.residues[res_a_index]
@@ -232,13 +236,16 @@ def _pdb_link_after(chain, links, molecule):
     """
     for link in links:
         chain_a, chain_b = link[21], link[51]
-        res_a_pdb, res_b_pdb = int(link[22:26]), int(link[52:56])
+        res_a_pdb = _pdb_parse_atom_serial(link[22:26])
+        res_b_pdb = _pdb_parse_atom_serial(link[52:56])
+        if res_a_pdb is None or res_b_pdb is None:
+            continue
         if chain_a not in chain or chain_b not in chain or \
                 res_a_pdb not in chain[chain_a] or res_b_pdb not in chain[chain_b]:
             Xprint(f"The link between {chain_a}{res_a_pdb} and {chain_b}{res_b_pdb} is not valid", "WARNING")
             continue
-        res_a_index = chain[link[21]][int(link[22:26])]
-        res_b_index = chain[link[51]][int(link[52:56])]
+        res_a_index = chain[link[21]][res_a_pdb]
+        res_b_index = chain[link[51]][res_b_pdb]
         if res_a_index > res_b_index:
             res_a_index, res_b_index = res_b_index, res_a_index
         res_a = molecule.residues[res_a_index]

@@ -2,6 +2,7 @@
     This **module** includes unittests of the Xponge.Assign operators
 """
 from io import StringIO
+import numpy as np
 
 __all__ = ["test_get_assign",
            "test_residuetype_to_assign",
@@ -13,7 +14,9 @@ __all__ = ["test_get_assign",
            "test_equal_atom_search",
            "test_atom_type_determination",
            "test_uff_optimization",
-           "test_saving"]
+           "test_saving",
+           "test_assign_pdb_hybrid36_save",
+           "test_assign_pdb_hybrid36_load"]
 
 def _check(assign):
     """
@@ -423,3 +426,47 @@ H  2.158   1.224   0.000
     assert _check(Xponge.get_assignment_from_pdb("ben.pdb")) is None
     ben.save_as_mol2("ben.mol2")
     assert _check(Xponge.get_assignment_from_mol2("ben.mol2")) is None
+
+def test_assign_pdb_hybrid36_save(tmp_path):
+    """
+        test saving Assign as PDB with hybrid-36 atom serials and CONECT
+    """
+    import Xponge
+    from Xponge.helper import Xdict
+    atom_numbers = 100001
+    assign = Xponge.Assign("H36")
+    assign.atom_numbers = atom_numbers
+    assign.atoms = ["C"] * atom_numbers
+    assign.names = ["C"] * atom_numbers
+    assign.element_details = [""] * atom_numbers
+    assign.coordinate = np.zeros((atom_numbers, 3), dtype=np.float32)
+    assign.charge = np.zeros(atom_numbers, dtype=np.float32)
+    assign.formal_charge = [0] * atom_numbers
+    assign.bonds = Xdict({i: Xdict() for i in range(atom_numbers)})
+    assign.bonds[99999][100000] = 1
+    assign.bonds[100000][99999] = 1
+
+    outfile = tmp_path / "assign_h36.pdb"
+    assign.save_as_pdb(str(outfile))
+    lines = outfile.read_text().splitlines()
+    atom_lines = [line for line in lines if line.startswith("ATOM")]
+    conect_lines = [line for line in lines if line.startswith("CONECT")]
+
+    assert atom_lines[99999][6:11] == "A0000"
+    assert atom_lines[100000][6:11] == "A0001"
+    assert any(line[6:11] == "A0000" and line[11:16] == "A0001" for line in conect_lines)
+
+def test_assign_pdb_hybrid36_load():
+    """
+        test loading Assign from PDB with hybrid-36 atom serials and CONECT
+    """
+    import Xponge
+    s = StringIO(
+        "ATOM  A0000 C1   BEN     1       0.000   0.000   0.000                      C\n"
+        "ATOM  A0001 C2   BEN     1       1.200   0.000   0.000                      C\n"
+        "CONECTA0000A0001\n"
+    )
+    assign = Xponge.get_assignment_from_pdb(s, "BEN")
+    assert assign.atom_numbers == 2
+    assert 1 in assign.bonds[0]
+    assert 0 in assign.bonds[1]

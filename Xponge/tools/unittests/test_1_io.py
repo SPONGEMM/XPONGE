@@ -7,6 +7,8 @@ __all__ = ["test_pdb_general",
            "test_pdb_ssbond_link_and_conect",
            "test_pdb_hybrid36_atom_serial",
            "test_pdb_hybrid36_resseq",
+           "test_pdb_hybrid36_export_resseq_and_link",
+           "test_pdb_hybrid36_export_overflow",
            "test_pdb_export_metadata",
            "test_set_box_padding",
            "test_mol2_general"]
@@ -950,6 +952,58 @@ def test_pdb_hybrid36_resseq():
     assert len(p.residues) == 2
     assert p.residues[0].name == "NGLY"
     assert p.residues[1].name == "CALA"
+
+def test_pdb_hybrid36_export_resseq_and_link(tmp_path):
+    """
+        test saving PDB with hybrid-36 residue sequence numbers and LINK records
+    """
+    import Xponge
+    import Xponge.forcefield.base.mass_base
+    import Xponge.forcefield.base.charge_base
+    Xponge.AtomType.New_From_String(r"""
+name  mass   charge[e]
+H36A  12.00  0.00
+""")
+    residue_type = Xponge.ResidueType(name="H36")
+    residue_type.add_atom("A", "H36A", 0.0, 0.0, 0.0)
+    residue_type.head = "A"
+    residue_type.tail = "A"
+
+    mol = Xponge.Molecule(name="H36M")
+    for _ in range(10001):
+        mol.add_residue(residue_type)
+    for i in range(len(mol.residues) - 1):
+        mol.add_residue_link(mol.residues[i].A, mol.residues[i + 1].A)
+    mol.add_residue_link(mol.residues[0].A, mol.residues[-1].A)
+
+    outfile = tmp_path / "h36m.pdb"
+    Xponge.save_pdb(mol, str(outfile), write_cryst1=False)
+    lines = outfile.read_text().splitlines()
+    atom_lines = [line for line in lines if line.startswith("ATOM")]
+    link_lines = [line for line in lines if line.startswith("LINK")]
+
+    assert atom_lines[9998][22:26] == "9999"
+    assert atom_lines[9999][22:26] == "A000"
+    assert atom_lines[10000][22:26] == "A001"
+    assert len(link_lines) == 1
+    assert link_lines[0][22:26] == "   1"
+    assert link_lines[0][52:56] == "A001"
+
+    roundtrip = Xponge.load_pdb(str(outfile))
+    assert len(roundtrip.residues) == 10001
+    assert roundtrip.get_residue_link(roundtrip.residues[0].A, roundtrip.residues[-1].A) is not None
+
+def test_pdb_hybrid36_export_overflow():
+    """
+        test saving PDB raises when hybrid-36 fields overflow
+    """
+    import Xponge.build as build
+    try:
+        build._pdb_format_integer_field(4, 2436112, "residue sequence number")
+    except ValueError as exc:
+        assert "residue sequence number" in str(exc)
+    else:
+        raise RuntimeError("Expected ValueError for overflowing hybrid-36 residue sequence number")
 
 def test_pdb_export_metadata(tmp_path):
     """

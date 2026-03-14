@@ -9,6 +9,55 @@ from .helper import AbstractMolecule, ResidueType, Molecule, Residue, GlobalSett
     set_global_alternative_names, guess_element_from_mass
 
 
+_HY36_DIGITS_UPPER = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+_HY36_DIGITS_LOWER = _HY36_DIGITS_UPPER.lower()
+
+
+def _hy36_encode_pure(digits, value):
+    """
+        encode a non-negative integer using the given digit table
+    """
+    assert value >= 0
+    if value == 0:
+        return digits[0]
+    base = len(digits)
+    result = []
+    while value:
+        value, rest = divmod(value, base)
+        result.append(digits[rest])
+    result.reverse()
+    return "".join(result)
+
+
+def _pdb_hybrid36_encode(width, value):
+    """
+        encode an integer using the PDB hybrid-36 convention
+    """
+    i = int(value)
+    if i >= 1 - 10 ** (width - 1):
+        if i < 10 ** width:
+            return f"{i:>{width}d}"
+        i -= 10 ** width
+        if i < 26 * 36 ** (width - 1):
+            i += 10 * 36 ** (width - 1)
+            return _hy36_encode_pure(_HY36_DIGITS_UPPER, i)
+        i -= 26 * 36 ** (width - 1)
+        if i < 26 * 36 ** (width - 1):
+            i += 10 * 36 ** (width - 1)
+            return _hy36_encode_pure(_HY36_DIGITS_LOWER, i)
+    raise ValueError("value out of range.")
+
+
+def _pdb_format_integer_field(width, value, field_name="PDB integer field"):
+    """
+        format a fixed-width PDB integer field, upgrading to hybrid-36 on overflow
+    """
+    try:
+        return _pdb_hybrid36_encode(width, value)
+    except ValueError as exc:
+        raise ValueError(f"{field_name} {value} is out of range for PDB hybrid-36 width {width}") from exc
+
+
 def _analyze_connectivity(cls):
     """
 
@@ -454,8 +503,9 @@ def _pdb_connection(connects):
         atoms.sort()
         atom_groups = [atoms[i:i + 4] for i in range(0, len(atoms), 4)]
         for four_atoms in atom_groups:
-            templist.append("CONECT" + "{:5d}".format(connect + 1)
-                            + "".join(["{:5d}".format(i + 1) for i in four_atoms]) + "\n")
+            templist.append("CONECT" + _pdb_format_integer_field(5, connect + 1, "atom serial")
+                            + "".join([_pdb_format_integer_field(5, i + 1, "atom serial")
+                                       for i in four_atoms]) + "\n")
     templist.sort()
     return "".join(templist)
 
@@ -554,23 +604,33 @@ def _pdb_residue_link(cls: Molecule, chain_ids: Xdict, chains: Xdict, r2i: Xdict
         elif res_a.name == "CYX" and res_b.name == "CYX" and \
                 a.name == res_a.type.connect_atoms["ssbond"] and \
                 b.name == res_b.type.connect_atoms["ssbond"]:
-            ssbonds.append("CYX {0:1s} {1:4d}    CYX {2:1s} {3:4d}\n".format(
-                chain_a, chains_inverse[chain_a][res_index_a + 1],
-                chain_b, chains_inverse[chain_b][res_index_b + 1]))
+            ssbonds.append((chain_a, chains_inverse[chain_a][res_index_a + 1],
+                            chain_b, chains_inverse[chain_b][res_index_b + 1]))
         else:
             save_names = GlobalSetting.PDBResidueNameMap["save"]
             name_a = save_names[res_a.name] if res_a.name in save_names else res_a.name
             name_b = save_names[res_b.name] if res_b.name in save_names else res_b.name
-            links.append("LINK        {0:^4s} {1:3s} {2:1s}{3:4d}                \
-{4:^4s} {5:3s} {6:1s}{7:4d}\n".format(
-    a.name, name_a, chain_a, chains_inverse[chain_a][res_index_a + 1],
-    b.name, name_b, chain_b, chains_inverse[chain_b][res_index_b + 1]))
+            links.append((chain_a, chains_inverse[chain_a][res_index_a + 1],
+                          chain_b, chains_inverse[chain_b][res_index_b + 1],
+                          a.name, name_a, b.name, name_b))
     if ssbonds:
         ssbonds.sort()
-        towrite += "".join(["SSBOND {0:3d} ".format(i + 1) + ssbond for i, ssbond in enumerate(ssbonds)])
+        towrite += "".join([
+            "SSBOND {0:3d} CYX {1:1s}{2:s}    CYX {3:1s}{4:s}\n".format(
+                i + 1, chain_a,
+                _pdb_format_integer_field(4, resseq_a, "residue sequence number"),
+                chain_b,
+                _pdb_format_integer_field(4, resseq_b, "residue sequence number"))
+            for i, (chain_a, resseq_a, chain_b, resseq_b) in enumerate(ssbonds)])
     if links:
-        links.sort(key=lambda line: (line[21], int(line[22:26]), line[51], int(line[52:56])))
-        towrite += "".join(links)
+        links.sort(key=lambda item: (item[0], item[1], item[2], item[3]))
+        towrite += "".join([
+            "LINK        {0:^4s} {1:3s} {2:1s}{3:s}                {4:^4s} {5:3s} {6:1s}{7:s}\n".format(
+                atom_a, name_a, chain_a,
+                _pdb_format_integer_field(4, resseq_a, "residue sequence number"),
+                atom_b, name_b, chain_b,
+                _pdb_format_integer_field(4, resseq_b, "residue sequence number"))
+            for chain_a, resseq_a, chain_b, resseq_b, atom_a, name_a, atom_b, name_b in links])
     return connects, towrite
 
 
@@ -623,11 +683,12 @@ def save_pdb(cls, filename=None, write_cryst1=True):
             temp_factor = _pdb_float_or_default(
                 getattr(atom, "temp_factor", getattr(atom, "bfactor", None)), 0.00)
             element = _pdb_guess_element(atom)
-            towrite += "ATOM  %5d %4s %3s %1s%4d    %8.3f%8.3f%8.3f%6.2f%6.2f          %2s\n" % (
-                (a2i[atom] + 1) % 100000, atom.name,
-                resname, chain_ids[resid],
-                (resid - chain_residue0) % 10000,
-                atom.x, atom.y, atom.z, occupancy, temp_factor, element)
+            serial = _pdb_format_integer_field(5, a2i[atom] + 1, "atom serial")
+            resseq = _pdb_format_integer_field(4, resid - chain_residue0, "residue sequence number")
+            towrite += ("ATOM  {0:s} {1:4s} {2:3s} {3:1s}{4:s}    {5:8.3f}{6:8.3f}{7:8.3f}{8:6.2f}{9:6.2f}"
+                        "          {10:2s}\n").format(
+                            serial, atom.name, resname, chain_ids[resid], resseq,
+                            atom.x, atom.y, atom.z, occupancy, temp_factor, element)
             if atom == atom.residue.atoms[-1] and resid in ter_res:
                 towrite += "TER\n"
                 if resid - real_chain_residue0 != 1 or resid + 1 in ter_res:

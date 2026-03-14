@@ -177,6 +177,7 @@ Xponge/mdrun/BIN_PATH.dat
 Xponge/mdrun/__init__.py
 Xponge/mdrun/__main__.py
 Xponge/tools/__init__.py
+Xponge/tools/json2csv.py
 Xponge/tools/mbar.py
 Xponge/tools/mmgbsa.py
 Xponge/tools/mol2rfe.py
@@ -229,5 +230,12 @@ Xponge/tools/unittests/test_8_tmd.py
 Xponge/tools/unittests/test_8_umbrella.py
 Xponge/tools/unittests/test_9_fep.py
 docs/get_docstrings.py
-tmp/C6H6.mol2
-tmp/convert_out.mol2
+test/cro.mol2
+test/cro4.frcmod
+test/cro4.mol2
+test/cro5.mol2
+test/croH.mol2
+test/croh.mol2
+test/pro.frcmod
+test/test_star/ps.itp
+test/test_star/test_construct.py
