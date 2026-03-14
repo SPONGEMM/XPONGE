@@ -8,6 +8,7 @@ __all__ = ["test_pdb_general",
            "test_pdb_hybrid36_atom_serial",
            "test_pdb_hybrid36_resseq",
            "test_pdb_export_metadata",
+           "test_set_box_padding",
            "test_mol2_general"]
 
 def test_pdb_general():
@@ -985,6 +986,48 @@ XMTH   1.008 0.00
     assert atom_lines[1][54:60] == "  1.00"
     assert atom_lines[1][60:66] == "  0.00"
     assert atom_lines[1][76:78] == " H"
+
+def test_set_box_padding():
+    """
+        test setting compact box padding from coordinates
+    """
+    import unittest
+    import Xponge
+    import Xponge.forcefield.base.mass_base
+    import Xponge.forcefield.base.charge_base
+
+    Xponge.AtomType.New_From_String(r"""
+name  mass   charge[e]
+XBPA  12.00  0.00
+XBPB   1.008 0.00
+""")
+    residue_type = Xponge.ResidueType(name="XBP")
+    residue_type.add_atom("A1", "XBPA", -1.0, 2.0, 0.5)
+    residue_type.add_atom("A2", "XBPB", 3.0, 5.0, 4.5)
+
+    mol = Xponge.Molecule(name="BOXPAD")
+    mol.add_residue(residue_type)
+    mol.box_length = [99.0, 99.0, 99.0]
+    mol.set_box_padding(0.5)
+
+    assert mol.box_length == [5.0, 4.0, 5.0]
+    coords = mol.get_atom_coordinates()
+    assert coords.min(axis=0).tolist() == [0.5, 0.5, 0.5]
+    assert coords.max(axis=0).tolist() == [4.5, 3.5, 4.5]
+
+    mol = Xponge.Molecule(name="BOXRAW")
+    mol.add_residue(residue_type)
+    mol.set_box_padding(1.0, center=False)
+    assert mol.box_length == [6.0, 5.0, 6.0]
+    assert mol.get_atom_coordinates().tolist() == [[-1.0, 2.0, 0.5], [3.0, 5.0, 4.5]]
+
+    testcase = unittest.TestCase()
+
+    with testcase.assertRaisesRegex(ValueError, "padding"):
+        mol.set_box_padding(-0.1)
+
+    with testcase.assertRaisesRegex(ValueError, "atom"):
+        Xponge.Molecule(name="EMPTY").set_box_padding(0.5)
 
 def test_mol2_general():
     """

@@ -1832,6 +1832,32 @@ If None, the information will be deleted between start and end
         self.get_atoms()
         return np.array([[atom.x, atom.y, atom.z] for atom in self.atoms])
 
+    def set_box_padding(self, padding=0.5, center=True):
+        """
+        This **function** sets box_length from the current coordinates with a fixed padding.
+
+        :param padding: the vacuum thickness to keep on each side
+        :param center: whether to translate the molecule so the minimum coordinate equals the padding
+        :return: None
+        """
+        if padding < 0:
+            raise ValueError("padding should be non-negative")
+
+        crd = self.get_atom_coordinates()
+        if crd.size == 0:
+            raise ValueError("at least one atom is required to set box padding")
+
+        min_crd = np.min(crd, axis=0)
+        max_crd = np.max(crd, axis=0)
+        self.box_length = list(max_crd - min_crd + padding * 2)
+
+        if center:
+            shift = padding - min_crd
+            for atom in self.atoms:
+                atom.x += shift[0]
+                atom.y += shift[1]
+                atom.z += shift[2]
+
     def divide_into_two_parts(self, atom1, atom2):
         """
         This **function** is used to divide the molecule into two parts
