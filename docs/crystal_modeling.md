@@ -60,7 +60,10 @@ from Xponge.helper.math import get_basis_vectors_from_length_and_angle
 # 1. SMILES 构建 Assign
 assign = Xponge.get_assignment_from_smiles("c1ccccc1")
 
-# 2. GAFF 赋原子类型
+# 2. GAFF/GAFF2 赋原子类型
+# 若要使用 gaff2，可改为：
+# import Xponge.forcefield.amber.gaff2 as gaff2
+# assign.Determine_Atom_Type("gaff2")
 assign.Determine_Atom_Type("gaff")
 
 # 3. 计算电荷（可选：若已有电荷可跳过）

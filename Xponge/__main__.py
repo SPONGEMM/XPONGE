@@ -198,7 +198,8 @@ def _name2name(subparsers):
     name2name.add_argument("-ores", "-out_residue", dest="out_residue",
                            help="the name of the output residue")
     name2name.add_argument("-ff", "-forcefield", dest="ff", nargs="*", default=["Xponge.forcefield.amber.gaff"],
-                           help="the forcefield for atom types in gaff_mol2")
+                           help="the forcefield for atom types in gaff_mol2, e.g. "
+                                "Xponge.forcefield.amber.gaff or Xponge.forcefield.amber.gaff2")
     name2name.add_argument("-cpcrd", "-copy_coordinate", dest="cpcrd", action="store_true",
                            help="use the coordinates of tfile")
     name2name.add_argument("-tmcs", type=int, default=10, help="the time to find max common structure")

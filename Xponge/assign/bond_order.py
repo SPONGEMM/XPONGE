@@ -495,6 +495,10 @@ conected atoms for every atom:\n{valence}\n{uc}\n\n", "DEBUG")
                     Xprint("-"*20 + f"{self.points[self.stat_position - 1]}", "DEBUG")
         if success:
             self.assign.bonds = bonds
+            # Bond order update invalidates ring/bond markers and aromatic caches.
+            self.assign.built = False
+            if hasattr(self.assign, "_alternating_type_cache"):
+                delattr(self.assign, "_alternating_type_cache")
         return success
 
 

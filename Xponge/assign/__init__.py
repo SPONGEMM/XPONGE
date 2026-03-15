@@ -375,6 +375,7 @@ class Assign():
         self.atom_marker = Xdict()
         self.bonds = Xdict()
         self.bond_marker = Xdict()
+        self._bond_sequence = []
 
     @property
     def built(self):
@@ -485,6 +486,9 @@ connected to two other atoms, "N4" means a nitrogen atom connected to four other
         :return: None
         """
         self.built = False
+        bond_pair = (min(atom1, atom2), max(atom1, atom2))
+        if bond_pair not in self._bond_sequence:
+            self._bond_sequence.append(bond_pair)
         self.bonds[atom1][atom2] = order
         self.bond_marker[atom1][atom2] = set([])
         self.bonds[atom2][atom1] = order
@@ -540,6 +544,11 @@ connected to two other atoms, "N4" means a nitrogen atom connected to four other
                 for key, value in bond.items() if key != atom})
             self.bond_marker[btom] = Xdict({(key - 1 if key > atom else key) : value
                 for key, value in self.bond_marker[btom].items() if key != atom})
+        self._bond_sequence = [
+            ((atom1 - 1 if atom1 > atom else atom1), (atom2 - 1 if atom2 > atom else atom2))
+            for atom1, atom2 in self._bond_sequence
+            if atom1 != atom and atom2 != atom
+        ]
 
     def delete_bond(self, atom1, atom2):
         """
@@ -552,6 +561,8 @@ connected to two other atoms, "N4" means a nitrogen atom connected to four other
         self.built = False
         self.bonds[atom1].pop(atom2, None)
         self.bonds[atom2].pop(atom1, None)
+        bond_pair = (min(atom1, atom2), max(atom1, atom2))
+        self._bond_sequence = [pair for pair in self._bond_sequence if pair != bond_pair]
 
     def determine_equal_atoms(self):
         """
