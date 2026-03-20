@@ -5,7 +5,8 @@
 __all__ = ["test_adding_of_residues",
            "test_omitting_residue_type",
            "test_reseting_type",
-           "test_pdb_filter"]
+           "test_pdb_filter",
+           "test_gromacs_iterator_skips_large_false_ifdef_block"]
 
 def test_adding_of_residues():
     """
@@ -218,6 +219,8 @@ REMARK 200  TEMPERATURE           (KELVIN) : 277.00
 REMARK 200  PH                             : 4.60                               
 REMARK 200  NUMBER OF CRYSTALS USED        : 1                                  
 REMARK 200                                                                      
+
+
 REMARK 200  SYNCHROTRON              (Y/N) : Y                                  
 REMARK 200  RADIATION SOURCE               : EMBL/DESY, HAMBURG                 
 REMARK 200  BEAMLINE                       : X11                                
@@ -1384,3 +1387,29 @@ MASTER      399    0    0    1    0    0    0    6  859    2    0    7
 END                                                                             
 """)
     Xponge.pdb_filter(s_in, "test_filter.pdb", ["ATOM", "TER", "SEQRES"], [], ["B"])
+
+def test_gromacs_iterator_skips_large_false_ifdef_block(tmp_path):
+    """
+        test that a large false #ifdef block does not overflow recursion
+    """
+    from Xponge.load import GromacsTopologyIterator
+
+    top = tmp_path / "topol.top"
+    itp = tmp_path / "include.itp"
+    skipped = "\n".join([f"{i:5d}     1    POSRES_FC_BB    POSRES_FC_BB    POSRES_FC_BB" for i in range(1500)])
+    itp.write_text(
+        "[ moleculetype ]\n"
+        "TEST 3\n\n"
+        "#ifdef POSRES\n"
+        "[ position_restraints ]\n"
+        f"{skipped}\n"
+        "#endif\n\n"
+        "[ atoms ]\n"
+        "1 CT1 1 TEST C1 1 0.0 12.0110\n"
+    )
+    top.write_text(f'#include "{itp.name}"\n')
+
+    iterator = GromacsTopologyIterator(str(top))
+    lines = list(iterator)
+
+    assert lines == ["TEST 3", "1 CT1 1 TEST C1 1 0.0 12.0110"]

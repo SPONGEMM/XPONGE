@@ -977,32 +977,39 @@ class GromacsTopologyIterator():
         self.stack = []
         return self
 
-    def __next__(self):
+    def _read_raw_line(self):
+        """
+        Read one raw line from the current include stack.
+        """
         while self.files:
-            f = self.files[-1]
-            line = f.readline()
+            line = self.files[-1].readline()
             if line:
-                line = self._line_preprocess(line)
-                if line[0] == "#":
-                    line = self._line_define(line)
-                elif self.macro_define_stat and not self.macro_define_stat[-1]:
-                    self.stack.append("false line")
-                    line = next(self)
-                    self.stack.pop()
-                elif "[" in line and "]" in line:
-                    self.flag = line.strip()[1:-1].strip()
-                    self.stack.append(f"flag line: {self.flag}")
-                    line = next(self)
-                    self.stack.pop()
-                for macro, tobecome in self.defined_macros.items():
-                    line = line.replace(macro, tobecome)
                 return line
-
-            f.close()
+            self.files[-1].close()
             self.files.pop()
             self.filenames.pop()
+        return None
 
-        raise StopIteration
+    def __next__(self):
+        while True:
+            line = self._read_raw_line()
+            if line is None:
+                raise StopIteration
+
+            line = self._line_preprocess(line)
+            if line is None:
+                continue
+            if line[0] == "#":
+                self._line_define(line)
+                continue
+            if self.macro_define_stat and not self.macro_define_stat[-1]:
+                continue
+            if "[" in line and "]" in line:
+                self.flag = line.strip()[1:-1].strip()
+                continue
+            for macro, tobecome in self.defined_macros.items():
+                line = line.replace(macro, tobecome)
+            return line
 
     def _add_iterator_file(self, filename):
         """
@@ -1038,13 +1045,17 @@ class GromacsTopologyIterator():
         if comment >= 0:
             line = line[:comment]
         while line and line[-1] == "\\":
-            self.stack.append("extra line")
-            line = line[:-1] + " " + next(self).strip()
-            self.stack.pop()
+            extra = self._read_raw_line()
+            if extra is None:
+                line = line[:-1]
+                break
+            extra = extra.strip()
+            comment = extra.find(";")
+            if comment >= 0:
+                extra = extra[:comment]
+            line = line[:-1] + " " + extra
         if not line:
-            self.stack.append("blank line")
-            line = next(self)
-            self.stack.pop()
+            return None
         return line
 
     def _line_define(self, line):
@@ -1054,7 +1065,10 @@ class GromacsTopologyIterator():
         :return:
         """
         words = line.split()
-        need_new_line = True
+        if self.macro_define_stat and not self.macro_define_stat[-1] and words[0] not in {
+            "#ifdef", "#ifndef", "#else", "#endif"
+        }:
+            return None
         if words[0] == "#ifdef":
             macro = words[1]
             if self.macro_define_stat and not self.macro_define_stat[-1]:
@@ -1076,11 +1090,6 @@ class GromacsTopologyIterator():
                 self.macro_define_stat[-1] = not self.macro_define_stat[-1]
         elif words[0] == "#endif":
             self.macro_define_stat.pop()
-        elif self.macro_define_stat and not self.macro_define_stat[-1]:
-            self.stack.append(f"false define: {len(self.macro_define_stat)}")
-            line = next(self)
-            self.stack.pop()
-            need_new_line = False
         elif words[0] == "#define":
             if len(words) > 2:
                 self.defined_macros[words[1]] = line[line.find(words[1]) + len(words[1]):].strip()
@@ -1092,11 +1101,7 @@ class GromacsTopologyIterator():
             self.defined_macros.pop(words[1])
         elif words[0] == "#error":
             raise AssertionError(line)
-        if need_new_line:
-            self.stack.append(f"process define: {line}")
-            line = next(self)
-            self.stack.pop()
-        return line
+        return None
 
 
 def _ffitp_dihedrals(line, buffers):
