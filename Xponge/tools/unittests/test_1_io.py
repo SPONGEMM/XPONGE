@@ -1083,6 +1083,35 @@ XBPB   1.008 0.00
     with testcase.assertRaisesRegex(ValueError, "atom"):
         Xponge.Molecule(name="EMPTY").set_box_padding(0.5)
 
+
+def test_save_pdb_normalizes_long_residue_names(tmp_path):
+    """
+        test saving PDB keeps fixed-width atom columns even for long residue names
+    """
+    import Xponge
+    import Xponge.forcefield.base.mass_base
+    import Xponge.forcefield.base.charge_base
+
+    Xponge.AtomType.New_From_String(r"""
+name  mass   charge[e]
+XLP   12.00  0.00
+""")
+    residue_type = Xponge.ResidueType(name="GLN__HE21_H__HE22_H")
+    residue_type.add_atom("CA", "XLP", 72.610, 47.770, 57.850)
+
+    mol = Xponge.Molecule(name="LONGRES")
+    mol.add_residue(residue_type)
+    mol.box_length = [91.0, 91.0, 91.0]
+
+    outfile = tmp_path / "longres.pdb"
+    Xponge.save_pdb(mol, str(outfile))
+
+    atom_line = next(line for line in outfile.read_text().splitlines() if line.startswith("ATOM"))
+    assert atom_line[17:20] == "GLN"
+    assert float(atom_line[30:38]) == 72.610
+    assert float(atom_line[38:46]) == 47.770
+    assert float(atom_line[46:54]) == 57.850
+
 def test_mol2_general():
     """
         test loading a mol2 file

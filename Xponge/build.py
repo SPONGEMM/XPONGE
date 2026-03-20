@@ -524,12 +524,7 @@ def _pdb_sequence(cls: Molecule, chains: Xdict):
         names = []
         for i in pdb_index:
             mol_index = index_map[i] - 1
-            name = cls.residues[mol_index].name
-            name = GlobalSetting.PDBResidueNameMap["save"][name] \
-                if name in GlobalSetting.PDBResidueNameMap["save"] else name
-            if len(name) > 3:
-                warn(f"The residue name {name} is more than 3 characters.")
-            names.append(name)
+            names.append(_pdb_normalize_residue_name(cls.residues[mol_index].name))
         lines = [" ".join(["{:3s}".format(name) for name in names[j:j+13]])  for j in range(0, len(names), 13)]
         lines = ["SEQRES {0:3d} {1:1s} {2:4d}  {3:s}\n".format(
             i + 1, chain_id, len(names), line) for i, line in enumerate(lines)]
@@ -564,6 +559,22 @@ def _pdb_guess_element(atom):
     if len(element) == 1:
         return f"{element:>2}"
     return f"{element[:2]:>2}"
+
+
+def _pdb_normalize_residue_name(name):
+    """
+        Normalize a residue name to fit the 3-character PDB residue field.
+    """
+    save_names = GlobalSetting.PDBResidueNameMap["save"]
+    name = save_names[name] if name in save_names else name
+    if len(name) <= 3:
+        return name
+    if "__" in name:
+        name = name.split("__", 1)[0]
+    if len(name) > 3:
+        warn(f"The residue name {name} is more than 3 characters. Truncating for PDB output.")
+        name = name[:3]
+    return name
 
 
 def _pdb_float_or_default(value, default):
@@ -607,9 +618,8 @@ def _pdb_residue_link(cls: Molecule, chain_ids: Xdict, chains: Xdict, r2i: Xdict
             ssbonds.append((chain_a, chains_inverse[chain_a][res_index_a + 1],
                             chain_b, chains_inverse[chain_b][res_index_b + 1]))
         else:
-            save_names = GlobalSetting.PDBResidueNameMap["save"]
-            name_a = save_names[res_a.name] if res_a.name in save_names else res_a.name
-            name_b = save_names[res_b.name] if res_b.name in save_names else res_b.name
+            name_a = _pdb_normalize_residue_name(res_a.name)
+            name_b = _pdb_normalize_residue_name(res_b.name)
             links.append((chain_a, chains_inverse[chain_a][res_index_a + 1],
                           chain_b, chains_inverse[chain_b][res_index_b + 1],
                           a.name, name_a, b.name, name_b))
@@ -675,10 +685,8 @@ def save_pdb(cls, filename=None, write_cryst1=True):
             if chain_ids[i + 1] != code or code == " ":
                 ter_res.add(i)
         for atom in cls.atoms:
-            resname = atom.residue.name
+            resname = _pdb_normalize_residue_name(atom.residue.name)
             resid = r2i[atom.residue]
-            if resname in GlobalSetting.PDBResidueNameMap["save"]:
-                resname = GlobalSetting.PDBResidueNameMap["save"][resname]
             occupancy = _pdb_float_or_default(getattr(atom, "occupancy", None), 1.00)
             temp_factor = _pdb_float_or_default(
                 getattr(atom, "temp_factor", getattr(atom, "bfactor", None)), 0.00)
