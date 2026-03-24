@@ -268,6 +268,12 @@ def _pdb_add_atom(current_residue, atomname, x, y, z,
             atom_map[atom_index] = current_residue.atoms[-1]
         return True
     except KeyError as ke:
+        if len(current_residue.type._name2atom) == 1:
+            only_atom_name = next(iter(current_residue.type._name2atom.keys()))
+            current_residue.Add_Atom(only_atom_name, x=x, y=y, z=z)
+            if atom_index not in atom_map:
+                atom_map[atom_index] = current_residue.atoms[-1]
+            return True
         if ignore_unknown_name:
             return False
         raise ke
@@ -293,6 +299,7 @@ def _pdb_add_residue(f, molecule, position_need, residue_type_map, ignore_hydrog
             if resindex is None:
                 continue
             resname = line[17:20].strip()
+            resname = GlobalSetting.PDBResidueAliasMap.get(resname, resname)
             atomname = line[12:16].strip()
             atom_index = _pdb_parse_atom_serial(line[6:11])
             if atom_index is None:
@@ -556,6 +563,7 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
                 if not chain_id.strip() or chain_id in chain_id_processed:
                     chain_id = 0
                 resname = line[17:20].strip()
+                resname = GlobalSetting.PDBResidueAliasMap.get(resname, resname)
                 atomname = line[12:16].strip()
                 if current_residue_index is None:
                     _pdb_judge_histone(judge_histone, residue_type_map, current_histone_information)
@@ -612,6 +620,7 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
         current_residue_index = None
         if residue_type_map[-1] in GlobalSetting.PDBResidueNameMap["tail"].keys():
             residue_type_map[-1] = GlobalSetting.PDBResidueNameMap["tail"][residue_type_map[-1]]
+        head_residue_names = set(GlobalSetting.PDBResidueNameMap["head"].values())
         for residue_index in oxt_residue_indices:
             if residue_index < 0 or residue_index >= len(residue_type_map):
                 continue
@@ -619,7 +628,7 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
             protein_residues = getattr(GlobalSetting, "PDBProteinResidueNames", set())
             if residue_name in protein_residues and residue_name in GlobalSetting.PDBResidueNameMap["tail"].keys():
                 residue_type_map[residue_index] = GlobalSetting.PDBResidueNameMap["tail"][residue_name]
-            elif residue_name.startswith("N") and residue_name[1:] in protein_residues and \
+            elif residue_name in head_residue_names and residue_name[1:] in protein_residues and \
                     residue_name[1:] in GlobalSetting.PDBResidueNameMap["tail"].keys():
                 residue_type_map[residue_index] = "C" + residue_name[1:]
 

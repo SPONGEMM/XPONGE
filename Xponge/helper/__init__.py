@@ -161,6 +161,7 @@ class _GlobalSetting():
                                       "angle": {"degree": np.pi, "rad": 180}
                                       })
         setattr(self, "PDBResidueNameMap", {"head": Xdict(), "tail": Xdict(), "save": Xdict()})
+        setattr(self, "PDBResidueAliasMap", Xdict())
         setattr(self, "PDBProteinResidueNames", set())
         # Extra search paths for GROMACS include files (e.g., ffitp/itp)
         setattr(self, "GMXIncludePaths", [])
@@ -248,6 +249,16 @@ class _GlobalSetting():
         assert place in ("head", "tail")
         self.PDBResidueNameMap[place][pdb_name] = real_name
         self.PDBResidueNameMap["save"][real_name] = pdb_name
+
+    def add_pdb_residue_alias_mapping(self, pdb_name, real_name):
+        """
+        This **function** is used to add residue aliases for reading PDB files
+
+        :param pdb_name: the residue name in pdb
+        :param real_name: the residue name in Python
+        :return: None
+        """
+        self.PDBResidueAliasMap[pdb_name] = real_name
 
     def set_invisible_bonded_forces(self, types):
         """

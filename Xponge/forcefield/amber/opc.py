@@ -51,6 +51,7 @@ amber.load_parameters_from_frcmod("ionsjc_tip4pew.frcmod")
 amber.load_parameters_from_frcmod("ions234lm_126_tip4pew.frcmod")
 
 load_mol2(os.path.join(AMBER_DATA_DIR, "atomic_ions.mol2"), as_template=True)
+amber.register_atomic_ion_pdb_aliases()
 
 Xprint("""Reference for opc:
 1. Water:

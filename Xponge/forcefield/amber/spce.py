@@ -44,6 +44,7 @@ amber.load_parameters_from_frcmod("ionsjc_spce.frcmod")
 amber.load_parameters_from_frcmod("ions234lm_126_spce.frcmod")
 
 load_mol2(os.path.join(AMBER_DATA_DIR, "atomic_ions.mol2"), as_template=True)
+amber.register_atomic_ion_pdb_aliases()
 
 Xprint("""Reference for spce:
 1. Water:
