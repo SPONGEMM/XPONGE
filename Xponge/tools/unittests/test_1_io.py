@@ -4,6 +4,7 @@
 from io import StringIO
 
 __all__ = ["test_pdb_general",
+           "test_pdb_oxt_terminal_without_ter",
            "test_pdb_ssbond_link_and_conect",
            "test_pdb_hybrid36_atom_serial",
            "test_pdb_hybrid36_resseq",
@@ -851,6 +852,26 @@ TER     815      LEU A 277
     assert int(round(pcharge)) == -9 and abs(pcharge - round(pcharge)) < 0.001
     Xponge.save_sponge_input(p, "test_pdb")
     Xponge.save_pdb(p, "test_pdb.pdb")
+
+
+def test_pdb_oxt_terminal_without_ter():
+    """
+        test loading a terminal residue with OXT but without a TER record
+    """
+    import Xponge
+    import Xponge.forcefield.amber.ff14sb
+    s = StringIO(r"""
+ATOM      1  N   SER A   1      -1.000   0.000   0.000  1.00  0.00           N  
+ATOM      2  CA  SER A   1       0.000   0.000   0.000  1.00  0.00           C  
+ATOM      3  C   SER A   1       1.200   0.000   0.000  1.00  0.00           C  
+ATOM      4  O   SER A   1       2.200   0.000   0.000  1.00  0.00           O  
+ATOM      5  CB  SER A   1       0.000   1.200   0.000  1.00  0.00           C  
+ATOM      6  OG  SER A   1       0.000   2.400   0.000  1.00  0.00           O  
+ATOM      7  OXT SER A   1       1.200  -1.200   0.000  1.00  0.00           O  
+""")
+    mol = Xponge.load_pdb(s)
+    assert mol.residues[0].type.name == "CSER"
+    assert mol.residues[0].name2atom("OXT").name == "OXT"
 
 def test_pdb_ssbond_link_and_conect():
     """

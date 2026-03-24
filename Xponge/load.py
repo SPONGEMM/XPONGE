@@ -531,6 +531,7 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
     chain_id_processed = set()
     current_histone_information = {"DeltaH": False, "EpsilonH": False}
     cryst1 = None
+    oxt_residue_indices = set()
     with file as f:
         for line in f:
             if read_cryst1 and line.startswith("CRYST1"):
@@ -583,6 +584,8 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
                         current_histone_information["DeltaH"] = True
                     elif atomname == GlobalSetting.HISMap["EpsilonH"]:
                         current_histone_information["EpsilonH"] = True
+                if atomname == "OXT":
+                    oxt_residue_indices.add(current_residue_count)
 
             elif line.startswith("TER"):
                 current_residue_index = None
@@ -609,6 +612,16 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
         current_residue_index = None
         if residue_type_map[-1] in GlobalSetting.PDBResidueNameMap["tail"].keys():
             residue_type_map[-1] = GlobalSetting.PDBResidueNameMap["tail"][residue_type_map[-1]]
+        for residue_index in oxt_residue_indices:
+            if residue_index < 0 or residue_index >= len(residue_type_map):
+                continue
+            residue_name = residue_type_map[residue_index]
+            protein_residues = getattr(GlobalSetting, "PDBProteinResidueNames", set())
+            if residue_name in protein_residues and residue_name in GlobalSetting.PDBResidueNameMap["tail"].keys():
+                residue_type_map[residue_index] = GlobalSetting.PDBResidueNameMap["tail"][residue_name]
+            elif residue_name.startswith("N") and residue_name[1:] in protein_residues and \
+                    residue_name[1:] in GlobalSetting.PDBResidueNameMap["tail"].keys():
+                residue_type_map[residue_index] = "C" + residue_name[1:]
 
         _pdb_ssbond_before(chain, residue_type_map, ssbonds)
         atom_map = _pdb_add_residue(file, molecule, position_need,

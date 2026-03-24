@@ -161,6 +161,7 @@ class _GlobalSetting():
                                       "angle": {"degree": np.pi, "rad": 180}
                                       })
         setattr(self, "PDBResidueNameMap", {"head": Xdict(), "tail": Xdict(), "save": Xdict()})
+        setattr(self, "PDBProteinResidueNames", set())
         # Extra search paths for GROMACS include files (e.g., ffitp/itp)
         setattr(self, "GMXIncludePaths", [])
 
