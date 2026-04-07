@@ -496,8 +496,87 @@ because {to_connect} and {atom} is in one residue", "WARNING")
             mol.add_residue_link(atom_, to_connect_)
 
 
+def _pdb_parse_unterminal_residues(unterminal_residues):
+    """
+        parse the optional residue selectors used to suppress head/tail mapping
+    """
+    all_resseq = set()
+    chain_resseq = set()
+    chain_resseq_ins = set()
+    if not unterminal_residues:
+        return all_resseq, chain_resseq, chain_resseq_ins
+    for selector in unterminal_residues:
+        if isinstance(selector, (int, np.integer)):
+            all_resseq.add(int(selector))
+            continue
+        if isinstance(selector, str):
+            text = selector.strip()
+            if not text:
+                continue
+            if ":" in text:
+                chain_id, res_text = text.split(":", 1)
+                chain_id = chain_id.strip()
+                if not chain_id:
+                    raise ValueError(f"invalid unterminal residue selector: {selector}")
+                chain_id = chain_id[0]
+            else:
+                chain_id = None
+                res_text = text
+            res_text = res_text.strip()
+            if not res_text:
+                raise ValueError(f"invalid unterminal residue selector: {selector}")
+            ins_code = " "
+            if len(res_text) > 1 and res_text[-1].isalpha():
+                ins_code = res_text[-1]
+                res_text = res_text[:-1]
+            try:
+                resseq = int(res_text)
+            except ValueError as exc:
+                raise ValueError(f"invalid unterminal residue selector: {selector}") from exc
+            if chain_id is None:
+                if ins_code != " ":
+                    raise ValueError(f"insertion code requires chain id: {selector}")
+                all_resseq.add(resseq)
+            elif ins_code == " ":
+                chain_resseq.add((chain_id, resseq))
+            else:
+                chain_resseq_ins.add((chain_id, resseq, ins_code))
+            continue
+        if isinstance(selector, (tuple, list)):
+            if len(selector) == 2:
+                chain_id, resseq = selector
+                chain_id = str(chain_id).strip()
+                if not chain_id:
+                    raise ValueError(f"invalid unterminal residue selector: {selector}")
+                chain_resseq.add((chain_id[0], int(resseq)))
+                continue
+            if len(selector) == 3:
+                chain_id, resseq, ins_code = selector
+                chain_id = str(chain_id).strip()
+                if not chain_id:
+                    raise ValueError(f"invalid unterminal residue selector: {selector}")
+                ins_code = str(ins_code).strip() or " "
+                chain_resseq_ins.add((chain_id[0], int(resseq), ins_code[0]))
+                continue
+        raise ValueError(f"invalid unterminal residue selector: {selector}")
+    return all_resseq, chain_resseq, chain_resseq_ins
+
+
+def _pdb_match_unterminal_residue(selector_sets, chain_id, resseq, insertion_code):
+    """
+        judge whether the residue should skip head/tail mapping
+    """
+    all_resseq, chain_resseq, chain_resseq_ins = selector_sets
+    if resseq in all_resseq:
+        return True
+    if (chain_id, resseq) in chain_resseq:
+        return True
+    return (chain_id, resseq, insertion_code) in chain_resseq_ins
+
+
 def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
-             ignore_unknown_name=False, ignore_seqres=True, ignore_conect=True, read_cryst1=True):
+             ignore_unknown_name=False, ignore_seqres=True, ignore_conect=True, read_cryst1=True,
+             unterminal_residues=None):
     """
     This **function** is used to load a pdb file
 
@@ -509,6 +588,9 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
     :param ignore_seqres: do not read the SEQRES lines **New From 1.2.6.7**
     :param ignore_conect: do not read the CONECT lines **New From 1.2.6.7**
     :param read_cryst1: read the CRYST1 line to set box length and angle
+    :param unterminal_residues: selectors to suppress head/tail terminal mapping while reading PDB.
+        Supported forms include: ``[12, 35]``, ``["A:12", "B:35A"]``, ``[("A", 12), ("B", 35, "A")]``
+        **New From 1.2.7.1**
     :return: a Molecule instance
     """
     if not isinstance(file, io.IOBase):
@@ -523,6 +605,8 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
     links = []
     connects = []
     residue_type_map = []
+    residue_unterminal_map = []
+    unterminal_selectors = _pdb_parse_unterminal_residues(unterminal_residues)
     insertion_count = 0
     current_residue_count = -1
     current_insertion_code = None
@@ -554,16 +638,21 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
                 chain_id = line[21]
                 if not chain_id.strip() or chain_id in chain_id_processed:
                     chain_id = 0
+                chain_id_in_file = line[21].strip() or " "
                 resname = line[17:20].strip()
                 atomname = line[12:16].strip()
+                skip_terminal_mapping = _pdb_match_unterminal_residue(
+                    unterminal_selectors, chain_id_in_file, resindex - insertion_count, insertion_code
+                )
                 if current_residue_index is None:
                     _pdb_judge_histone(judge_histone, residue_type_map, current_histone_information)
                     current_residue_count += 1
                     current_resname = resname
                     current_insertion_code = insertion_code
-                    if resname in GlobalSetting.PDBResidueNameMap["head"].keys():
+                    if not skip_terminal_mapping and resname in GlobalSetting.PDBResidueNameMap["head"].keys():
                         resname = GlobalSetting.PDBResidueNameMap["head"][resname]
                     residue_type_map.append(resname)
+                    residue_unterminal_map.append(skip_terminal_mapping)
                     current_residue_index = resindex
                     chain[chain_id][resindex] = current_residue_count
                 elif (current_residue_index != resindex or current_insertion_code != insertion_code) or \
@@ -578,6 +667,7 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
                     current_residue_index = resindex
                     chain[chain_id][resindex] = current_residue_count
                     residue_type_map.append(resname)
+                    residue_unterminal_map.append(skip_terminal_mapping)
                 if judge_histone and resname in GlobalSetting.HISMap["HIS"].keys():
                     if atomname == GlobalSetting.HISMap["DeltaH"]:
                         current_histone_information["DeltaH"] = True
@@ -590,7 +680,7 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
                 current_insertion_code = None
                 insertion_count = 0
                 chain_id_processed.add(chain_id)
-                if residue_type_map[-1] in GlobalSetting.PDBResidueNameMap["tail"].keys():
+                if not residue_unterminal_map[-1] and residue_type_map[-1] in GlobalSetting.PDBResidueNameMap["tail"].keys():
                     residue_type_map[-1] = GlobalSetting.PDBResidueNameMap["tail"][residue_type_map[-1]]
                 _pdb_judge_histone(judge_histone, residue_type_map, current_histone_information)
 
@@ -607,7 +697,7 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
                 connects.append(line)
 
         current_residue_index = None
-        if residue_type_map[-1] in GlobalSetting.PDBResidueNameMap["tail"].keys():
+        if not residue_unterminal_map[-1] and residue_type_map[-1] in GlobalSetting.PDBResidueNameMap["tail"].keys():
             residue_type_map[-1] = GlobalSetting.PDBResidueNameMap["tail"][residue_type_map[-1]]
 
         _pdb_ssbond_before(chain, residue_type_map, ssbonds)

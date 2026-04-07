@@ -5,6 +5,7 @@ from io import StringIO
 
 __all__ = ["test_pdb_general",
            "test_pdb_ssbond_link_and_conect",
+           "test_pdb_unterminal_residue_overrides",
            "test_pdb_hybrid36_atom_serial",
            "test_pdb_hybrid36_resseq",
            "test_pdb_hybrid36_export_resseq_and_link",
@@ -900,6 +901,38 @@ CONECT  805  798
     assert p.get_residue_link(p.residues[2].C, p.residues[3].N) is not None
     assert p.get_residue_link(p.residues[1].C, p.residues[2].N) is not None
     Xponge.save_pdb(p, "test.pdb")
+
+
+def test_pdb_unterminal_residue_overrides():
+    """
+        test suppressing terminal mapping for selected residues when loading PDB
+    """
+    import Xponge
+    import Xponge.forcefield.amber.ff14sb
+    s = StringIO(r"""
+ATOM      1  N   VAL A   2       0.000   0.000   0.000  1.00  0.00           N
+ATOM      2  CA  VAL A   2       1.000   0.000   0.000  1.00  0.00           C
+ATOM      3  C   VAL A   2       2.000   0.000   0.000  1.00  0.00           C
+ATOM      4  O   VAL A   2       3.000   0.000   0.000  1.00  0.00           O
+ATOM      5  N   TRP A   3       4.000   0.000   0.000  1.00  0.00           N
+ATOM      6  CA  TRP A   3       5.000   0.000   0.000  1.00  0.00           C
+ATOM      7  C   TRP A   3       6.000   0.000   0.000  1.00  0.00           C
+ATOM      8  O   TRP A   3       7.000   0.000   0.000  1.00  0.00           O
+TER
+""")
+    p = Xponge.load_pdb(s, ignore_hydrogen=True)
+    assert p.residues[0].name == "NVAL"
+    assert p.residues[1].name == "CTRP"
+
+    s.seek(0)
+    p = Xponge.load_pdb(s, ignore_hydrogen=True, unterminal_residues=[2, 3])
+    assert p.residues[0].name == "VAL"
+    assert p.residues[1].name == "TRP"
+
+    s.seek(0)
+    p = Xponge.load_pdb(s, ignore_hydrogen=True, unterminal_residues=["A:2"])
+    assert p.residues[0].name == "VAL"
+    assert p.residues[1].name == "CTRP"
 
 def test_pdb_hybrid36_atom_serial():
     """
