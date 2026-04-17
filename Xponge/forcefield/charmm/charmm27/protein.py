@@ -25,6 +25,7 @@ set_real_global_variable("NHIS", ResidueType.get_type("NHIS"))
 set_real_global_variable("CHIS", ResidueType.get_type("CHIS"))
 
 residues = "ALA ARG ASN ASP CYS CYX GLN GLU GLY HID HIE HIP ILE LEU LYS MET PHE PRO SER THR TRP TYR VAL".split()
+GlobalSetting.PDBProteinResidueNames.update(residues)
 
 for resname in residues:
     res = ResidueType.get_type(resname)

@@ -268,6 +268,12 @@ def _pdb_add_atom(current_residue, atomname, x, y, z,
             atom_map[atom_index] = current_residue.atoms[-1]
         return True
     except KeyError as ke:
+        if len(current_residue.type._name2atom) == 1:
+            only_atom_name = next(iter(current_residue.type._name2atom.keys()))
+            current_residue.Add_Atom(only_atom_name, x=x, y=y, z=z)
+            if atom_index not in atom_map:
+                atom_map[atom_index] = current_residue.atoms[-1]
+            return True
         if ignore_unknown_name:
             return False
         raise ke
@@ -293,6 +299,7 @@ def _pdb_add_residue(f, molecule, position_need, residue_type_map, ignore_hydrog
             if resindex is None:
                 continue
             resname = line[17:20].strip()
+            resname = GlobalSetting.PDBResidueAliasMap.get(resname, resname)
             atomname = line[12:16].strip()
             atom_index = _pdb_parse_atom_serial(line[6:11])
             if atom_index is None:
@@ -593,7 +600,8 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
         **New From 1.2.7.1**
     :return: a Molecule instance
     """
-    if not isinstance(file, io.IOBase):
+    should_close = not isinstance(file, io.IOBase)
+    if should_close:
         filename = file
         file = open(file)
     else:
@@ -615,7 +623,9 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
     chain_id_processed = set()
     current_histone_information = {"DeltaH": False, "EpsilonH": False}
     cryst1 = None
-    with file as f:
+    oxt_residue_indices = set()
+    f = file
+    try:
         for line in f:
             if read_cryst1 and line.startswith("CRYST1"):
                 try:
@@ -640,6 +650,7 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
                     chain_id = 0
                 chain_id_in_file = line[21].strip() or " "
                 resname = line[17:20].strip()
+                resname = GlobalSetting.PDBResidueAliasMap.get(resname, resname)
                 atomname = line[12:16].strip()
                 skip_terminal_mapping = _pdb_match_unterminal_residue(
                     unterminal_selectors, chain_id_in_file, resindex - insertion_count, insertion_code
@@ -673,6 +684,8 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
                         current_histone_information["DeltaH"] = True
                     elif atomname == GlobalSetting.HISMap["EpsilonH"]:
                         current_histone_information["EpsilonH"] = True
+                if atomname == "OXT":
+                    oxt_residue_indices.add(current_residue_count)
 
             elif line.startswith("TER"):
                 current_residue_index = None
@@ -680,7 +693,8 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
                 current_insertion_code = None
                 insertion_count = 0
                 chain_id_processed.add(chain_id)
-                if not residue_unterminal_map[-1] and residue_type_map[-1] in GlobalSetting.PDBResidueNameMap["tail"].keys():
+                if residue_type_map and not residue_unterminal_map[-1] and \
+                        residue_type_map[-1] in GlobalSetting.PDBResidueNameMap["tail"].keys():
                     residue_type_map[-1] = GlobalSetting.PDBResidueNameMap["tail"][residue_type_map[-1]]
                 _pdb_judge_histone(judge_histone, residue_type_map, current_histone_information)
 
@@ -697,8 +711,22 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
                 connects.append(line)
 
         current_residue_index = None
-        if not residue_unterminal_map[-1] and residue_type_map[-1] in GlobalSetting.PDBResidueNameMap["tail"].keys():
+        if residue_type_map and not residue_unterminal_map[-1] and \
+                residue_type_map[-1] in GlobalSetting.PDBResidueNameMap["tail"].keys():
             residue_type_map[-1] = GlobalSetting.PDBResidueNameMap["tail"][residue_type_map[-1]]
+        head_residue_names = set(GlobalSetting.PDBResidueNameMap["head"].values())
+        for residue_index in oxt_residue_indices:
+            if residue_index < 0 or residue_index >= len(residue_type_map):
+                continue
+            if residue_unterminal_map[residue_index]:
+                continue
+            residue_name = residue_type_map[residue_index]
+            protein_residues = getattr(GlobalSetting, "PDBProteinResidueNames", set())
+            if residue_name in protein_residues and residue_name in GlobalSetting.PDBResidueNameMap["tail"].keys():
+                residue_type_map[residue_index] = GlobalSetting.PDBResidueNameMap["tail"][residue_name]
+            elif residue_name in head_residue_names and residue_name[1:] in protein_residues and \
+                    residue_name[1:] in GlobalSetting.PDBResidueNameMap["tail"].keys():
+                residue_type_map[residue_index] = "C" + residue_name[1:]
 
         _pdb_ssbond_before(chain, residue_type_map, ssbonds)
         atom_map = _pdb_add_residue(file, molecule, position_need,
@@ -710,6 +738,9 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
         if cryst1 is not None:
             molecule.box_length = cryst1[0]
             molecule.box_angle = cryst1[1]
+    finally:
+        if should_close:
+            f.close()
 
     return molecule
 

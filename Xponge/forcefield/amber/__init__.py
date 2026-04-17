@@ -2,8 +2,8 @@
 This **package** sets the basic configuration of amber force field
 """
 import os
-from ...helper import set_global_alternative_names, Generate_New_Bonded_Force_Type, Xdict
-from ... import AtomType, load_parmdat, load_frcmod, Molecule
+from ...helper import set_global_alternative_names, Generate_New_Bonded_Force_Type, Xdict, GlobalSetting
+from ... import AtomType, load_parmdat, load_frcmod, Molecule, ResidueType
 
 from ..base import charge_base, mass_base, lj_base, bond_base, angle_base, dihedral_base, nb14_base,\
     virtual_atom_base, exclude_base
@@ -22,6 +22,31 @@ exclude_base.Exclude(4)
 
 # pylint: disable=invalid-name
 AmberCMapType = None
+
+
+def register_atomic_ion_pdb_aliases():
+    """
+    Register common PDB residue aliases for single-atom Amber ion templates.
+
+    Only aliases without common charge-state ambiguity are included here.
+    """
+    alias_map = {
+        "BE": "BE2",
+        "CA": "CA2",
+        "CD": "CD2",
+        "CO": "CO2",
+        "HG": "HG2",
+        "MG": "MG2",
+        "NI": "NI2",
+        "PB": "PB2",
+        "PD": "PD2",
+        "PT": "PT2",
+        "SN": "SN2",
+        "ZN": "ZN2",
+    }
+    for pdb_name, real_name in alias_map.items():
+        if real_name in ResidueType.get_all_types():
+            GlobalSetting.Add_PDB_Residue_Alias_Mapping(pdb_name, real_name)
 
 def load_parameters_from_parmdat(filename, prefix=True):
     """
