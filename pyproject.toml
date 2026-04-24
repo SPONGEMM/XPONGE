@@ -3,7 +3,7 @@ requires = ["setuptools>=64,<77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "Xponge"
+name = "mokda-xponge"
 dynamic = ["version"]
 description = "A Python package to perform pre- and post-processing of molecular simulations"
 readme = "README.md"
@@ -33,7 +33,7 @@ extra = [
     "pubchempy>=1.0.5",
     "pyscf>=2.11.0",
     "rdkit>=2025.9.3",
-    "xpongelib>=1.2.5.0",
+    "mokda-xpongelib>=1.2.5.0",
 ]
 
 [dependency-groups]
