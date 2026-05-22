@@ -12,3 +12,13 @@ bin/*
 # temp files
 tmp/*
 test/*
+
+# local FEP build/test outputs
+/[0-9]*/
+/A.mol2
+/B.mol2
+/test.pdb
+/mcs.png
+/mcs.txt
+/TMP_*.frcmod
+/*.egg-info/

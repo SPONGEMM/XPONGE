@@ -97,7 +97,7 @@ def _nb14_extra_merge_rule(mol_r, mol_a, mol_b, forcetype, rforces, bforces, lam
 
             f_r.A = f_b.A * lambda_
             f_r.B = f_b.B * lambda_
-            f_r.kee = f_b.kee * lambda_
+            f_r.kee *= lambda_
             mol_r.Add_Bonded_Force(f_r)
         else:
             temp_charge0 = f_r.atoms[0].charge if abs(f_r.atoms[0].charge) > TINY else TINY
@@ -544,11 +544,22 @@ def _link_restypeb_atoms(residue_type_b, forcopy, matchmap):
                     atom.copied[forcopy].Link_Atom(key, aton.copied[forcopy])
 
 
-def _get_residue_ab(residue_type_a, residue_type_b, residue_a, forcopy, matchmap, match_a, match_b):
+def _make_unique_fep_restype_name(base_name, nonce):
+    """Return a ResidueType registry-safe temporary name for FEP mixed topologies."""
+    candidate = f"{base_name}__FEP_TMP_{nonce}"
+    suffix = 0
+    while candidate in ResidueType._types:
+        suffix += 1
+        candidate = f"{base_name}__FEP_TMP_{nonce}_{suffix}"
+    return candidate
+
+
+def _get_residue_ab(residue_type_a, residue_type_b, residue_a, restype_name,
+                    forcopy, matchmap, match_a, match_b):
     """
         get the mixed residue type
     """
-    restype_ab = residue_type_a.deepcopy(residue_type_a.name + "_" + residue_type_b.name, forcopy)
+    restype_ab = residue_type_a.deepcopy(restype_name, forcopy)
 
     extra_a, extra_b, rbmap = _get_extra_atoms_and_rbmap(restype_ab, residue_type_a, residue_type_b, residue_a, forcopy,
                                                          matchmap, match_a, match_b)
@@ -574,6 +585,94 @@ def _get_residue_ab(residue_type_a, residue_type_b, residue_a, forcopy, matchmap
     _link_restypeb_atoms(residue_type_b, forcopy, matchmap)
 
     return restype_ab, rbmap
+
+
+def _copy_atom_contents(target_atom, source_atom):
+    """Copy the atom typing and parameters from one atom to another."""
+    target_atom.type = source_atom.type
+    for key, value in source_atom.contents.items():
+        if key != "name":
+            target_atom.contents[key] = value
+    target_atom.charge = source_atom.charge
+    target_atom.LJtype = source_atom.LJtype
+
+
+def _set_zero_lj_atom(atom, subsys):
+    """Hide one endpoint atom by clearing its non-bonded state."""
+    atom.LJtype = "ZERO_LJ_ATOM"
+    atom.charge = 0
+    atom.subsys = subsys
+
+
+def _refresh_residue_type_topology_metadata(restype):
+    """
+    Refresh linked-atom caches and checked_list without rebuilding bonded forces.
+
+    The mixed residue types already carry the endpoint-specific force entities.
+    Only the topology cache used during molecule build needs to be refreshed.
+    """
+    restype.checked_list.clear()
+    for atom in restype.atoms:
+        extra_excluded_atoms = set(atom.extra_excluded_atoms)
+        atom.linked_atoms = Xdict({i + 1: set() for i in range(1, GlobalSetting.farthest_bonded_force)})
+        atom.linked_atoms["extra_excluded_atoms"] = extra_excluded_atoms
+    build._analyze_connectivity(restype)
+    for frc in GlobalSetting.BondedForces:
+        if len(frc.get_all_types()) < 2:
+            continue
+        build._get_frc_all(frc, restype)
+    restype.built = True
+
+
+def _force_is_within_atom_indices(force, atom2index, valid_indices):
+    """Check whether all atoms in a force belong to the given index set."""
+    return all(atom2index(atom) in valid_indices for atom in force.atoms)
+
+
+def _project_bonded_force(force, atom_map):
+    """Copy a bonded force entity onto another residue type via an atom map."""
+    new_force = force.type.entity([atom_map[atom] for atom in force.atoms], force.type, force.name)
+    new_force.contents = {**force.contents}
+    return new_force
+
+
+def _replace_pure_common_force_entities(restype_target, residue_type_source,
+                                        common_target_indices, common_source_indices,
+                                        source_atom_to_target):
+    """
+    Replace pure-common force entities in the target residue with the projected
+    source-state entities while keeping mixed A-only/B-only terms untouched.
+    """
+    for forcename, target_forces in restype_target.bonded_forces.items():
+        source_forces = residue_type_source.bonded_forces.get(forcename, [])
+        pure_target = [force for force in target_forces if _force_is_within_atom_indices(
+            force, restype_target.atom2index, common_target_indices)]
+        pure_source = [force for force in source_forces if _force_is_within_atom_indices(
+            force, residue_type_source.atom2index, common_source_indices)]
+        if not pure_target and not pure_source:
+            continue
+
+        forcepair = _find_common_forces(GlobalSetting.BondedForcesMap[forcename], pure_target, pure_source,
+                                        source_atom_to_target)
+        replacements = {}
+        additions = []
+        for force_target, force_source in forcepair:
+            projected_force = None if force_source is None else _project_bonded_force(force_source, source_atom_to_target)
+            if force_target is None:
+                if projected_force is not None:
+                    additions.append(projected_force)
+            else:
+                replacements[force_target] = projected_force
+
+        new_forces = []
+        for force in target_forces:
+            if force in replacements:
+                if replacements[force] is not None:
+                    new_forces.append(replacements[force])
+            else:
+                new_forces.append(force)
+        new_forces.extend(additions)
+        restype_target.bonded_forces[forcename] = new_forces
 
 
 def _nhydrogen(rdmol, j):
@@ -705,33 +804,36 @@ the tanimoto coefficient of the max common structure.
     _correct_residueb_coordinates(residue_a, residue_type_b, matchmap)
 
     forcopy = hash(str(time.time()))
-    restype_ab, rbmap = _get_residue_ab(residue_type_a, residue_type_b, residue_a, forcopy, matchmap, match_a, match_b)
+    canonical_ab_name = residue_type_a.name + "_" + residue_type_b.name
+    canonical_ba_name = residue_type_b.name + "_" + residue_type_a.name
+    nonce = hex(forcopy & 0xffffffffffffffff)[2:]
+    restype_ab_name = _make_unique_fep_restype_name(canonical_ab_name, nonce)
+    restype_ab, rbmap = _get_residue_ab(residue_type_a, residue_type_b, residue_a, restype_ab_name,
+                                        forcopy, matchmap, match_a, match_b)
 
-    restype_ba = restype_ab.deepcopy(residue_type_b.name + "_" + residue_type_a.name)
+    restype_ba_name = _make_unique_fep_restype_name(canonical_ba_name, nonce)
+    restype_ba = restype_ab.deepcopy(restype_ba_name)
+    common_a_indices = set(match_a)
+    common_b_indices = set(match_b)
 
-    build.Build_Bonded_Force(restype_ba)
-    build.Build_Bonded_Force(restype_ab)
-
-    nb14_extra_base.nb14_to_nb14_extra(restype_ba)
-    nb14_extra_base.nb14_to_nb14_extra(restype_ab)
     for i, atomi in enumerate(restype_ab.atoms):
         if i < len(residue_type_a.atoms):
-            atomi.contents.update(
-                {key: value for key, value in residue_type_a.atoms[i].contents.items() if key != "name"})
+            _copy_atom_contents(atomi, residue_type_a.atoms[i])
         else:
-            restype_ab.atoms[i].LJtype = "ZERO_LJ_ATOM"
-            restype_ab.atoms[i].charge = 0
-            restype_ab.atoms[i].subsys = 2
+            _set_zero_lj_atom(restype_ab.atoms[i], 2)
             restype_ba.atoms[i].subsys = 2
 
         if i in rbmap:
-            restype_ba.atoms[i].contents.update(
-                {key: value for key, value in residue_type_b.atoms[rbmap[i]].contents.items() if key != "name"})
+            _copy_atom_contents(restype_ba.atoms[i], residue_type_b.atoms[rbmap[i]])
         else:
-            restype_ba.atoms[i].LJtype = "ZERO_LJ_ATOM"
-            restype_ba.atoms[i].charge = 0
+            _set_zero_lj_atom(restype_ba.atoms[i], 1)
             restype_ab.atoms[i].subsys = 1
-            restype_ba.atoms[i].subsys = 1
+    b_atom_to_restype_ba = {residue_type_b.atoms[b_index]: restype_ba.atoms[a_index]
+                            for a_index, b_index in rbmap.items()}
+    _replace_pure_common_force_entities(restype_ba, residue_type_b, common_a_indices, common_b_indices,
+                                        b_atom_to_restype_ba)
+    _refresh_residue_type_topology_metadata(restype_ab)
+    _refresh_residue_type_topology_metadata(restype_ba)
 
     mol_a = Molecule(mol.name + "A")
     mol_b = Molecule(mol.name + "B")
@@ -743,6 +845,8 @@ the tanimoto coefficient of the max common structure.
         if res == residue_a:
             mol_a.Add_Residue(restype_ab)
             mol_b.Add_Residue(restype_ba)
+            mol_a.residues[-1].name = canonical_ab_name
+            mol_b.residues[-1].name = canonical_ba_name
             ri = i
         else:
             mol_a.Add_Residue(res.deepcopy())
@@ -794,6 +898,8 @@ def merge_force_field(mol_a, mol_b, default_lambda, specific_lambda=None, intra_
         mol_a2mol_b[atom_a] = mol_b.atoms[i]
 
     mol_r = mol_a.deepcopy()
+    for i, residue in enumerate(mol_r.residues):
+        residue.name = mol_a.residues[i].name
 
     mol_r2mol_a = Xdict()
     mol_r2mol_b = Xdict()
