@@ -495,6 +495,7 @@ conected atoms for every atom:\n{valence}\n{uc}\n\n", "DEBUG")
                     Xprint("-"*20 + f"{self.points[self.stat_position - 1]}", "DEBUG")
         if success:
             self.assign.bonds = bonds
+            self.assign.determine_ring_and_bond_type()
         return success
 
 

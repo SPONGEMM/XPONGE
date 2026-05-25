@@ -12,6 +12,7 @@ __all__ = ["test_get_assign",
            "test_atom_deletion",
            "test_bond_deletion",
            "test_equal_atom_search",
+           "test_mol2_bond_order_refreshes_derived_state",
            "test_atom_type_determination",
            "test_uff_optimization",
            "test_saving",
@@ -136,7 +137,7 @@ USER_CHARGES
     11      5     11 1
     12      6     12 1
 @<TRIPOS>SUBSTRUCTURE
-    1      ASN      1 ****               0 ****  **** 
+    1      ASN      1 ****               0 ****  ****
 """)
     error = _check(Xponge.get_assignment_from_mol2(s))
     if error is not None:
@@ -220,7 +221,7 @@ USER_CHARGES
     11      5     11 1
     12      6     12 1
 @<TRIPOS>SUBSTRUCTURE
-    1      ASN      1 ****               0 ****  **** 
+    1      ASN      1 ****               0 ****  ****
 """)
     ben0 = Xponge.load_mol2(s)
     ben = Xponge.get_assignment_from_residuetype(ben0.residues[0].type)
@@ -264,6 +265,62 @@ def test_ring_system():
         for atom in ring.atoms:
             assert "RG6" in nal.atom_marker[atom]
             assert "AR1" in nal.atom_marker[atom]
+
+def test_mol2_bond_order_refreshes_derived_state():
+    """
+        test bond order assignment refreshes derived ring and bond markers for mol2 input
+    """
+    import Xponge
+    import Xponge.forcefield.amber.gaff
+    s = StringIO(r"""
+@<TRIPOS>MOLECULE
+ASN
+ 12 12 1 0 1
+SMALL
+USER_CHARGES
+@<TRIPOS>ATOM
+     1    C  -1.2131  -0.6884   0.0000   C.ar         1      ASN   0.000000
+     2   C1  -1.2028   0.7064   0.0001   C.ar         1      ASN   0.000000
+     3   C2  -0.0103  -1.3948   0.0000   C.ar         1      ASN   0.000000
+     4   C3   0.0104   1.3948  -0.0001   C.ar         1      ASN   0.000000
+     5   C4   1.2028  -0.7063   0.0000   C.ar         1      ASN   0.000000
+     6   C5   1.2131   0.6884   0.0000   C.ar         1      ASN   0.000000
+     7    H  -2.1577  -1.2244   0.0000   H            1      ASN   0.000000
+     8   H1  -2.1393   1.2564   0.0001   H            1      ASN   0.000000
+     9   H2  -0.0184  -2.4809  -0.0001   H            1      ASN   0.000000
+    10   H3   0.0184   2.4808   0.0000   H            1      ASN   0.000000
+    11   H4   2.1394  -1.2563   0.0001   H            1      ASN   0.000000
+    12   H5   2.1577   1.2245   0.0000   H            1      ASN   0.000000
+@<TRIPOS>BOND
+     1      1      2 ar
+     2      1      3 ar
+     3      1      7 1
+     4      2      4 ar
+     5      2      8 1
+     6      3      5 ar
+     7      3      9 1
+     8      4      6 ar
+     9      4     10 1
+    10      5      6 ar
+    11      5     11 1
+    12      6     12 1
+@<TRIPOS>SUBSTRUCTURE
+    1      ASN      1 ****               0 ****  ****
+""")
+    ben = Xponge.get_assignment_from_mol2(s)
+    assert len(ben.rings) == 1
+    for ring in ben.rings:
+        for atom in ring.atoms:
+            assert "RG6" in ben.atom_marker[atom]
+            assert "AR1" in ben.atom_marker[atom]
+    for atom1, atom2 in ((0, 1), (0, 2), (1, 3), (2, 4), (3, 5), (4, 5)):
+        assert "AB" in ben.bond_marker[atom1][atom2]
+        assert "AB" in ben.bond_marker[atom2][atom1]
+    ben.determine_atom_type("gaff")
+    for i in range(6):
+        assert ben.atom_types[i].name == "ca"
+    for i in range(6, 12):
+        assert ben.atom_types[i].name == "ha"
 
 def test_atom_deletion():
     """
