@@ -1443,6 +1443,8 @@ class Molecule():
         """the bonded forces after building"""
         self.built = False
         """indicates the instance built or not"""
+        self.ignore_missing_atoms = False
+        """whether to ignore missing residue template atoms when building bonded forces"""
         self.box_length = None
         """the box length of the molecule"""
         self.box_angle = [90.0, 90.0, 90.0]
@@ -1682,6 +1684,16 @@ in this Molecule
         for residue in self.residues:
             residue.Add_Missing_Atoms()
 
+    def set_ignore_missing_atoms(self, ignore=True):
+        """
+        This **function** is used to set whether missing atoms in residue templates are ignored when building.
+
+        :param ignore: whether to ignore missing atoms in residue templates
+        :return: None
+        """
+        self.built = False
+        self.ignore_missing_atoms = bool(ignore)
+
     def set_missing_residues_info(self, start, end, missing_residues):
         """
         This **function** is used to set the information about the missing residues
@@ -1795,6 +1807,7 @@ If None, the information will be deleted between start and end
         :return: the new instance
         """
         new_molecule = Molecule(self.name)
+        new_molecule.ignore_missing_atoms = self.ignore_missing_atoms
         forcopy = hash(str(time.time()))
         for res in self.residues:
             new_molecule.Add_Residue(res.deepcopy(forcopy))

@@ -204,7 +204,7 @@ def _build_residue_type(cls):
         _find_the_force(frc, frc_all_final, cls)
 
 
-def _build_residue(cls, checked):
+def _build_residue(cls, checked, ignore_missing_atoms=False):
     """
 
     :param cls:
@@ -213,28 +213,46 @@ def _build_residue(cls, checked):
     if not cls.type.built:
         _build_residue_type(cls.type)
 
-    try:
-        res_type_atom_map = Xdict({atom : cls.name2atom(atom.name) for atom in cls.type.atoms},
+    if ignore_missing_atoms:
+        res_type_atom_map = Xdict(
             not_found_message="{} in the ResidueType is not in the Residue. \
             You need to add the missing atoms before building.")
-    except KeyError as ke:
-        ke.args += ("Maybe there are missing atoms in your residue",)
-        raise ke
+        for atom in cls.type.atoms:
+            try:
+                res_type_atom_map[atom] = cls.name2atom(atom.name)
+            except KeyError:
+                continue
+    else:
+        try:
+            res_type_atom_map = Xdict({atom : cls.name2atom(atom.name) for atom in cls.type.atoms},
+                not_found_message="{} in the ResidueType is not in the Residue. \
+                You need to add the missing atoms before building.")
+        except KeyError as ke:
+            ke.args += ("Maybe there are missing atoms in your residue",)
+            raise ke
 
     for atom0, atom in res_type_atom_map.items():
         for key in atom0.linked_atoms.keys():
             for atomi in atom0.linked_atoms[key]:
+                if atomi not in res_type_atom_map:
+                    continue
                 atom.Link_Atom(key, res_type_atom_map[atomi])
 
     for key, frc_entities in cls.type.bonded_forces.items():
         for frc_entity in frc_entities:
+            if ignore_missing_atoms and any(atom not in res_type_atom_map for atom in frc_entity.atoms):
+                continue
             finded_atoms = [res_type_atom_map[atom] for atom in frc_entity.atoms]
             finded_type = frc_entity.type
             frc_name = finded_type.get_class_name()
             cls.Add_Bonded_Force(finded_type.entity(finded_atoms, finded_type))
             cls.bonded_forces[frc_name][-1].contents = frc_entity.contents
         for pair in cls.type.checked_list.get(key, []):
-            checked[key].add("-".join([repr(cls.name2atom(name)) for name in pair]))
+            try:
+                checked[key].add("-".join([repr(cls.name2atom(name)) for name in pair]))
+            except KeyError:
+                if not ignore_missing_atoms:
+                    raise
 
 
 def _build_reslink_preprosess(atom1, atom2):
@@ -309,11 +327,12 @@ def _build_molecule(cls):
     :return:
     """
     checked = {frc.get_class_name(): set() for frc in GlobalSetting.BondedForces}
+    ignore_missing_atoms = getattr(cls, "ignore_missing_atoms", False)
     cls.get_atoms()
     for res in cls.residues:
         if not res.type.built:
             build_bonded_force(res.type)
-        _build_residue(res, checked)
+        _build_residue(res, checked, ignore_missing_atoms=ignore_missing_atoms)
     for link in cls.residue_links:
         atom1, atom2 = link.atom1, link.atom2
         _build_reslink_preprosess(atom1, atom2)

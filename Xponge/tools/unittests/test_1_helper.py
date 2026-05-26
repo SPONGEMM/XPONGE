@@ -4,6 +4,8 @@
 
 __all__ = ["test_adding_of_residues",
            "test_omitting_residue_type",
+           "test_build_requires_missing_atoms_by_default",
+           "test_build_ignores_missing_atoms_when_enabled",
            "test_reseting_type",
            "test_pdb_filter",
            "test_gromacs_iterator_skips_large_false_ifdef_block"]
@@ -49,6 +51,51 @@ def test_omitting_residue_type():
     blb = ALA.deepcopy("BLB")
     blb.omit_atoms("O", charge=+2)
     assert int(round(blb.charge)) == 2 and abs(blb.charge - 2) < 0.001
+
+def _cys_without_hg_molecule():
+    import Xponge
+    import Xponge.forcefield.amber.ff14sb
+
+    cys_type = Xponge.ResidueType.get_type("CYS")
+    residue = Xponge.Residue(cys_type)
+    for atom in cys_type.atoms:
+        if atom.name == "HG":
+            continue
+        residue.add_atom(atom.name, x=atom.x, y=atom.y, z=atom.z)
+    molecule = Xponge.Molecule("CYS_WITHOUT_HG")
+    molecule.add_residue(residue)
+    return molecule
+
+def test_build_requires_missing_atoms_by_default():
+    """
+        test strict building still fails when residue template atoms are missing
+    """
+    import tempfile
+    import Xponge
+
+    molecule = _cys_without_hg_molecule()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        try:
+            Xponge.save_sponge_input(molecule, "input", temp_dir)
+        except KeyError as exc:
+            assert "HG" in str(exc)
+        else:
+            raise AssertionError("save_sponge_input should fail when HG is missing by default")
+
+def test_build_ignores_missing_atoms_when_enabled():
+    """
+        test explicit ignore_missing_atoms skips missing template atom bonded terms
+    """
+    import os
+    import tempfile
+    import Xponge
+
+    molecule = _cys_without_hg_molecule()
+    molecule.set_ignore_missing_atoms(True)
+    with tempfile.TemporaryDirectory() as temp_dir:
+        Xponge.save_sponge_input(molecule, "input", temp_dir)
+        assert os.path.exists(os.path.join(temp_dir, "input_bond.txt"))
+        assert os.path.exists(os.path.join(temp_dir, "input_angle.txt"))
 
 def test_reseting_type():
     """
