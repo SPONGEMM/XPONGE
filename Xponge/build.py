@@ -359,6 +359,115 @@ def _build_molecule(cls):
                     tolink.Link_Atom("v", i)
 
 
+def _reorder_residues_by_linked_components(mol):
+    """
+    Reorder residues so every residue-link connected component is contiguous.
+
+    SPONGE requires atoms in one molecule to occupy one continuous atom-index
+    block.  Xponge users can create cross-residue links after appending ligands
+    or payloads to the end of a system, so the original residue order may split
+    a connected molecule across unrelated chains.  Reordering at the residue
+    level preserves each residue's internal atom order while making the SPONGE
+    atom order valid.
+    """
+    residue_count = len(mol.residues)
+    if residue_count <= 1 or not mol.residue_links:
+        return False
+
+    residue_index = {residue: index for index, residue in enumerate(mol.residues)}
+    parent = list(range(residue_count))
+
+    def find(index):
+        while parent[index] != index:
+            parent[index] = parent[parent[index]]
+            index = parent[index]
+        return index
+
+    def union(index_a, index_b):
+        root_a = find(index_a)
+        root_b = find(index_b)
+        if root_a != root_b:
+            parent[root_b] = root_a
+
+    for link in mol.residue_links:
+        res_a = getattr(link.atom1, "residue", None)
+        res_b = getattr(link.atom2, "residue", None)
+        if res_a is res_b:
+            continue
+        if res_a not in residue_index or res_b not in residue_index:
+            continue
+        union(residue_index[res_a], residue_index[res_b])
+
+    components = {}
+    for index in range(residue_count):
+        root = find(index)
+        if root not in components:
+            components[root] = []
+        components[root].append(index)
+
+    ordered_components = sorted(
+        (sorted(indices) for indices in components.values()),
+        key=lambda indices: indices[0]
+    )
+    ordered_indices = [index for indices in ordered_components for index in indices]
+    if ordered_indices == list(range(residue_count)):
+        return False
+
+    mol.residues = [mol.residues[index] for index in ordered_indices]
+    mol.built = False
+    mol.get_atoms()
+    return True
+
+
+def _check_sponge_atom_components_are_contiguous(mol):
+    """
+    Validate the final atom order against SPONGE's molecule-index contract.
+    """
+    atom_count = len(mol.atoms)
+    if atom_count <= 1:
+        return
+
+    parent = list(range(atom_count))
+
+    def find(index):
+        while parent[index] != index:
+            parent[index] = parent[parent[index]]
+            index = parent[index]
+        return index
+
+    def union(index_a, index_b):
+        root_a = find(index_a)
+        root_b = find(index_b)
+        if root_a != root_b:
+            parent[root_b] = root_a
+
+    for bond in mol.bonded_forces.get("bond", []):
+        if getattr(bond, "k", 0) == 0:
+            continue
+        union(mol.atom_index[bond.atoms[0]], mol.atom_index[bond.atoms[1]])
+
+    components = {}
+    for index in range(atom_count):
+        root = find(index)
+        if root not in components:
+            components[root] = []
+        components[root].append(index)
+
+    for indices in components.values():
+        start = min(indices)
+        end = max(indices)
+        if end - start + 1 == len(indices):
+            continue
+        atom = mol.atoms[end]
+        raise ValueError(
+            "Atoms in the same molecule must be continuous for SPONGE input. "
+            f"The connected atom block from #{start} to #{end} is split by other atoms; "
+            f"atom #{end} ({repr(atom)}) is not continuous. "
+            "Please check whether this component contains covalent bonds that were "
+            "not registered as residue links before save_sponge_input was called."
+        )
+
+
 def build_bonded_force(cls):
     """
     This **function** build the bonded force for the input object
@@ -451,7 +560,9 @@ def save_sponge_input(cls, prefix=None, dirname="."):
     """
     if isinstance(cls, Molecule):
         mol = cls
+        _reorder_residues_by_linked_components(cls)
         build_bonded_force(cls)
+        _check_sponge_atom_components_are_contiguous(cls)
 
         if not prefix:
             prefix = cls.name

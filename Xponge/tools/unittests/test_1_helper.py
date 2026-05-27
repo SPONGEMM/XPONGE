@@ -4,6 +4,8 @@
 
 __all__ = ["test_adding_of_residues",
            "test_omitting_residue_type",
+           "test_save_sponge_input_reorders_linked_residue_components",
+           "test_sponge_input_contiguity_checker_rejects_split_atom_components",
            "test_build_requires_missing_atoms_by_default",
            "test_build_ignores_missing_atoms_when_enabled",
            "test_reseting_type",
@@ -39,6 +41,50 @@ def test_adding_of_residues():
     t5 = ACE | ALA | NME
     assert len(t5.residues) == 3
     assert len(t5.residue_links) == 0
+
+def test_save_sponge_input_reorders_linked_residue_components():
+    """
+        test SPONGE export keeps covalently linked residue components contiguous
+    """
+    import importlib
+    import Xponge
+    import Xponge.forcefield.amber.ff14sb
+    globals().update(Xponge.ResidueType.get_all_types())
+
+    mol = ALA | GLY | NME
+    first, middle, last = mol.residues
+    mol.add_residue_link(first.atoms[0], last.atoms[0])
+
+    build_module = importlib.import_module("Xponge.build")
+    reordered = build_module._reorder_residues_by_linked_components(mol)
+
+    assert reordered
+    assert mol.residues == [first, last, middle]
+    assert mol.atom_index[first.atoms[0]] < mol.atom_index[last.atoms[-1]] < mol.atom_index[middle.atoms[0]]
+
+def test_sponge_input_contiguity_checker_rejects_split_atom_components():
+    """
+        test SPONGE export validation catches split connected atom components
+    """
+    import importlib
+    from types import SimpleNamespace
+    import Xponge
+    import Xponge.forcefield.amber.ff14sb
+    globals().update(Xponge.ResidueType.get_all_types())
+
+    mol = ALA | GLY | NME
+    mol.get_atoms()
+    mol.bonded_forces = {
+        "bond": [SimpleNamespace(k=1, atoms=[mol.residues[0].atoms[0], mol.residues[2].atoms[0]])]
+    }
+
+    build_module = importlib.import_module("Xponge.build")
+    try:
+        build_module._check_sponge_atom_components_are_contiguous(mol)
+    except ValueError as exc:
+        assert "must be continuous" in str(exc)
+    else:
+        raise AssertionError("split atom components should fail SPONGE input validation")
 
 def test_omitting_residue_type():
     """
