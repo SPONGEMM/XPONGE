@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   build-wheel:
@@ -39,10 +40,11 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
-  publish-private-index:
-    name: Publish to private index
+  publish-pypi:
+    name: Publish to PyPI
     runs-on: ubuntu-latest
     needs: build-wheel
+    environment: pypi
 
     steps:
       - name: Download distribution artifacts
@@ -54,7 +56,7 @@ jobs:
       - name: Create release placeholder
         run: |
           mkdir -p release-assets
-          printf "Release assets are published to the private package repository.\n" > release-assets/RELEASE_FILES_NOT_INCLUDED.txt
+          printf "Release assets are published to PyPI.\n" > release-assets/RELEASE_FILES_NOT_INCLUDED.txt
 
       - name: Create release
         uses: softprops/action-gh-release@v2
@@ -62,22 +64,7 @@ jobs:
           files: release-assets/RELEASE_FILES_NOT_INCLUDED.txt
           generate_release_notes: true
 
-      - name: Upload to private repository
-        env:
-          PRIVATE_PYPI_URL: ${{ secrets.PRIVATE_PYPI_URL || vars.PRIVATE_PYPI_URL }}
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PRIVATE_PYPI_TOKEN }}
-        run: |
-          if [ -z "${PRIVATE_PYPI_URL}" ]; then
-            echo "PRIVATE_PYPI_URL is not set. Please set GitHub Actions secret or variable PRIVATE_PYPI_URL"
-            exit 1
-          fi
-          if [ -z "${TWINE_PASSWORD}" ]; then
-            echo "PRIVATE_PYPI_TOKEN is not set. Please set GitHub Actions secret PRIVATE_PYPI_TOKEN"
-            exit 1
-          fi
-          python -m pip install --upgrade twine
-          python -m twine upload \
-            --repository-url "${PRIVATE_PYPI_URL}" \
-            --non-interactive \
-            dist/*
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
