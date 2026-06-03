@@ -1,5 +1,5 @@
 """
-This **module** sets the basic configuration for gaff
+This **module** sets the basic configuration for gaff2
 """
 from tempfile import TemporaryDirectory
 from ...helper import source, Xprint, set_real_global_variable
@@ -8,8 +8,7 @@ from ._alternating import apply_amber_alternating_type_adjustment
 source("....")
 amber = source("...amber")
 
-amber.load_parameters_from_parmdat("gaff.dat")
-
+amber.load_parameters_from_parmdat("gaff2.dat")
 
 def _is_cc_cd(i, assign):
     return assign.Atom_Judge(i, "C3") and "sb" in assign.atom_marker[i] and "db" in assign.atom_marker[i] and \
@@ -84,10 +83,36 @@ def _is_pe_pf(i, assign):
     return False
 
 
-gaff = assign.AssignRule("gaff")
+gaff2 = assign.AssignRule("gaff2")
 
 
-@gaff.Add_Rule("cx")
+def _attached_hydrogens(i, assign):
+    return sum(assign.atoms[bonded_atom] == "H" for bonded_atom in assign.bonds[i].keys())
+
+
+def _has_amide_like_carbon_neighbor(i, assign):
+    for bonded_atom in assign.bonds[i].keys():
+        if not assign.Atom_Judge(bonded_atom, "C3"):
+            continue
+        for bonded_atom_bonded in assign.bonds[bonded_atom].keys():
+            if assign.Atom_Judge(bonded_atom_bonded, ["O1", "S1"]):
+                return True
+    return False
+
+
+def _has_conjugated_amine_neighbor(i, assign):
+    for bonded_atom in assign.bonds[i].keys():
+        if "DB" in assign.atom_marker[bonded_atom] and assign.Atom_Judge(bonded_atom, ["C3", "N2", "P2"]):
+            return True
+        if (("AR1" in assign.atom_marker[bonded_atom].keys() or
+             "AR2" in assign.atom_marker[bonded_atom].keys() or
+             "AR3" in assign.atom_marker[bonded_atom].keys()) and
+                assign.atoms[bonded_atom] in assign.XX):
+            return True
+    return False
+
+
+@gaff2.Add_Rule("cx")
 def _rule_cx(i, assign):
     """
 
@@ -98,7 +123,7 @@ def _rule_cx(i, assign):
     return assign.Atom_Judge(i, "C4") and "RG3" in assign.atom_marker[i].keys()
 
 
-@gaff.Add_Rule("cy")
+@gaff2.Add_Rule("cy")
 def _rule_cy(i, assign):
     """
 
@@ -109,7 +134,29 @@ def _rule_cy(i, assign):
     return assign.Atom_Judge(i, "C4") and "RG4" in assign.atom_marker[i].keys()
 
 
-@gaff.Add_Rule("c3")
+@gaff2.Add_Rule("c5")
+def _rule_c5(i, assign):
+    """
+
+    :param i:
+    :param assign:
+    :return:
+    """
+    return assign.Atom_Judge(i, "C4") and "RG5" in assign.atom_marker[i].keys()
+
+
+@gaff2.Add_Rule("c6")
+def _rule_c6(i, assign):
+    """
+
+    :param i:
+    :param assign:
+    :return:
+    """
+    return assign.Atom_Judge(i, "C4") and "RG6" in assign.atom_marker[i].keys()
+
+
+@gaff2.Add_Rule("c3")
 def _rule_c3(i, assign):
     """
 
@@ -120,7 +167,25 @@ def _rule_c3(i, assign):
     return assign.Atom_Judge(i, "C4")
 
 
-@gaff.Add_Rule("c")
+@gaff2.Add_Rule("cs")
+def _rule_cs(i, assign):
+    """
+
+    :param i:
+    :param assign:
+    :return:
+    """
+    if not assign.Atom_Judge(i, "C3"):
+        return False
+    if "AR1" in assign.atom_marker[i]:
+        return False
+    for bonded_atom in assign.bonds[i].keys():
+        if assign.Atom_Judge(bonded_atom, "S1"):
+            return True
+    return False
+
+
+@gaff2.Add_Rule("c")
 def _rule_c(i, assign):
     """
 
@@ -138,7 +203,7 @@ def _rule_c(i, assign):
     return tofind
 
 
-@gaff.Add_Rule("cz")
+@gaff2.Add_Rule("cz")
 def _rule_cz(i, assign):
     """
 
@@ -155,7 +220,7 @@ def _rule_cz(i, assign):
     return tofind
 
 
-@gaff.Add_Rule("cq")
+@gaff2.Add_Rule("cq")
 def _rule_cq(i, assign):
     """
 
@@ -166,7 +231,7 @@ def _rule_cq(i, assign):
     return False
 
 
-@gaff.Add_Rule("cp")
+@gaff2.Add_Rule("cp")
 def _rule_cp(i, assign):
     """
 
@@ -184,7 +249,7 @@ def _rule_cp(i, assign):
     return tofind
 
 
-@gaff.Add_Rule("ca")
+@gaff2.Add_Rule("ca")
 def _rule_ca(i, assign):
     """
 
@@ -215,7 +280,7 @@ def _single_double_name(i, assign, name1, name2):
     return tofind
 
 
-@gaff.Add_Rule("cd")
+@gaff2.Add_Rule("cd")
 def _rule_cd(i, assign):
     """
 
@@ -226,7 +291,7 @@ def _rule_cd(i, assign):
     return False
 
 
-@gaff.Add_Rule("cc")
+@gaff2.Add_Rule("cc")
 def _rule_cc(i, assign):
     """
 
@@ -237,7 +302,7 @@ def _rule_cc(i, assign):
     return _is_cc_cd(i, assign)
 
 
-@gaff.Add_Rule("cf")
+@gaff2.Add_Rule("cf")
 def _rule_cf(i, assign):
     """
 
@@ -248,7 +313,7 @@ def _rule_cf(i, assign):
     return False
 
 
-@gaff.Add_Rule("ce")
+@gaff2.Add_Rule("ce")
 def _rule_ce(i, assign):
     """
 
@@ -259,7 +324,7 @@ def _rule_ce(i, assign):
     return _is_ce_cf(i, assign)
 
 
-@gaff.Add_Rule("cu")
+@gaff2.Add_Rule("cu")
 def _rule_cu(i, assign):
     """
 
@@ -270,7 +335,7 @@ def _rule_cu(i, assign):
     return assign.Atom_Judge(i, "C3") and "RG3" in assign.atom_marker[i].keys()
 
 
-@gaff.Add_Rule("cv")
+@gaff2.Add_Rule("cv")
 def _rule_cv(i, assign):
     """
 
@@ -281,7 +346,7 @@ def _rule_cv(i, assign):
     return assign.Atom_Judge(i, "C3") and "RG4" in assign.atom_marker[i].keys()
 
 
-@gaff.Add_Rule("c2")
+@gaff2.Add_Rule("c2")
 def _rule_c2(i, assign):
     """
 
@@ -292,7 +357,7 @@ def _rule_c2(i, assign):
     return assign.Atom_Judge(i, "C3")
 
 
-@gaff.Add_Rule("cg")
+@gaff2.Add_Rule("cg")
 def _rule_cg(i, assign):
     """
 
@@ -312,7 +377,7 @@ def _rule_cg(i, assign):
     return tofind
 
 
-@gaff.Add_Rule("c1")
+@gaff2.Add_Rule("c1")
 def _rule_c1(i, assign):
     """
 
@@ -323,7 +388,7 @@ def _rule_c1(i, assign):
     return assign.Atom_Judge(i, "C2") or assign.Atom_Judge(i, "C1")
 
 
-@gaff.Add_Rule("hn")
+@gaff2.Add_Rule("hn")
 def _rule_hn(i, assign):
     """
 
@@ -334,7 +399,7 @@ def _rule_hn(i, assign):
     return assign.Atom_Judge(i, "H1") and assign.atoms[list(assign.bonds[i].keys())[0]] == "N"
 
 
-@gaff.Add_Rule("ho")
+@gaff2.Add_Rule("ho")
 def _rule_ho(i, assign):
     """
 
@@ -345,7 +410,7 @@ def _rule_ho(i, assign):
     return assign.Atom_Judge(i, "H1") and assign.atoms[list(assign.bonds[i].keys())[0]] == "O"
 
 
-@gaff.Add_Rule("hs")
+@gaff2.Add_Rule("hs")
 def _rule_hs(i, assign):
     """
 
@@ -356,7 +421,7 @@ def _rule_hs(i, assign):
     return assign.Atom_Judge(i, "H1") and assign.atoms[list(assign.bonds[i].keys())[0]] == "S"
 
 
-@gaff.Add_Rule("hp")
+@gaff2.Add_Rule("hp")
 def _rule_hp(i, assign):
     """
 
@@ -367,7 +432,7 @@ def _rule_hp(i, assign):
     return assign.Atom_Judge(i, "H1") and assign.atoms[list(assign.bonds[i].keys())[0]] == "P"
 
 
-@gaff.Add_Rule("hx")
+@gaff2.Add_Rule("hx")
 def _rule_hx(i, assign):
     """
 
@@ -385,7 +450,7 @@ def _rule_hx(i, assign):
     return assign.Atom_Judge(i, "H1") and tofind
 
 
-@gaff.Add_Rule("hw")
+@gaff2.Add_Rule("hw")
 def _rule_hw(i, assign):
     """
 
@@ -403,7 +468,7 @@ def _rule_hw(i, assign):
     return assign.Atom_Judge(i, "H1") and tofind
 
 
-@gaff.Add_Rule("h3")
+@gaff2.Add_Rule("h3")
 def _rule_h3(i, assign):
     """
 
@@ -421,7 +486,7 @@ def _rule_h3(i, assign):
     return assign.Atom_Judge(i, "H1") and tofind == 3
 
 
-@gaff.Add_Rule("h2")
+@gaff2.Add_Rule("h2")
 def _rule_h2(i, assign):
     """
 
@@ -438,7 +503,7 @@ def _rule_h2(i, assign):
     return assign.Atom_Judge(i, "H1") and tofind == 2
 
 
-@gaff.Add_Rule("h1")
+@gaff2.Add_Rule("h1")
 def _rule_h1(i, assign):
     """
 
@@ -455,7 +520,7 @@ def _rule_h1(i, assign):
     return assign.Atom_Judge(i, "H1") and tofind == 1
 
 
-@gaff.Add_Rule("hc")
+@gaff2.Add_Rule("hc")
 def _rule_hc(i, assign):
     """
 
@@ -466,7 +531,7 @@ def _rule_hc(i, assign):
     return assign.Atom_Judge(i, "H1") and assign.Atom_Judge(list(assign.bonds[i].keys())[0], "C4")
 
 
-@gaff.Add_Rule("h5")
+@gaff2.Add_Rule("h5")
 def _rule_h5(i, assign):
     """
 
@@ -483,7 +548,7 @@ def _rule_h5(i, assign):
     return assign.Atom_Judge(i, "H1") and tofind == 2
 
 
-@gaff.Add_Rule("h4")
+@gaff2.Add_Rule("h4")
 def _rule_h4(i, assign):
     """
 
@@ -500,7 +565,7 @@ def _rule_h4(i, assign):
     return assign.Atom_Judge(i, "H1") and tofind == 1
 
 
-@gaff.Add_Rule("ha")
+@gaff2.Add_Rule("ha")
 def _rule_ha(i, assign):
     """
 
@@ -511,7 +576,7 @@ def _rule_ha(i, assign):
     return assign.Atom_Judge(i, "H1")
 
 
-@gaff.Add_Rule("f")
+@gaff2.Add_Rule("f")
 def _rule_f(i, assign):
     """
 
@@ -522,7 +587,7 @@ def _rule_f(i, assign):
     return assign.atoms[i] == "F"
 
 
-@gaff.Add_Rule("cl")
+@gaff2.Add_Rule("cl")
 def _rule_cl(i, assign):
     """
 
@@ -533,7 +598,7 @@ def _rule_cl(i, assign):
     return assign.atoms[i] == "Cl"
 
 
-@gaff.Add_Rule("br")
+@gaff2.Add_Rule("br")
 def _rule_br(i, assign):
     """
 
@@ -544,7 +609,7 @@ def _rule_br(i, assign):
     return assign.atoms[i] == "Br"
 
 
-@gaff.Add_Rule("i")
+@gaff2.Add_Rule("i")
 def _rule_i(i, assign):
     """
 
@@ -555,7 +620,7 @@ def _rule_i(i, assign):
     return assign.atoms[i] == "I"
 
 
-@gaff.Add_Rule("o")
+@gaff2.Add_Rule("o")
 def _rule_o(i, assign):
     """
 
@@ -566,7 +631,7 @@ def _rule_o(i, assign):
     return assign.Atom_Judge(i, "O1")
 
 
-@gaff.Add_Rule("oh")
+@gaff2.Add_Rule("oh")
 def _rule_oh(i, assign):
     """
 
@@ -583,7 +648,7 @@ def _rule_oh(i, assign):
     return tofind
 
 
-@gaff.Add_Rule("op")
+@gaff2.Add_Rule("op")
 def _rule_op(i, assign):
     """
 
@@ -594,7 +659,7 @@ def _rule_op(i, assign):
     return assign.Atom_Judge(i, "O2") and "RG3" in assign.atom_marker[i].keys()
 
 
-@gaff.Add_Rule("oq")
+@gaff2.Add_Rule("oq")
 def _rule_oq(i, assign):
     """
 
@@ -605,7 +670,7 @@ def _rule_oq(i, assign):
     return assign.Atom_Judge(i, "O2") and "RG4" in assign.atom_marker[i].keys()
 
 
-@gaff.Add_Rule("os")
+@gaff2.Add_Rule("os")
 def _rule_os(i, assign):
     """
 
@@ -616,7 +681,7 @@ def _rule_os(i, assign):
     return assign.atoms[i] == "O"
 
 
-@gaff.Add_Rule("ni")
+@gaff2.Add_Rule("ni")
 def _rule_ni(i, assign):
     """
 
@@ -637,7 +702,7 @@ def _rule_ni(i, assign):
     return tofind
 
 
-@gaff.Add_Rule("nj")
+@gaff2.Add_Rule("nj")
 def _rule_nj(i, assign):
     """
 
@@ -658,7 +723,29 @@ def _rule_nj(i, assign):
     return tofind
 
 
-@gaff.Add_Rule("n")
+@gaff2.Add_Rule("ns")
+def _rule_ns(i, assign):
+    """
+
+    :param i:
+    :param assign:
+    :return:
+    """
+    return assign.Atom_Judge(i, "N3") and _attached_hydrogens(i, assign) == 1 and _has_amide_like_carbon_neighbor(i, assign)
+
+
+@gaff2.Add_Rule("nt")
+def _rule_nt(i, assign):
+    """
+
+    :param i:
+    :param assign:
+    :return:
+    """
+    return assign.Atom_Judge(i, "N3") and _attached_hydrogens(i, assign) == 2 and _has_amide_like_carbon_neighbor(i, assign)
+
+
+@gaff2.Add_Rule("n")
 def _rule_n(i, assign):
     """
 
@@ -666,20 +753,10 @@ def _rule_n(i, assign):
     :param assign:
     :return:
     """
-    tofind = False
-    if assign.Atom_Judge(i, "N3"):
-        for bonded_atom in assign.bonds[i].keys():
-            if assign.Atom_Judge(bonded_atom, "C3"):
-                for bonded_atom_bonded in assign.bonds[bonded_atom].keys():
-                    if assign.Atom_Judge(bonded_atom_bonded, "O1") or assign.Atom_Judge(bonded_atom_bonded, "S1"):
-                        tofind = True
-                        break
-            if tofind:
-                break
-    return tofind
+    return assign.Atom_Judge(i, "N3") and _has_amide_like_carbon_neighbor(i, assign)
 
 
-@gaff.Add_Rule("nk")
+@gaff2.Add_Rule("nk")
 def _rule_nk(i, assign):
     """
 
@@ -690,7 +767,7 @@ def _rule_nk(i, assign):
     return assign.Atom_Judge(i, "N4") and "RG3" in assign.atom_marker[i].keys()
 
 
-@gaff.Add_Rule("nl")
+@gaff2.Add_Rule("nl")
 def _rule_nl(i, assign):
     """
 
@@ -701,7 +778,51 @@ def _rule_nl(i, assign):
     return assign.Atom_Judge(i, "N4") and "RG4" in assign.atom_marker[i].keys()
 
 
-@gaff.Add_Rule("n4")
+@gaff2.Add_Rule("nx")
+def _rule_nx(i, assign):
+    """
+
+    :param i:
+    :param assign:
+    :return:
+    """
+    return assign.Atom_Judge(i, "N4") and _attached_hydrogens(i, assign) == 1
+
+
+@gaff2.Add_Rule("ny")
+def _rule_ny(i, assign):
+    """
+
+    :param i:
+    :param assign:
+    :return:
+    """
+    return assign.Atom_Judge(i, "N4") and _attached_hydrogens(i, assign) == 2
+
+
+@gaff2.Add_Rule("nz")
+def _rule_nz(i, assign):
+    """
+
+    :param i:
+    :param assign:
+    :return:
+    """
+    return assign.Atom_Judge(i, "N4") and _attached_hydrogens(i, assign) == 3
+
+
+@gaff2.Add_Rule("n+")
+def _rule_n_plus(i, assign):
+    """
+
+    :param i:
+    :param assign:
+    :return:
+    """
+    return assign.Atom_Judge(i, "N4") and _attached_hydrogens(i, assign) == 4
+
+
+@gaff2.Add_Rule("n4")
 def _rule_n4(i, assign):
     """
 
@@ -712,7 +833,7 @@ def _rule_n4(i, assign):
     return assign.Atom_Judge(i, "N4")
 
 
-@gaff.Add_Rule("no")
+@gaff2.Add_Rule("no")
 def _rule_no(i, assign):
     """
 
@@ -728,7 +849,7 @@ def _rule_no(i, assign):
     return tofind == 2
 
 
-@gaff.Add_Rule("na")
+@gaff2.Add_Rule("na")
 def _rule_na(i, assign):
     """
 
@@ -741,7 +862,7 @@ def _rule_na(i, assign):
         assign.atom_marker[i].keys())
 
 
-@gaff.Add_Rule("nm")
+@gaff2.Add_Rule("nm")
 def _rule_nm(i, assign):
     """
 
@@ -749,25 +870,10 @@ def _rule_nm(i, assign):
     :param assign:
     :return:
     """
-    tofind = False
-    if assign.Atom_Judge(i, "N3") and "RG3" in assign.atom_marker[i].keys():
-        for bonded_atom in assign.bonds[i].keys():
-            if ("DB" in assign.atom_marker[bonded_atom].keys() and
-                    (assign.Atom_Judge(bonded_atom, "C3") or
-                     assign.Atom_Judge(bonded_atom, "N2") or
-                     assign.Atom_Judge(bonded_atom, "P2"))):
-                tofind = True
-                break
-            if (("AR1" in assign.atom_marker[bonded_atom].keys() or
-                 "AR2" in assign.atom_marker[bonded_atom].keys() or
-                 "AR3" in assign.atom_marker[bonded_atom].keys()) and
-                    assign.atoms[bonded_atom] in assign.XX):
-                tofind = True
-                break
-    return tofind
+    return assign.Atom_Judge(i, "N3") and "RG3" in assign.atom_marker[i].keys() and _has_conjugated_amine_neighbor(i, assign)
 
 
-@gaff.Add_Rule("nn")
+@gaff2.Add_Rule("nn")
 def _rule_nn(i, assign):
     """
 
@@ -775,23 +881,32 @@ def _rule_nn(i, assign):
     :param assign:
     :return:
     """
-    tofind = False
-    if assign.Atom_Judge(i, "N3") and "RG4" in assign.atom_marker[i].keys():
-        for bonded_atom in assign.bonds[i].keys():
-            if "DB" in assign.atom_marker[bonded_atom].keys() and assign.Atom_Judge(bonded_atom,
-                                                                                    ["C3", "N2", "P2"]):
-                tofind = True
-                break
-            if (("AR1" in assign.atom_marker[bonded_atom].keys() or
-                 "AR2" in assign.atom_marker[bonded_atom].keys() or
-                 "AR3" in assign.atom_marker[bonded_atom].keys()) and
-                    assign.atoms[bonded_atom] in assign.XX):
-                tofind = True
-                break
-    return tofind
+    return assign.Atom_Judge(i, "N3") and "RG4" in assign.atom_marker[i].keys() and _has_conjugated_amine_neighbor(i, assign)
 
 
-@gaff.Add_Rule("nh")
+@gaff2.Add_Rule("nu")
+def _rule_nu(i, assign):
+    """
+
+    :param i:
+    :param assign:
+    :return:
+    """
+    return assign.Atom_Judge(i, "N3") and _attached_hydrogens(i, assign) == 1 and _has_conjugated_amine_neighbor(i, assign)
+
+
+@gaff2.Add_Rule("nv")
+def _rule_nv(i, assign):
+    """
+
+    :param i:
+    :param assign:
+    :return:
+    """
+    return assign.Atom_Judge(i, "N3") and _attached_hydrogens(i, assign) == 2 and _has_conjugated_amine_neighbor(i, assign)
+
+
+@gaff2.Add_Rule("nh")
 def _rule_nh(i, assign):
     """
 
@@ -799,23 +914,10 @@ def _rule_nh(i, assign):
     :param assign:
     :return:
     """
-    tofind = False
-    if assign.Atom_Judge(i, "N3"):
-        for bonded_atom in assign.bonds[i].keys():
-            if "DB" in assign.atom_marker[bonded_atom].keys() and assign.Atom_Judge(bonded_atom,
-                                                                                    ["C3", "N2", "P2"]):
-                tofind = True
-                break
-            if (("AR1" in assign.atom_marker[bonded_atom].keys() or
-                 "AR2" in assign.atom_marker[bonded_atom].keys() or
-                 "AR3" in assign.atom_marker[bonded_atom].keys()) and
-                    assign.atoms[bonded_atom] in assign.XX):
-                tofind = True
-                break
-    return tofind
+    return assign.Atom_Judge(i, "N3") and _has_conjugated_amine_neighbor(i, assign)
 
 
-@gaff.Add_Rule("np")
+@gaff2.Add_Rule("np")
 def _rule_np(i, assign):
     """
 
@@ -823,10 +925,10 @@ def _rule_np(i, assign):
     :param assign:
     :return:
     """
-    return assign.Atom_Judge(i, "N3") and "RG3" in assign.atom_marker[i].keys()
+    return assign.Atom_Judge(i, "N3") and "RG3" in assign.atom_marker[i].keys() and _attached_hydrogens(i, assign) == 0
 
 
-@gaff.Add_Rule("nq")
+@gaff2.Add_Rule("nq")
 def _rule_nq(i, assign):
     """
 
@@ -834,10 +936,65 @@ def _rule_nq(i, assign):
     :param assign:
     :return:
     """
-    return assign.Atom_Judge(i, "N3") and "RG4" in assign.atom_marker[i].keys()
+    return assign.Atom_Judge(i, "N3") and "RG4" in assign.atom_marker[i].keys() and _attached_hydrogens(i, assign) == 0
 
 
-@gaff.Add_Rule("n3")
+@gaff2.Add_Rule("n5")
+def _rule_n5(i, assign):
+    """
+
+    :param i:
+    :param assign:
+    :return:
+    """
+    return assign.Atom_Judge(i, "N3") and "RG3" in assign.atom_marker[i].keys() and _attached_hydrogens(i, assign) == 1
+
+
+@gaff2.Add_Rule("n6")
+def _rule_n6(i, assign):
+    """
+
+    :param i:
+    :param assign:
+    :return:
+    """
+    return assign.Atom_Judge(i, "N3") and "RG4" in assign.atom_marker[i].keys() and _attached_hydrogens(i, assign) == 1
+
+
+@gaff2.Add_Rule("n7")
+def _rule_n7(i, assign):
+    """
+
+    :param i:
+    :param assign:
+    :return:
+    """
+    return assign.Atom_Judge(i, "N3") and _attached_hydrogens(i, assign) == 1
+
+
+@gaff2.Add_Rule("n8")
+def _rule_n8(i, assign):
+    """
+
+    :param i:
+    :param assign:
+    :return:
+    """
+    return assign.Atom_Judge(i, "N3") and _attached_hydrogens(i, assign) == 2
+
+
+@gaff2.Add_Rule("n9")
+def _rule_n9(i, assign):
+    """
+
+    :param i:
+    :param assign:
+    :return:
+    """
+    return assign.Atom_Judge(i, "N3") and _attached_hydrogens(i, assign) == 3
+
+
+@gaff2.Add_Rule("n3")
 def _rule_n3(i, assign):
     """
 
@@ -848,7 +1005,7 @@ def _rule_n3(i, assign):
     return assign.Atom_Judge(i, "N3")
 
 
-@gaff.Add_Rule("nb")
+@gaff2.Add_Rule("nb")
 def _rule_nb(i, assign):
     """
 
@@ -859,7 +1016,7 @@ def _rule_nb(i, assign):
     return assign.Atom_Judge(i, "N2") and "AR1" in assign.atom_marker[i].keys()
 
 
-@gaff.Add_Rule("nd")
+@gaff2.Add_Rule("nd")
 def _rule_nd(i, assign):
     """
 
@@ -870,7 +1027,7 @@ def _rule_nd(i, assign):
     return False
 
 
-@gaff.Add_Rule("nc")
+@gaff2.Add_Rule("nc")
 def _rule_nc(i, assign):
     """
 
@@ -881,7 +1038,7 @@ def _rule_nc(i, assign):
     return _is_nc_nd(i, assign)
 
 
-@gaff.Add_Rule("nf")
+@gaff2.Add_Rule("nf")
 def _rule_nf(i, assign):
     """
 
@@ -892,7 +1049,7 @@ def _rule_nf(i, assign):
     return False
 
 
-@gaff.Add_Rule("ne")
+@gaff2.Add_Rule("ne")
 def _rule_ne(i, assign):
     """
 
@@ -903,7 +1060,7 @@ def _rule_ne(i, assign):
     return _is_ne_nf(i, assign)
 
 
-@gaff.Add_Rule("n1")
+@gaff2.Add_Rule("n1")
 def _rule_n1(i, assign):
     """
 
@@ -916,7 +1073,7 @@ def _rule_n1(i, assign):
                                            (assign.atom_marker[i].get("db") == 2)))
 
 
-@gaff.Add_Rule("n2")
+@gaff2.Add_Rule("n2")
 def _rule_n2(i, assign):
     """
 
@@ -927,7 +1084,7 @@ def _rule_n2(i, assign):
     return assign.Atom_Judge(i, "N2")
 
 
-@gaff.Add_Rule("s")
+@gaff2.Add_Rule("s")
 def _rule_s(i, assign):
     """
 
@@ -938,7 +1095,7 @@ def _rule_s(i, assign):
     return assign.Atom_Judge(i, "S1")
 
 
-@gaff.Add_Rule("s2")
+@gaff2.Add_Rule("s2")
 def _rule_s2(i, assign):
     """
 
@@ -949,7 +1106,7 @@ def _rule_s2(i, assign):
     return assign.Atom_Judge(i, "S2") and ("DB" in assign.atom_marker[i] or "TB" in assign.atom_marker[i])
 
 
-@gaff.Add_Rule("sh")
+@gaff2.Add_Rule("sh")
 def _rule_sh(i, assign):
     """
 
@@ -966,7 +1123,7 @@ def _rule_sh(i, assign):
     return tofind
 
 
-@gaff.Add_Rule("sp")
+@gaff2.Add_Rule("sp")
 def _rule_sp(i, assign):
     """
 
@@ -977,7 +1134,7 @@ def _rule_sp(i, assign):
     return assign.Atom_Judge(i, "S2") and "RG3" in assign.atom_marker[i].keys()
 
 
-@gaff.Add_Rule("sq")
+@gaff2.Add_Rule("sq")
 def _rule_sq(i, assign):
     """
 
@@ -988,7 +1145,7 @@ def _rule_sq(i, assign):
     return assign.Atom_Judge(i, "S2") and "RG4" in assign.atom_marker[i].keys()
 
 
-@gaff.Add_Rule("ss")
+@gaff2.Add_Rule("ss")
 def _rule_ss(i, assign):
     """
 
@@ -999,7 +1156,7 @@ def _rule_ss(i, assign):
     return assign.Atom_Judge(i, "S2")
 
 
-@gaff.Add_Rule("sx")
+@gaff2.Add_Rule("sx")
 def _rule_sx(i, assign):
     """
 
@@ -1019,7 +1176,7 @@ def _rule_sx(i, assign):
     return tofind
 
 
-@gaff.Add_Rule("s4")
+@gaff2.Add_Rule("s4")
 def _rule_s4(i, assign):
     """
 
@@ -1030,7 +1187,7 @@ def _rule_s4(i, assign):
     return assign.Atom_Judge(i, "S3")
 
 
-@gaff.Add_Rule("sy")
+@gaff2.Add_Rule("sy")
 def _rule_sy(i, assign):
     """
 
@@ -1050,7 +1207,7 @@ def _rule_sy(i, assign):
     return tofind
 
 
-@gaff.Add_Rule("s6")
+@gaff2.Add_Rule("s6")
 def _rule_s6(i, assign):
     """
 
@@ -1061,7 +1218,7 @@ def _rule_s6(i, assign):
     return assign.Atom_Judge(i, "S4") or assign.Atom_Judge(i, "S5") or assign.Atom_Judge(i, "S6")
 
 
-@gaff.Add_Rule("pd")
+@gaff2.Add_Rule("pd")
 def _rule_pd(i, assign):
     """
 
@@ -1072,7 +1229,7 @@ def _rule_pd(i, assign):
     return False
 
 
-@gaff.Add_Rule("pb")
+@gaff2.Add_Rule("pb")
 def _rule_pb(i, assign):
     """
 
@@ -1083,7 +1240,7 @@ def _rule_pb(i, assign):
     return assign.Atom_Judge(i, "P2") and "AR1" in assign.atom_marker[i].keys()
 
 
-@gaff.Add_Rule("pc")
+@gaff2.Add_Rule("pc")
 def _rule_pc(i, assign):
     """
 
@@ -1094,7 +1251,7 @@ def _rule_pc(i, assign):
     return _is_pc_pd(i, assign)
 
 
-@gaff.Add_Rule("pf")
+@gaff2.Add_Rule("pf")
 def _rule_pf(i, assign):
     """
 
@@ -1105,7 +1262,7 @@ def _rule_pf(i, assign):
     return False
 
 
-@gaff.Add_Rule("pe")
+@gaff2.Add_Rule("pe")
 def _rule_pe(i, assign):
     """
 
@@ -1116,7 +1273,7 @@ def _rule_pe(i, assign):
     return _is_pe_pf(i, assign)
 
 
-@gaff.Add_Rule("p2")
+@gaff2.Add_Rule("p2")
 def _rule_p2(i, assign):
     """
 
@@ -1127,7 +1284,7 @@ def _rule_p2(i, assign):
     return assign.Atom_Judge(i, "P1") or assign.Atom_Judge(i, "P2")
 
 
-@gaff.Add_Rule("px")
+@gaff2.Add_Rule("px")
 def _rule_px(i, assign):
     """
 
@@ -1146,7 +1303,7 @@ def _rule_px(i, assign):
     return tofind
 
 
-@gaff.Add_Rule("p4")
+@gaff2.Add_Rule("p4")
 def _rule_p4(i, assign):
     """
 
@@ -1163,7 +1320,7 @@ def _rule_p4(i, assign):
     return tofind
 
 
-@gaff.Add_Rule("p3")
+@gaff2.Add_Rule("p3")
 def _rule_p3(i, assign):
     """
 
@@ -1174,7 +1331,7 @@ def _rule_p3(i, assign):
     return assign.Atom_Judge(i, "P3")
 
 
-@gaff.Add_Rule("py")
+@gaff2.Add_Rule("py")
 def _rule_py(i, assign):
     """
 
@@ -1193,7 +1350,7 @@ def _rule_py(i, assign):
     return tofind
 
 
-@gaff.Add_Rule("p5")
+@gaff2.Add_Rule("p5")
 def _rule_p5(i, assign):
     """
 
@@ -1204,12 +1361,12 @@ def _rule_p5(i, assign):
     return assign.Atom_Judge(i, "P4") or assign.Atom_Judge(i, "P5") or assign.Atom_Judge(i, "P6")
 
 
-gaff.set_post_action(apply_amber_alternating_type_adjustment)
+gaff2.set_post_action(apply_amber_alternating_type_adjustment)
 
 #pylint: disable=consider-using-with
-def parmchk2_gaff(ifname, ofname, direct_load=True, keep=True):
+def parmchk2_gaff2(ifname, ofname, direct_load=True, keep=True):
     """
-    This **function** is to do parmchk2 for gaff
+    This **function** is to do parmchk2 for gaff2
 
     :param ifname: a string of mol2 file name, a ResidueType, Residue or Molecule instance
     :param ofname: the output file name
@@ -1226,7 +1383,7 @@ def parmchk2_gaff(ifname, ofname, direct_load=True, keep=True):
         Save_Mol2(ifname, tempfile)
         ifname = tempfile
     parmchk2_func = getattr(xlib, "_parmchk2")
-    parmchk2_func(ifname, "mol2", ofname, datapath, 0, 1, 1)
+    parmchk2_func(ifname, "mol2", ofname, datapath, 0, 1, 2)
     if direct_load:
         amber.load_parameters_from_frcmod(ofname, prefix=False)
     if not keep:
@@ -1235,9 +1392,9 @@ def parmchk2_gaff(ifname, ofname, direct_load=True, keep=True):
         tempdir.cleanup()
 
 
-set_real_global_variable("parmchk2_gaff", parmchk2_gaff)
+set_real_global_variable("parmchk2_gaff2", parmchk2_gaff2)
 
-Xprint("""Reference for gaff:
+Xprint("""Reference for gaff2:
   Wang, J., Wolf, R.M., Caldwell, J.W., Kollman, P.A. and Case, D.A.
     Development and testing of a general amber force field.
     Journal of Computational Chemistry 2004 25, 1157-1174

@@ -58,15 +58,30 @@ def rdmol_to_assign(rdmol):
     """
     from .. import Assign
     assign = Assign()
+    kekulized_bonds = {}
 
     for atom in rdmol.GetAtoms():
         x, y, z = rdmol.GetConformer().GetAtomPosition(atom.GetIdx())
         assign.add_atom(atom.GetSymbol(), x=x, y=y, z=z)
         assign.formal_charge[-1] = atom.GetFormalCharge()
 
+    if any(bond.GetBondType() == Chem.BondType.AROMATIC for bond in rdmol.GetBonds()):
+        try:
+            kekulized = Chem.Mol(rdmol)
+            Chem.Kekulize(kekulized, clearAromaticFlags=True)
+        except Exception:
+            kekulized_bonds = {}
+        else:
+            for bond in kekulized.GetBonds():
+                key = (bond.GetBeginAtomIdx(), bond.GetEndAtomIdx())
+                kekulized_bonds[key] = bond.GetBondType()
+                kekulized_bonds[(key[1], key[0])] = bond.GetBondType()
+
     has_unknown_bond = False
     for bond in rdmol.GetBonds():
         temp_bond = bond.GetBondType()
+        if temp_bond == Chem.BondType.AROMATIC and kekulized_bonds:
+            temp_bond = kekulized_bonds[(bond.GetBeginAtomIdx(), bond.GetEndAtomIdx())]
         if temp_bond == Chem.BondType.UNSPECIFIED:
             temp_bond = -1
         elif temp_bond == Chem.BondType.SINGLE:

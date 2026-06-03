@@ -1,7 +1,6 @@
 *.pyc
 build/*
 dist/*
-dist/*
 Xponge.egg-info/PKG-INFO
 Xponge.egg-info/SOURCES.txt
 Xponge/.idea
@@ -22,3 +21,17 @@ test/*
 /mcs.txt
 /TMP_*.frcmod
 /*.egg-info/
+
+# local benchmarking / test environments
+/.bench-env/
+/.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+__pycache__/
+
+# local benchmark tooling / generated datasets
+/benchmarks/
+
+# ad-hoc migration notes
+/docs/plans/2026-06-03-*.md
