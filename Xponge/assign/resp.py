@@ -109,6 +109,7 @@ def _resp_scf_kernel(mol, assign, a, b, matrix_a, matrix_a0, matrix_b, q):
     :return:
     """
     step = 0
+    q = np.asarray(q, dtype=float).reshape(-1)
     q_last_step = q
     while step == 0 or np.max(np.abs(q - q_last_step)) > 1e-4:
         step += 1
@@ -118,8 +119,7 @@ def _resp_scf_kernel(mol, assign, a, b, matrix_a, matrix_a0, matrix_b, q):
                 matrix_a[i][i] = matrix_a0[i][i] + a / np.sqrt(q_last_step[i] * q_last_step[i] + b * b)
 
         ainv = np.linalg.inv(matrix_a)
-        q = np.dot(ainv, matrix_b)
-        q = q[:-1]
+        q = np.dot(ainv, matrix_b)[:-1].reshape(-1)
 
     return q
 
@@ -216,6 +216,20 @@ def _correct_extra_equivalence(tofit_second, fit_group, sublength, extra_equival
             fit_group[atom] = group_map[fit_group[atom]]
 
     return tofit_second, fit_group, sublength
+
+
+def _find_restrained_second_stage_groups(assign, tofit_second):
+    """
+
+    :param assign:
+    :param tofit_second:
+    :return:
+    """
+    restrained = []
+    for i, group in enumerate(tofit_second):
+        if any(assign.atoms[j] != "H" for j in group):
+            restrained.append(i)
+    return restrained
 
 
 def _get_a20_and_b20(total_length, tofit_second, fit_group, sublength, mol, matrix_a0, matrix_b, charge, q):
@@ -330,14 +344,14 @@ def resp_fit(assign, basis="6-31g*", opt=False, charge=None, spin=0, extra_equiv
         rp = np.linalg.norm(r - grids, axis=1)
         matrix_b[i] = np.sum(mep / rp)
     matrix_b[-1] = charge
-    matrix_b = matrix_b.reshape(-1, 1)
+    matrix_b_col = matrix_b.reshape(-1, 1)
 
-    q = np.dot(ainv, matrix_b.reshape(-1, 1))[:-1]
+    q = np.dot(ainv, matrix_b_col)[:-1].reshape(-1)
 
     if only_esp:
         return _force_equivalence_q(q, extra_equivalence)
 
-    q = _resp_scf_kernel(mol, assign, a1, 0.1, matrix_a, matrix_a0, matrix_b, q)
+    q = _resp_scf_kernel(mol, assign, a1, 0.1, matrix_a, matrix_a0, matrix_b_col, q)
 
     if not two_stage:
         return _force_equivalence_q(q, extra_equivalence)
@@ -353,12 +367,13 @@ def resp_fit(assign, basis="6-31g*", opt=False, charge=None, spin=0, extra_equiv
 
         a20, b20 = _get_a20_and_b20(total_length, tofit_second, fit_group, sublength, mol, matrix_a0, matrix_b, charge,
                                     q)
+        restrained_groups = _find_restrained_second_stage_groups(assign, tofit_second)
 
         matrix_a = np.zeros_like(a20)
         matrix_a[:] = a20[:]
         matrix_b = b20.reshape(-1, 1)
         ainv = np.linalg.inv(matrix_a)
-        q_temp = np.dot(ainv, matrix_b)[:-1]
+        q_temp = np.dot(ainv, matrix_b)[:-1].reshape(-1)
 
         a = a2
         b = 0.1
@@ -367,11 +382,10 @@ def resp_fit(assign, basis="6-31g*", opt=False, charge=None, spin=0, extra_equiv
         while step == 0 or np.max(np.abs(q_temp - q_last_step)) > 1e-4:
             step += 1
             q_last_step = q_temp
-            for i in range(mol.natm - sublength):
-                if assign.atoms[i] != "H":
-                    matrix_a[i][i] = a20[i][i] + a / np.sqrt(q_last_step[i] * q_last_step[i] + b * b)
+            for i in restrained_groups:
+                matrix_a[i][i] = a20[i][i] + a / np.sqrt(q_last_step[i] * q_last_step[i] + b * b)
             ainv = np.linalg.inv(matrix_a)
-            q_temp = np.dot(ainv, matrix_b)[:-1]
+            q_temp = np.dot(ainv, matrix_b)[:-1].reshape(-1)
 
         for i, group in enumerate(tofit_second):
             for j in group:
