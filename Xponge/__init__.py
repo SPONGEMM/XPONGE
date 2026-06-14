@@ -77,6 +77,7 @@ __version__ = "1.5b5"
 import os
 import time
 import sys
+from io import StringIO
 from collections import OrderedDict, deque
 from itertools import product, permutations
 
@@ -95,10 +96,69 @@ from .build import save_mol2, save_pdb, save_sponge_input, save_gro, build_bonde
 from .process import impose_bond, impose_angle, impose_dihedral, add_solvent_box, h_mass_repartition, solvent_replace, \
     sort_atoms_by, main_axis_rotate, get_peptide_from_sequence, optimize, Region, UnionRegion, IntersectRegion, \
     BlockRegion, SphereRegion, FrustumRegion, PrismRegion, Lattice
+from .qm import compute_esp_on_grid, compute_hessian, get_backend as get_qm_backend, \
+    get_capabilities as get_qm_capabilities, normalize_backend_name as normalize_qm_backend_name, \
+    optimize_geometry as optimize_qm_geometry, qmmolecule_from_assign, run_scf
+from .mcpb import MCPB, MCPBIonInfo, MCPBLocalModel, MCPBRequest, MCPBResult, MCPBSelection, \
+    save_pdb_with_connect as MCPB_Save_PDB, write_mcpb_artifacts as MCPB_Write_Artifacts
 
 pi = np.pi
 kb = 0.00198716
 bar = 1.439506089041446e-5
+
+
+def register_residue_templates_from_mol2_file(filename):
+    return load_mol2(filename, as_template=True)
+
+
+def register_residue_templates_from_mol2_text(text):
+    return load_mol2(StringIO(text), as_template=True)
+
+
+def has_template(name):
+    return str(name) in ResidueType.get_all_types()
+
+
+def get_template_molecule(name):
+    return Molecule.cast(ResidueType.get_type(str(name)), deepcopy=True)
+
+
+def registered_template_names():
+    return tuple(ResidueType.get_all_types().keys())
+
+
+def register_amber_frcmod_file(filename):
+    from .forcefield import amber
+
+    return amber.load_parameters_from_frcmod(str(filename), prefix=False)
+
+
+def register_amber_parmdat_file(filename):
+    from .forcefield import amber
+
+    return amber.load_parameters_from_parmdat(str(filename), prefix=False)
+
+
+def register_amber_bond_parameter(type1, type2, force_constant, length):
+    from .forcefield.base import bond_base
+
+    bond_base.BondType.New_From_String(
+        "name   k[kcal/mol·A^-2]   b[A]\n"
+        f"{type1}-{type2}  {float(force_constant)}  {float(length)}\n"
+    )
+
+
+def register_amber_angle_parameter(atom_types, force_constant, theta_degrees):
+    from .forcefield.base import angle_base
+
+    if isinstance(atom_types, str):
+        name = atom_types
+    else:
+        name = "-".join(map(str, atom_types))
+    angle_base.AngleType.New_From_String(
+        "name      k   b\n"
+        f"{name}  {float(force_constant)}  {float(theta_degrees)}\n"
+    )
 
 def _initialize():
     """

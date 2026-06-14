@@ -763,6 +763,8 @@ The function will receive the assignment as input, and give True or False as out
             self.charge = resp.RESP_Fit(self, basis=parameters.get("basis", "6-31g*"), opt=parameters.get("opt", False),
                                         charge=parameters.get("charge", int(round(sum(self.formal_charge)))),
                                         spin=parameters.get("spin", 0),
+                                        backend=parameters.get("backend", None),
+                                        core=parameters.get("core", None),
                                         extra_equivalence=parameters.get("extra_equivalence", []),
                                         grid_density=parameters.get("grid_density", 6),
                                         grid_cell_layer=parameters.get("grid_cell_layer", 4),
