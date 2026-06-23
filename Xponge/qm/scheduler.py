@@ -36,9 +36,9 @@ def normalize_backend_name(backend):
 def backend_import_or_hint(backend_name, exc):
     message = str(exc)
     if backend_name == "pyscf" and sys.platform.startswith("win"):
-        message += " On Windows, install Psi4 and call calculate_charge('resp', backend='psi4', ...)."
+        message += " On Windows, install Psi4 via conda-forge or the official Psi4 installer and call calculate_charge('resp', backend='psi4', ...)."
     elif backend_name == "psi4":
-        message += " Psi4 is the default QM backend on Windows; ensure the package installation completed successfully or install Psi4 manually and retry."
+        message += " On Windows, Psi4 is not installed through pip by default; install it via conda-forge or the official Psi4 installer and retry."
     raise QMBackendImportError(message) from exc
 
 

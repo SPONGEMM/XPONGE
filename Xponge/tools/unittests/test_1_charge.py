@@ -156,6 +156,18 @@ def test_qm_scheduler_default_backend_matches_platform(monkeypatch):
     assert qm_scheduler.get_backend(None).name == "psi4"
 
 
+def test_qm_scheduler_windows_import_hint_mentions_external_psi4_install(monkeypatch):
+    """
+        Test the Windows Psi4 import hint points users to external installation.
+    """
+    from Xponge.qm import scheduler as qm_scheduler
+
+    monkeypatch.setattr(qm_scheduler.sys, "platform", "win32")
+
+    with pytest.raises(qm_scheduler.QMBackendImportError, match="conda-forge"):
+        qm_scheduler.backend_import_or_hint("psi4", ImportError("Psi4 is required"))
+
+
 def test_calculate_charge_resp_passes_backend_and_core():
     """
         Test the RESP entrypoint forwards backend and core options

@@ -25,7 +25,6 @@ dependencies = [
     "pubchempy>=1.0.5",
     "rdkit>=2025.9.3",
     "pyscf>=2.11.0; platform_system != 'Windows'",
-    "psi4; platform_system == 'Windows'",
     "mokda-xpongelib>=1.2.5.0",
 ]
 
