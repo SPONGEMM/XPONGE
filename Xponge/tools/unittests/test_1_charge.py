@@ -140,6 +140,22 @@ def test_qm_capabilities_report_psi4_hessian_as_unsupported():
     assert not caps.supports_hessian
 
 
+def test_qm_scheduler_default_backend_matches_platform(monkeypatch):
+    """
+        Test the default QM backend selection matches the current platform policy
+    """
+    import Xponge
+    from Xponge.qm import scheduler as qm_scheduler
+
+    monkeypatch.setattr(qm_scheduler.sys, "platform", "linux")
+    assert qm_scheduler.normalize_backend_name(None) == "pyscf"
+    assert qm_scheduler.get_backend(None).name == "pyscf"
+
+    monkeypatch.setattr(qm_scheduler.sys, "platform", "win32")
+    assert qm_scheduler.normalize_backend_name(None) == "psi4"
+    assert qm_scheduler.get_backend(None).name == "psi4"
+
+
 def test_calculate_charge_resp_passes_backend_and_core():
     """
         Test the RESP entrypoint forwards backend and core options

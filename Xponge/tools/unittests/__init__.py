@@ -10,19 +10,22 @@ This **module** gives the unit tests of the functions in Xponge
 Requirements:
 
 - conda install python==3.11
-- pip install numpy
-- pip install rdkit-pypi
-- pip install xpongelib
+- pip install -e .
 - pip install netcdf4
-- pip install pubchempy
-- pip install MDAnalysis (for nojump)
-- pip install pyscf (for RESP calculation only)
 - pip install zenodo_get
 - vmd (for manully result check)
 - AMBER (version: 24)
 - GROMACS (version:24.2)
     * charmm36-jul2022.ff
     * oplsaam.ff
+
+Default Python installation now includes:
+
+- rdkit
+- PubChemPy
+- MDAnalysis
+- PySCF on Linux/macOS
+- Psi4 on Windows
 
 The tests include:
 
