@@ -2,6 +2,7 @@
 This **package** sets the basic configuration of amber force field
 """
 import os
+import numpy as np
 from ...helper import set_global_alternative_names, Generate_New_Bonded_Force_Type, Xdict, GlobalSetting
 from ... import AtomType, load_parmdat, load_frcmod, Molecule, ResidueType
 
@@ -47,6 +48,47 @@ def register_atomic_ion_pdb_aliases():
     for pdb_name, real_name in alias_map.items():
         if real_name in ResidueType.get_all_types():
             GlobalSetting.Add_PDB_Residue_Alias_Mapping(pdb_name, real_name)
+
+
+def configure_proline_like_terminal_mapping(resname, cterm_name, nterm_name=None):
+    """
+    Configure PDB head/tail mappings for proline-like residues.
+
+    `HYP` follows the same backbone-geometry special case as `PRO`: the head-side
+    dihedral is defined with `HA` instead of a backbone `H`.  Amber also treats
+    `ff14SB` and `ff19SB` differently for the N-terminal form, so the caller may
+    omit `nterm_name`.
+    """
+    res = ResidueType.get_type(resname)
+    cres = ResidueType.get_type(cterm_name)
+    nres = ResidueType.get_type(nterm_name) if nterm_name else None
+
+    GlobalSetting.PDBProteinResidueNames.add(resname)
+
+    res.head, cres.head = "N", "N"
+    res.head_length, cres.head_length = 1.3, 1.3
+    res.head_next, cres.head_next = "CA", "CA"
+
+    res.head_link_conditions.append({"atoms": ["CA", "N"], "parameter": 120 / 180 * np.pi})
+    cres.head_link_conditions.append({"atoms": ["CA", "N"], "parameter": 120 / 180 * np.pi})
+    res.head_link_conditions.append({"atoms": ["HA", "CA", "N"], "parameter": 0})
+    cres.head_link_conditions.append({"atoms": ["HA", "CA", "N"], "parameter": 0})
+
+    res.tail = "C"
+    res.tail_next = "CA"
+    res.tail_length = 1.3
+    res.tail_link_conditions.append({"atoms": ["CA", "C"], "parameter": 120 / 180 * np.pi})
+    res.tail_link_conditions.append({"atoms": ["O", "CA", "C"], "parameter": -np.pi})
+
+    if nres is not None:
+        nres.tail = "C"
+        nres.tail_next = "CA"
+        nres.tail_length = 1.3
+        nres.tail_link_conditions.append({"atoms": ["CA", "C"], "parameter": 120 / 180 * np.pi})
+        nres.tail_link_conditions.append({"atoms": ["O", "CA", "C"], "parameter": -np.pi})
+
+    GlobalSetting.Add_PDB_Residue_Name_Mapping("head", resname, nterm_name or resname)
+    GlobalSetting.Add_PDB_Residue_Name_Mapping("tail", resname, cterm_name)
 
 def load_parameters_from_parmdat(filename, prefix=True):
     """

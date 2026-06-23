@@ -1,5 +1,9 @@
 """
 This **module** sets the residue types of glycoprotein
+
+`HYP/NHYP/CHYP` are provided by the Amber protein force fields (`ff14sb`/`ff19sb`).
+This module only defines the GLYCAM glycoprotein bridge residues and their
+N/C-terminal forms, so users should load the protein FF together with GLYCAM.
 """
 
 from ....helper import source

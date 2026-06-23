@@ -9,6 +9,7 @@ amber = source("...amber")
 amber.load_parameters_from_parmdat(os.path.join("glycam_06j", "GLYCAM_06j.dat"))
 
 load_mol2(os.path.join(AMBER_DATA_DIR, "glycam_06j", "terminal.mol2"), as_template=True)
+load_mol2(os.path.join(AMBER_DATA_DIR, "glycam_06j", "functional_groups.mol2"), as_template=True)
 
 ROH = ResidueType.get_type("ROH")
 ROH.head = "O1"
@@ -19,6 +20,21 @@ OME = ResidueType.get_type("OME")
 OME.head = "O"
 OME.head_next = "CH3"
 OME.head_length = 1.3
+
+MEX = ResidueType.get_type("MEX")
+MEX.head = "CH3"
+MEX.head_next = "H1"
+MEX.head_length = 1.52
+
+SO3 = ResidueType.get_type("SO3")
+SO3.head = "S1"
+SO3.head_next = "O1"
+SO3.head_length = 1.74
+
+TBT = ResidueType.get_type("TBT")
+TBT.tail = "O1"
+TBT.tail_next = "C1"
+TBT.tail_length = 1.43
 
 
 def set_head(res, n):

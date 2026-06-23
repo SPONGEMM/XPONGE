@@ -70,6 +70,7 @@ GlobalSetting.HISMap["HIS"].update({"HIS": {"HID": "HID", "HIE": "HIE", "HIP": "
 ResidueType.get_type("CYX").connect_atoms["ssbond"] = "SG"
 ResidueType.get_type("NCYX").connect_atoms["ssbond"] = "SG"
 ResidueType.get_type("CCYX").connect_atoms["ssbond"] = "SG"
+amber.configure_proline_like_terminal_mapping("HYP", "CHYP")
 
 Xprint("""Reference for ff14SB:
   James A. Maier, Carmenza Martinez, Koushik Kasavajhala, Lauren Wickstrom, Kevin E. Hauser, and Carlos Simmerling

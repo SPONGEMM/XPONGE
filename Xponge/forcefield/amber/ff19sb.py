@@ -10,6 +10,7 @@ amber.load_parameters_from_parmdat("parm19.dat")
 amber.load_parameters_from_frcmod("ff19SB.frcmod", include_cmap=True)
 
 load_mol2(os.path.join(AMBER_DATA_DIR, "ff19SB.mol2"), as_template=True)
+load_mol2(os.path.join(AMBER_DATA_DIR, "ff19SB_nhyp.mol2"), as_template=True)
 
 ResidueType.set_type("HIS", ResidueType.get_type("HIE"))
 ResidueType.set_type("NHIS", ResidueType.get_type("NHIE"))
@@ -70,6 +71,7 @@ GlobalSetting.HISMap["HIS"].update({"HIS": {"HID": "HID", "HIE": "HIE", "HIP": "
 ResidueType.get_type("CYX").connect_atoms["ssbond"] = "SG"
 ResidueType.get_type("NCYX").connect_atoms["ssbond"] = "SG"
 ResidueType.get_type("CCYX").connect_atoms["ssbond"] = "SG"
+amber.configure_proline_like_terminal_mapping("HYP", "CHYP", "NHYP")
 
 Xprint("""Reference for ff19SB:
   Chuan Tian, Koushik Kasavajhala, Kellon A. A. Belfon, Lauren Raguette, He Huang, Angela N. Migues, John Bickel, Yuzhang Wang, Jorge Pincay, Qin Wu, and Carlos Simmerling
