@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 
 from .backends import psi4_backend, pyscf_backend
+from ._esp_memory import normalize_chunk_policy, normalize_safety_factor, parse_memory_limit_bytes
 from .capabilities import QMCapabilitySet
 from .errors import QMBackendImportError, QMBackendSelectionError, QMCapabilityError
 from .models import ESPGridRequest, HessianResult, OptimizationResult, QMMolecule, QMRunOptions
@@ -82,12 +83,20 @@ def run_scf(assign, *, backend=None, basis="6-31g*", charge=0, spin=0, optimize_
         backend_import_or_hint(backend_name, exc)
 
 
-def compute_esp_on_grid(scf_result, grid_points_bohr):
+def compute_esp_on_grid(scf_result, grid_points_bohr, *, memory_limit=None, chunk_policy="auto", safety_factor=0.8):
     backend_module = get_backend(scf_result.backend_name)
     try:
         if not backend_module.capabilities().supports_esp:
             raise QMCapabilityError(f"{scf_result.backend_name} does not support ESP")
-        return backend_module.compute_esp(scf_result, ESPGridRequest(grid_points_bohr=grid_points_bohr))
+        return backend_module.compute_esp(
+            scf_result,
+            ESPGridRequest(
+                grid_points_bohr=grid_points_bohr,
+                memory_limit_bytes=parse_memory_limit_bytes(memory_limit),
+                chunk_policy=normalize_chunk_policy(chunk_policy),
+                safety_factor=normalize_safety_factor(safety_factor),
+            ),
+        )
     except ImportError as exc:
         backend_import_or_hint(scf_result.backend_name, exc)
 

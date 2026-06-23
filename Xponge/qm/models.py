@@ -35,6 +35,9 @@ class ESPGridRequest:
     grid_points_bohr: Any
     include_nuclear_term: bool = False
     include_electronic_term: bool = True
+    memory_limit_bytes: int | None = None
+    chunk_policy: str = "auto"
+    safety_factor: float = 0.8
 
 
 @dataclass(slots=True)
@@ -59,6 +62,7 @@ class ESPResult:
     total_esp_au: Any | None = None
     nuclear_esp_au: Any | None = None
     timings: dict[str, float] = field(default_factory=dict)
+    diagnostics: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)

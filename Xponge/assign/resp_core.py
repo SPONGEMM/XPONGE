@@ -198,6 +198,20 @@ def _correct_extra_equivalence(tofit_second, fit_group, sublength, extra_equival
     return tofit_second, fit_group, sublength
 
 
+def _find_restrained_second_stage_groups(assign, tofit_second):
+    """
+
+    :param assign:
+    :param tofit_second:
+    :return:
+    """
+    restrained = []
+    for i, group in enumerate(tofit_second):
+        if any(assign.atoms[j] != "H" for j in group):
+            restrained.append(i)
+    return restrained
+
+
 def _get_a20_and_b20(total_length, tofit_second, fit_group, sublength, mol, matrix_a0, matrix_b, charge, q):
     """
 
@@ -317,6 +331,7 @@ def fit_resp_from_esp(assign, atom_coordinates_bohr, nuclear_charges, grid_point
         a20, b20 = _get_a20_and_b20(
             total_length, tofit_second, fit_group, sublength, mol, matrix_a0, matrix_b, charge, q
         )
+        restrained_groups = _find_restrained_second_stage_groups(assign, tofit_second)
 
         matrix_a = np.zeros_like(a20)
         matrix_a[:] = a20[:]
@@ -331,9 +346,8 @@ def fit_resp_from_esp(assign, atom_coordinates_bohr, nuclear_charges, grid_point
         while step == 0 or np.max(np.abs(q_temp - q_last_step)) > 1e-4:
             step += 1
             q_last_step = q_temp
-            for i in range(mol.natm - sublength):
-                if assign.atoms[i] != "H":
-                    matrix_a[i][i] = a20[i][i] + a / np.sqrt(q_last_step[i] * q_last_step[i] + b * b)
+            for i in restrained_groups:
+                matrix_a[i][i] = a20[i][i] + a / np.sqrt(q_last_step[i] * q_last_step[i] + b * b)
             ainv = np.linalg.inv(matrix_a)
             q_temp = np.dot(ainv, matrix_b)[:-1].reshape(-1)
 

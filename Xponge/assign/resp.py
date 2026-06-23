@@ -28,7 +28,8 @@ def _normalize_core_name(core):
 
 def resp_fit(assign, basis="6-31g*", opt=False, charge=None, spin=0, extra_equivalence=None,
              grid_density=6, grid_cell_layer=4, radius=None, a1=0.0005, a2=0.001,
-             two_stage=True, only_esp=False, backend=None, core=None):
+             two_stage=True, only_esp=False, backend=None, core=None,
+             esp_memory_limit=None, esp_chunk_policy="auto", esp_safety_factor=0.8):
     """
     This **function** fits the RESP partial charge for an Assign instance.
 
@@ -72,7 +73,13 @@ def resp_fit(assign, basis="6-31g*", opt=False, charge=None, spin=0, extra_equiv
         layer=grid_cell_layer,
         radius=radius,
     )
-    esp_result = qm_scheduler.compute_esp_on_grid(scf_result, grids)
+    esp_result = qm_scheduler.compute_esp_on_grid(
+        scf_result,
+        grids,
+        memory_limit=esp_memory_limit,
+        chunk_policy=esp_chunk_policy,
+        safety_factor=esp_safety_factor,
+    )
     return resp_core.fit_resp_from_esp(
         assign,
         atom_coordinates_bohr=scf_result.coordinates_bohr,
@@ -93,6 +100,7 @@ _resp_scf_kernel = resp_core._resp_scf_kernel
 _find_tofit_second = resp_core._find_tofit_second
 _correct_extra_equivalence = resp_core._correct_extra_equivalence
 _get_a20_and_b20 = resp_core._get_a20_and_b20
+_find_restrained_second_stage_groups = resp_core._find_restrained_second_stage_groups
 
 set_global_alternative_names()
 

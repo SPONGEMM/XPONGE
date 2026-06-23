@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import math
 import time
 
+from .._esp_memory import choose_dual_chunk_layout, estimate_aux_tensor_bytes, iter_chunk_slices
 from ..capabilities import QMCapabilitySet
 from ..errors import QMBackendImportError
 from ..models import ESPGridRequest, ESPResult, HessianResult, OptimizationResult, QMMolecule, QMRunOptions, SCFResult
@@ -11,6 +13,7 @@ from ..models import ESPGridRequest, ESPResult, HessianResult, OptimizationResul
 
 name = "pyscf"
 ANGSTROM_PER_BOHR = 0.52918
+_ESP_TENSOR_ITEMSIZE = 8
 
 
 def require_numpy_pyscf():
@@ -61,6 +64,46 @@ def _collapse_density_matrix(dm, np):
     if dm.ndim == 3:
         return dm.sum(axis=0)
     return dm
+
+
+def _compute_esp_full(np, gto, df_module, mol, dm, grid_points_bohr):
+    fakemol = gto.fakemol_for_charges(grid_points_bohr)
+    return np.einsum("ijp,ij->p", df_module.incore.aux_e2(mol, fakemol), dm)
+
+
+def _compute_esp_grid_chunked(np, gto, df_module, mol, dm, grid_points_bohr, chunk_size):
+    electronic = np.zeros(len(grid_points_bohr), dtype=float)
+    for start, stop in iter_chunk_slices(len(grid_points_bohr), chunk_size):
+        fakemol = gto.fakemol_for_charges(grid_points_bohr[start:stop])
+        electronic[start:stop] = np.einsum("ijp,ij->p", df_module.incore.aux_e2(mol, fakemol), dm)
+    return electronic
+
+
+def _compute_esp_pointwise(np, mol, dm, grid_points_bohr):
+    electronic = np.zeros(len(grid_points_bohr), dtype=float)
+    for index, point in enumerate(grid_points_bohr):
+        mol.set_rinv_orig_(point)
+        electronic[index] = np.einsum("ij,ij", mol.intor("int1e_rinv"), dm)
+    return electronic
+
+
+def _compute_esp_shell_grid_chunked(np, gto, df_module, mol, dm, grid_points_bohr, shell_blocks, grid_chunk_size):
+    electronic = np.zeros(len(grid_points_bohr), dtype=float)
+    for start, stop in iter_chunk_slices(len(grid_points_bohr), grid_chunk_size):
+        grid_chunk = grid_points_bohr[start:stop]
+        fakemol = gto.fakemol_for_charges(grid_chunk)
+        chunk_esp = np.zeros(len(grid_chunk), dtype=float)
+        for ish0, ish1, iao0, iao1 in shell_blocks:
+            dm_rows = dm[iao0:iao1]
+            for jsh0, jsh1, jao0, jao1 in shell_blocks:
+                tensor = df_module.incore.aux_e2(
+                    mol,
+                    fakemol,
+                    shls_slice=(ish0, ish1, jsh0, jsh1, 0, len(grid_chunk)),
+                )
+                chunk_esp += np.einsum("ijp,ij->p", tensor, dm_rows[:, jao0:jao1])
+        electronic[start:stop] = chunk_esp
+    return electronic
 
 
 def _update_assign_coordinates(assign, coordinates_angstrom):
@@ -117,25 +160,123 @@ def compute_esp(scf_result: SCFResult, request: ESPGridRequest) -> ESPResult:
     grid_points_bohr = np.asarray(request.grid_points_bohr, dtype=float)
     mol = scf_result.backend_handle["mol"]
     wavefunction = scf_result.backend_handle["wavefunction"]
+    dm = _collapse_density_matrix(wavefunction.make_rdm1(), np)
+    nao = int(mol.nao_nr())
+    grid_count = len(grid_points_bohr)
+    memory_limit_bytes = int(request.memory_limit_bytes)
+    usable_bytes = max(1, int(memory_limit_bytes * float(request.safety_factor)))
+    estimated_full_bytes = estimate_aux_tensor_bytes(nao, nao, grid_count, _ESP_TENSOR_ITEMSIZE)
+    estimated_per_grid_bytes = estimate_aux_tensor_bytes(nao, nao, 1, _ESP_TENSOR_ITEMSIZE)
     start = time.perf_counter()
-    try:
-        from pyscf import df
+    diagnostics = {
+        "chunk_policy": request.chunk_policy,
+        "estimated_full_bytes": estimated_full_bytes,
+        "memory_limit_bytes": memory_limit_bytes,
+    }
+    if grid_count == 0:
+        timings = {"esp": time.perf_counter() - start}
+        diagnostics.update({"mode": "full", "grid_chunk_count": 0, "shell_block_count": 0})
+        return ESPResult(
+            grid_points_bohr=grid_points_bohr,
+            electronic_esp_au=np.array([], dtype=float),
+            timings=timings,
+            diagnostics=diagnostics,
+        )
 
-        fakemol = gto.fakemol_for_charges(grid_points_bohr)
-        dm = _collapse_density_matrix(wavefunction.make_rdm1(), np)
-        electronic = np.einsum("ijp,ij->p", df.incore.aux_e2(mol, fakemol), dm)
-    except MemoryError:
-        dm = _collapse_density_matrix(wavefunction.make_rdm1(), np)
-        vele = []
-        for point in grid_points_bohr:
-            mol.set_rinv_orig_(point)
-            vele.append(np.einsum("ij,ij", mol.intor("int1e_rinv"), dm))
-        electronic = np.array(vele)
+    from pyscf import df
+
+    if request.chunk_policy == "full":
+        if estimated_full_bytes > usable_bytes:
+            raise ValueError("Requested full ESP evaluation exceeds the configured memory budget")
+        electronic = _compute_esp_full(np, gto, df, mol, dm, grid_points_bohr)
+        diagnostics.update({"mode": "full", "grid_chunk_count": 1, "shell_block_count": 0})
+    elif request.chunk_policy == "grid":
+        if estimated_per_grid_bytes > usable_bytes:
+            raise ValueError("Grid chunking with full AO blocks exceeds the configured memory budget; use chunk_policy='dual' or 'auto'")
+        grid_chunk_size = max(1, min(grid_count, usable_bytes // estimated_per_grid_bytes))
+        electronic = _compute_esp_grid_chunked(np, gto, df, mol, dm, grid_points_bohr, grid_chunk_size)
+        diagnostics.update(
+            {
+                "mode": "grid_chunk",
+                "grid_chunk_size": grid_chunk_size,
+                "grid_chunk_count": math.ceil(grid_count / grid_chunk_size),
+                "shell_block_count": 0,
+            }
+        )
+    elif request.chunk_policy == "pointwise":
+        electronic = _compute_esp_pointwise(np, mol, dm, grid_points_bohr)
+        diagnostics.update({"mode": "pointwise", "grid_chunk_count": grid_count, "shell_block_count": 0})
+    elif request.chunk_policy == "dual":
+        shell_blocks, grid_chunk_size, largest_block_ao = choose_dual_chunk_layout(
+            mol.ao_loc_nr(),
+            grid_count,
+            usable_bytes,
+        )
+        electronic = _compute_esp_shell_grid_chunked(
+            np,
+            gto,
+            df,
+            mol,
+            dm,
+            grid_points_bohr,
+            shell_blocks,
+            grid_chunk_size,
+        )
+        diagnostics.update(
+            {
+                "mode": "shell_grid_chunk",
+                "grid_chunk_size": grid_chunk_size,
+                "grid_chunk_count": math.ceil(grid_count / grid_chunk_size),
+                "shell_block_count": len(shell_blocks),
+                "largest_shell_block_ao": largest_block_ao,
+            }
+        )
+    else:
+        if estimated_full_bytes <= usable_bytes:
+            electronic = _compute_esp_full(np, gto, df, mol, dm, grid_points_bohr)
+            diagnostics.update({"mode": "full", "grid_chunk_count": 1, "shell_block_count": 0})
+        elif estimated_per_grid_bytes <= usable_bytes:
+            grid_chunk_size = max(1, min(grid_count, usable_bytes // estimated_per_grid_bytes))
+            electronic = _compute_esp_grid_chunked(np, gto, df, mol, dm, grid_points_bohr, grid_chunk_size)
+            diagnostics.update(
+                {
+                    "mode": "grid_chunk",
+                    "grid_chunk_size": grid_chunk_size,
+                    "grid_chunk_count": math.ceil(grid_count / grid_chunk_size),
+                    "shell_block_count": 0,
+                }
+            )
+        else:
+            shell_blocks, grid_chunk_size, largest_block_ao = choose_dual_chunk_layout(
+                mol.ao_loc_nr(),
+                grid_count,
+                usable_bytes,
+            )
+            electronic = _compute_esp_shell_grid_chunked(
+                np,
+                gto,
+                df,
+                mol,
+                dm,
+                grid_points_bohr,
+                shell_blocks,
+                grid_chunk_size,
+            )
+            diagnostics.update(
+                {
+                    "mode": "shell_grid_chunk",
+                    "grid_chunk_size": grid_chunk_size,
+                    "grid_chunk_count": math.ceil(grid_count / grid_chunk_size),
+                    "shell_block_count": len(shell_blocks),
+                    "largest_shell_block_ao": largest_block_ao,
+                }
+            )
     timings = {"esp": time.perf_counter() - start}
     return ESPResult(
         grid_points_bohr=grid_points_bohr,
         electronic_esp_au=electronic,
         timings=timings,
+        diagnostics=diagnostics,
     )
 
 
