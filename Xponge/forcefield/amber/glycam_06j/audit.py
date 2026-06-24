@@ -9,7 +9,12 @@ import re
 from pathlib import Path
 
 FUNCTIONAL_GROUP_TEMPLATES = {"CA2", "MEX", "OME", "ROH", "SO3", "TBT"}
-EXTERNAL_COVERAGE = {"CA2": "covered by Amber ion templates outside glycam_06j"}
+EXTERNAL_COVERAGE = {
+    "CA2": "covered by Amber ion templates outside glycam_06j",
+    "HYP": "covered by Amber protein force-field templates",
+    "NHYP": "covered by Amber protein force-field templates",
+    "CHYP": "covered by Amber protein force-field templates",
+}
 NAME_EQUIVALENTS = {}
 
 _PREP_UNIT_RE = re.compile(r"^([A-Za-z0-9]{3,4})\s+INT\s+0\s*$")

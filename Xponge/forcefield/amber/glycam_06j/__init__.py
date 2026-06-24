@@ -10,6 +10,7 @@ amber.load_parameters_from_parmdat(os.path.join("glycam_06j", "GLYCAM_06j.dat"))
 
 load_mol2(os.path.join(AMBER_DATA_DIR, "glycam_06j", "terminal.mol2"), as_template=True)
 load_mol2(os.path.join(AMBER_DATA_DIR, "glycam_06j", "functional_groups.mol2"), as_template=True)
+load_mol2(os.path.join(AMBER_DATA_DIR, "glycam_06j", "modified_monosaccharides.mol2"), as_template=True)
 
 ROH = ResidueType.get_type("ROH")
 ROH.head = "O1"

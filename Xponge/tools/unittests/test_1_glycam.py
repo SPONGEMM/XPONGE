@@ -8,6 +8,7 @@ __all__ = [
     "test_ff19sb_hyp_n_terminal_mapping",
     "test_glycoprotein_core_template_registration",
     "test_glycam_functional_group_templates_and_linkability",
+    "test_glycam_modified_monosaccharide_templates_load",
     "test_glycam_coverage_audit_classifies_extension_layers",
 ]
 
@@ -101,10 +102,22 @@ def test_glycam_functional_group_templates_and_linkability():
     assert len(so3_chain.residue_links) == 2
 
 
+def test_glycam_modified_monosaccharide_templates_load():
+    """
+        The Phase 3C/3D Amber PREP imports should register representative
+        modified monosaccharide families in the GLYCAM namespace.
+    """
+    import Xponge
+    import Xponge.forcefield.amber.glycam_06j
+
+    for resname in ["0TV", "0AE", "0AF", "0GL", "AGL", "5AD", "ACX", "ZOLS", "ZOLT"]:
+        assert Xponge.ResidueType.get_type(resname).name == resname
+
+
 def test_glycam_coverage_audit_classifies_extension_layers():
     """
-        The coverage audit should report the newly added functional groups as
-        covered and keep modified monosaccharides distinct from them.
+        The coverage audit should now close the modified-monosaccharide gap
+        while recording only explicit external-coverage exceptions.
     """
     from pathlib import Path
     from Xponge.forcefield.amber.glycam_06j.audit import audit_glycam_coverage
@@ -115,5 +128,8 @@ def test_glycam_coverage_audit_classifies_extension_layers():
     for resname in ["MEX", "SO3", "TBT"]:
         assert resname in report["covered"]
     assert "CA2" in report["covered_elsewhere"]
-    for resname in ["0AE", "0AF", "0GL", "0TV"]:
-        assert resname in report["missing_modified_monosaccharides"]
+    assert report["covered_elsewhere"]["HYP"] == "covered by Amber protein force-field templates"
+    assert report["covered_elsewhere"]["NHYP"] == "covered by Amber protein force-field templates"
+    assert report["covered_elsewhere"]["CHYP"] == "covered by Amber protein force-field templates"
+    assert report["missing_functional_groups"] == []
+    assert report["missing_modified_monosaccharides"] == []
