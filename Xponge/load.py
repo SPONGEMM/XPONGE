@@ -581,9 +581,83 @@ def _pdb_match_unterminal_residue(selector_sets, chain_id, resseq, insertion_cod
     return (chain_id, resseq, insertion_code) in chain_resseq_ins
 
 
+def _pdb_parse_terminal_residues(terminal_residues):
+    """
+        parse residue selectors that explicitly control head/tail terminal mapping
+    """
+    n_terminals = set()
+    c_terminals = set()
+    if not terminal_residues:
+        return n_terminals, c_terminals
+
+    def normalize_selector(chain_id, resseq, insertion_code):
+        chain_id = str(chain_id or "").strip()
+        if not chain_id:
+            chain_id = " "
+        insertion_code = str(insertion_code or "").strip() or " "
+        return chain_id[0], int(resseq), insertion_code[0]
+
+    def add_selector(chain_id, resseq, insertion_code, terminal_kind):
+        selector = normalize_selector(chain_id, resseq, insertion_code)
+        terminal_kind = str(terminal_kind or "").strip().upper()
+        if terminal_kind in ("N", "HEAD", "N_TERMINAL", "N-TERMINAL"):
+            n_terminals.add(selector)
+        elif terminal_kind in ("C", "TAIL", "C_TERMINAL", "C-TERMINAL"):
+            c_terminals.add(selector)
+        else:
+            raise ValueError(f"invalid terminal kind: {terminal_kind}")
+
+    for entry in terminal_residues:
+        if isinstance(entry, dict):
+            chain_id = entry.get("chain_id", entry.get("chainId", ""))
+            resseq = entry.get("res_seq", entry.get("resSeq", entry.get("residue_seq", entry.get("residueSeq"))))
+            insertion_code = entry.get("icode", entry.get("insertion_code", entry.get("insertionCode", "")))
+            selector = normalize_selector(chain_id, resseq, insertion_code)
+            if bool(entry.get("n_terminal", entry.get("nTerminal", False))):
+                n_terminals.add(selector)
+            if bool(entry.get("c_terminal", entry.get("cTerminal", False))):
+                c_terminals.add(selector)
+            terminal_kind = entry.get("terminal", entry.get("kind", entry.get("place", "")))
+            if terminal_kind:
+                add_selector(chain_id, resseq, insertion_code, terminal_kind)
+            continue
+        if isinstance(entry, (tuple, list)):
+            if len(entry) == 4:
+                add_selector(entry[0], entry[1], entry[2], entry[3])
+                continue
+            if len(entry) == 5:
+                selector = normalize_selector(entry[0], entry[1], entry[2])
+                if bool(entry[3]):
+                    n_terminals.add(selector)
+                if bool(entry[4]):
+                    c_terminals.add(selector)
+                continue
+        raise ValueError(f"invalid terminal residue selector: {entry}")
+    return n_terminals, c_terminals
+
+
+def _pdb_match_terminal_residue(selector_sets, chain_id, resseq, insertion_code):
+    n_terminals, c_terminals = selector_sets
+    selector = (chain_id, resseq, insertion_code)
+    return selector in n_terminals, selector in c_terminals
+
+
+def _pdb_apply_tail_mapping(residue_name):
+    protein_residues = getattr(GlobalSetting, "PDBProteinResidueNames", set())
+    head_residue_names = set(GlobalSetting.PDBResidueNameMap["head"].values())
+    if residue_name in protein_residues and residue_name in GlobalSetting.PDBResidueNameMap["tail"].keys():
+        return GlobalSetting.PDBResidueNameMap["tail"][residue_name]
+    if residue_name in head_residue_names and residue_name[1:] in protein_residues and \
+            residue_name[1:] in GlobalSetting.PDBResidueNameMap["tail"].keys():
+        return "C" + residue_name[1:]
+    if residue_name in GlobalSetting.PDBResidueNameMap["tail"].keys():
+        return GlobalSetting.PDBResidueNameMap["tail"][residue_name]
+    return residue_name
+
+
 def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
              ignore_unknown_name=False, ignore_seqres=True, ignore_conect=True, read_cryst1=True,
-             unterminal_residues=None):
+             unterminal_residues=None, terminal_residues=None, infer_terminals=True):
     """
     This **function** is used to load a pdb file
 
@@ -598,6 +672,11 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
     :param unterminal_residues: selectors to suppress head/tail terminal mapping while reading PDB.
         Supported forms include: ``[12, 35]``, ``["A:12", "B:35A"]``, ``[("A", 12), ("B", 35, "A")]``
         **New From 1.2.7.1**
+    :param terminal_residues: selectors that explicitly mark N/C terminal residues.
+        Supported forms include dictionaries with ``chain_id``, ``res_seq``, ``icode``, ``n_terminal`` and
+        ``c_terminal``, or tuples ``(chain_id, res_seq, icode, "N"/"C")``.
+    :param infer_terminals: whether to infer terminal mapping from TER, EOF and OXT records. If False,
+        only ``terminal_residues`` controls head/tail mapping.
     :return: a Molecule instance
     """
     should_close = not isinstance(file, io.IOBase)
@@ -614,7 +693,9 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
     connects = []
     residue_type_map = []
     residue_unterminal_map = []
+    residue_terminal_map = []
     unterminal_selectors = _pdb_parse_unterminal_residues(unterminal_residues)
+    terminal_selectors = _pdb_parse_terminal_residues(terminal_residues)
     insertion_count = 0
     current_residue_count = -1
     current_insertion_code = None
@@ -655,15 +736,22 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
                 skip_terminal_mapping = _pdb_match_unterminal_residue(
                     unterminal_selectors, chain_id_in_file, resindex - insertion_count, insertion_code
                 )
+                explicit_n_terminal, explicit_c_terminal = _pdb_match_terminal_residue(
+                    terminal_selectors, chain_id_in_file, resindex - insertion_count, insertion_code
+                )
                 if current_residue_index is None:
                     _pdb_judge_histone(judge_histone, residue_type_map, current_histone_information)
                     current_residue_count += 1
                     current_resname = resname
                     current_insertion_code = insertion_code
-                    if not skip_terminal_mapping and resname in GlobalSetting.PDBResidueNameMap["head"].keys():
+                    should_map_head = explicit_n_terminal or (
+                        infer_terminals and not skip_terminal_mapping
+                    )
+                    if should_map_head and resname in GlobalSetting.PDBResidueNameMap["head"].keys():
                         resname = GlobalSetting.PDBResidueNameMap["head"][resname]
                     residue_type_map.append(resname)
                     residue_unterminal_map.append(skip_terminal_mapping)
+                    residue_terminal_map.append((explicit_n_terminal, explicit_c_terminal))
                     current_residue_index = resindex
                     chain[chain_id][resindex] = current_residue_count
                 elif (current_residue_index != resindex or current_insertion_code != insertion_code) or \
@@ -676,9 +764,12 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
                         insertion_count += 1
                         resindex += 1
                     current_residue_index = resindex
+                    if explicit_n_terminal and resname in GlobalSetting.PDBResidueNameMap["head"].keys():
+                        resname = GlobalSetting.PDBResidueNameMap["head"][resname]
                     chain[chain_id][resindex] = current_residue_count
                     residue_type_map.append(resname)
                     residue_unterminal_map.append(skip_terminal_mapping)
+                    residue_terminal_map.append((explicit_n_terminal, explicit_c_terminal))
                 if judge_histone and resname in GlobalSetting.HISMap["HIS"].keys():
                     if atomname == GlobalSetting.HISMap["DeltaH"]:
                         current_histone_information["DeltaH"] = True
@@ -693,7 +784,7 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
                 current_insertion_code = None
                 insertion_count = 0
                 chain_id_processed.add(chain_id)
-                if residue_type_map and not residue_unterminal_map[-1] and \
+                if infer_terminals and residue_type_map and not residue_unterminal_map[-1] and \
                         residue_type_map[-1] in GlobalSetting.PDBResidueNameMap["tail"].keys():
                     residue_type_map[-1] = GlobalSetting.PDBResidueNameMap["tail"][residue_type_map[-1]]
                 _pdb_judge_histone(judge_histone, residue_type_map, current_histone_information)
@@ -711,22 +802,19 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
                 connects.append(line)
 
         current_residue_index = None
-        if residue_type_map and not residue_unterminal_map[-1] and \
+        if infer_terminals and residue_type_map and not residue_unterminal_map[-1] and \
                 residue_type_map[-1] in GlobalSetting.PDBResidueNameMap["tail"].keys():
             residue_type_map[-1] = GlobalSetting.PDBResidueNameMap["tail"][residue_type_map[-1]]
-        head_residue_names = set(GlobalSetting.PDBResidueNameMap["head"].values())
-        for residue_index in oxt_residue_indices:
-            if residue_index < 0 or residue_index >= len(residue_type_map):
-                continue
-            if residue_unterminal_map[residue_index]:
-                continue
-            residue_name = residue_type_map[residue_index]
-            protein_residues = getattr(GlobalSetting, "PDBProteinResidueNames", set())
-            if residue_name in protein_residues and residue_name in GlobalSetting.PDBResidueNameMap["tail"].keys():
-                residue_type_map[residue_index] = GlobalSetting.PDBResidueNameMap["tail"][residue_name]
-            elif residue_name in head_residue_names and residue_name[1:] in protein_residues and \
-                    residue_name[1:] in GlobalSetting.PDBResidueNameMap["tail"].keys():
-                residue_type_map[residue_index] = "C" + residue_name[1:]
+        if infer_terminals:
+            for residue_index in oxt_residue_indices:
+                if residue_index < 0 or residue_index >= len(residue_type_map):
+                    continue
+                if residue_unterminal_map[residue_index]:
+                    continue
+                residue_type_map[residue_index] = _pdb_apply_tail_mapping(residue_type_map[residue_index])
+        for residue_index, (_, explicit_c_terminal) in enumerate(residue_terminal_map):
+            if explicit_c_terminal:
+                residue_type_map[residue_index] = _pdb_apply_tail_mapping(residue_type_map[residue_index])
 
         _pdb_ssbond_before(chain, residue_type_map, ssbonds)
         atom_map = _pdb_add_residue(file, molecule, position_need,

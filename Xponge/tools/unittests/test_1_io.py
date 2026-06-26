@@ -978,6 +978,49 @@ TER
     assert p.residues[0].name == "VAL"
     assert p.residues[1].name == "CTRP"
 
+
+def test_pdb_explicit_terminal_residues_disable_inference():
+    """
+        test explicit terminal selectors as the only source of terminal mapping
+    """
+    import Xponge
+    import Xponge.forcefield.amber.ff14sb
+    s = StringIO(r"""
+ATOM      1  N   VAL A   2       0.000   0.000   0.000  1.00  0.00           N
+ATOM      2  CA  VAL A   2       1.000   0.000   0.000  1.00  0.00           C
+ATOM      3  C   VAL A   2       2.000   0.000   0.000  1.00  0.00           C
+ATOM      4  O   VAL A   2       3.000   0.000   0.000  1.00  0.00           O
+ATOM      5  N   TRP A   3       4.000   0.000   0.000  1.00  0.00           N
+ATOM      6  CA  TRP A   3       5.000   0.000   0.000  1.00  0.00           C
+ATOM      7  C   TRP A   3       6.000   0.000   0.000  1.00  0.00           C
+ATOM      8  O   TRP A   3       7.000   0.000   0.000  1.00  0.00           O
+TER
+""")
+    p = Xponge.load_pdb(
+        s,
+        ignore_hydrogen=True,
+        terminal_residues=[{"chain_id": "A", "res_seq": 2, "n_terminal": True}],
+        infer_terminals=False,
+    )
+    assert p.residues[0].name == "NVAL"
+    assert p.residues[1].name == "TRP"
+
+    s = StringIO(r"""
+ATOM      1  N   VAL     2       0.000   0.000   0.000  1.00  0.00           N
+ATOM      2  CA  VAL     2       1.000   0.000   0.000  1.00  0.00           C
+ATOM      3  C   VAL     2       2.000   0.000   0.000  1.00  0.00           C
+ATOM      4  O   VAL     2       3.000   0.000   0.000  1.00  0.00           O
+TER
+""")
+    p = Xponge.load_pdb(
+        s,
+        ignore_hydrogen=True,
+        terminal_residues=[{"chain_id": "", "res_seq": 2, "n_terminal": True}],
+        infer_terminals=False,
+    )
+    assert p.residues[0].name == "NVAL"
+
+
 def test_pdb_hybrid36_atom_serial():
     """
         test loading PDB with hybrid-36 atom serials

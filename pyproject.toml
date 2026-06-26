@@ -46,6 +46,7 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["."]
+include = ["Xponge*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.mol2", "*.frcmod", "*.dat", "*.itp"]
