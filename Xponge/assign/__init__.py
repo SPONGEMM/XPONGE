@@ -760,7 +760,7 @@ The function will receive the assignment as input, and give True or False as out
         method = method.upper()
         if method == "RESP":
             from . import resp
-            self.charge = resp.RESP_Fit(self, basis=parameters.get("basis", "6-31g*"), opt=parameters.get("opt", False),
+            self.charge = resp.RESP_Fit(self, basis=parameters.get("basis", None), opt=parameters.get("opt", False),
                                         charge=parameters.get("charge", int(round(sum(self.formal_charge)))),
                                         spin=parameters.get("spin", 0),
                                         backend=parameters.get("backend", None),

@@ -56,6 +56,8 @@ def _update_assign_coordinates(assign, coordinates_angstrom):
 
 def run_scf(molecule: QMMolecule, options: QMRunOptions, assign=None, return_timings: bool = False) -> SCFResult:
     np, psi4 = require_numpy_psi4()
+    if options.ecp is not None or not isinstance(options.basis, str):
+        raise QMCapabilityError(f"{name} does not support resolved RESP basis/ECP maps; use backend='pyscf'")
     timings = {}
     total_start = time.perf_counter()
     psi4.core.be_quiet()
@@ -171,6 +173,8 @@ def optimize_geometry(molecule: QMMolecule, options: QMRunOptions, assign=None, 
         QMRunOptions(
             backend=options.backend,
             basis=options.basis,
+            ecp=options.ecp,
+            cart=options.cart,
             method=options.method,
             reference=options.reference,
             optimize_geometry=True,

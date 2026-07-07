@@ -39,6 +39,91 @@ def test_tpacm4():
     Xponge.Xprint(assign.charge)
 
 
+def test_resp_parameters_select_standard_basis_and_mk_radius():
+    from Xponge.qm.resp_parameters import get_resp_mk_radius, select_resp_basis_family
+
+    assert select_resp_basis_family({"C", "H", "O"}) == "6-31G*"
+    assert select_resp_basis_family({"C", "H", "I"}) == "CEP-31G"
+    assert select_resp_basis_family({"C", "H", "U"}) == "SDD"
+    assert get_resp_mk_radius("I") == pytest.approx(1.99)
+    assert get_resp_mk_radius("Be") == pytest.approx(1.7)
+
+
+def test_resp_basis_resolver_maps_iodine_cep31g_to_sbkjc():
+    from Xponge.qm.resp_basis import resolve_default_resp_basis
+
+    resolved = resolve_default_resp_basis({"C", "H", "I"})
+
+    assert resolved.label == "CEP-31G"
+    assert resolved.basis == {"H": "dz", "C": "sbkjc", "I": "sbkjc"}
+    assert resolved.ecp == {"C": "sbkjc", "I": "sbkjc"}
+    assert resolved.cart is True
+
+
+def test_resp_basis_resolver_keeps_sdd_separate_from_cep31g():
+    from Xponge.qm.resp_basis import resolve_resp_basis
+
+    cep = resolve_resp_basis("CEP-31G", {"I"})
+    sdd = resolve_resp_basis("SDD", {"I"})
+
+    assert cep.basis == {"I": "sbkjc"}
+    assert cep.ecp == {"I": "sbkjc"}
+    assert sdd.basis == {"I": "stuttgart"}
+    assert sdd.ecp == {"I": "stuttgart"}
+
+
+def test_resp_default_setup_passes_resolved_basis_ecp_cart_and_mk_radii(monkeypatch):
+    import numpy as np
+    import Xponge
+    from Xponge.assign import resp
+
+    assign = Xponge.Assign("METHYL_IODIDE")
+    for index, element in enumerate(["C", "H", "H", "H", "I"]):
+        assign.add_atom(element, float(index), 0.0, 0.0, name=f"{element}{index + 1}")
+    assign.add_bond(0, 1, 1)
+    assign.add_bond(0, 2, 1)
+    assign.add_bond(0, 3, 1)
+    assign.add_bond(0, 4, 1)
+    assign.charge = np.zeros(5)
+    calls = {}
+
+    class FakeSCF:
+        backend_name = "fake"
+        coordinates_bohr = np.zeros((5, 3))
+        nuclear_charges = np.array([6.0, 1.0, 1.0, 1.0, 53.0])
+
+    class FakeESP:
+        electronic_esp_au = np.zeros(2)
+
+    def fake_run_scf(assign, *, backend=None, basis=None, ecp=None, cart=None, charge=0, spin=0, optimize_geometry=False):
+        calls["scf"] = (basis, ecp, cart, charge, spin, optimize_geometry)
+        return FakeSCF()
+
+    def fake_grid(assign, atom_coordinates_bohr, area_density=1.0, layer=4, radius=None):
+        calls["radius"] = dict(radius)
+        return np.zeros((2, 3))
+
+    monkeypatch.setattr(resp.qm_scheduler, "run_scf", fake_run_scf)
+    monkeypatch.setattr(resp.qm_scheduler, "compute_esp_on_grid", lambda *args, **kwargs: FakeESP())
+    monkeypatch.setattr(resp.resp_core, "get_mk_grid", fake_grid)
+    monkeypatch.setattr(resp.resp_core, "fit_resp_from_esp", lambda *args, **kwargs: np.zeros(5))
+
+    result = resp.resp_fit(assign, backend="pyscf", charge=0, return_metadata=True)
+
+    assert calls["scf"] == (
+        {"C": "sbkjc", "H": "dz", "I": "sbkjc"},
+        {"C": "sbkjc", "I": "sbkjc"},
+        True,
+        0,
+        0,
+        False,
+    )
+    assert calls["radius"]["I"] == pytest.approx(1.99)
+    assert calls["radius"]["C"] == pytest.approx(1.61)
+    assert result["charges"].shape == (5,)
+    assert result["metadata"]["basis_family"] == "CEP-31G"
+
+
 def test_resp_second_stage_hydrogen_groups_are_not_restrained():
     """
         Regression:

@@ -4,20 +4,9 @@ from __future__ import annotations
 
 from .. import Assign
 from ..assign import resp as resp_module
+from ..qm.resp_parameters import get_resp_mk_radius
 from ._compat import atom_element, atom_id, atom_to_residue_map, refresh_molecule_indices
 from .selection import infer_element_symbol
-
-_RESP_DEFAULT_RADII = {
-    "H": 1.2,
-    "C": 1.5,
-    "N": 1.5,
-    "O": 1.4,
-    "P": 1.8,
-    "S": 1.75,
-    "F": 1.35,
-    "Cl": 1.7,
-    "Br": 2.3,
-}
 
 _MCPB_METAL_RESP_RADII = {
     "Li": 1.82,
@@ -64,18 +53,13 @@ def _resp_radius_overrides(request, local_model) -> dict[str, float]:
         residue = request.molecule.residues[source_atom_to_residue[source_atom_id]]
         info = ion_info_by_atom.get(source_atom_id)
         element = info.element if info is not None else infer_element_symbol(atom_element(atom), atom.name, residue.name)
-        if element in _RESP_DEFAULT_RADII:
-            continue
         if info is not None and "resp_radius" in info.metadata:
             radius[element] = float(info.metadata["resp_radius"])
             continue
         if element in _MCPB_METAL_RESP_RADII:
             radius[element] = _MCPB_METAL_RESP_RADII[element]
             continue
-        raise ValueError(
-            f"MCPB local RESP requires an explicit resp_radius for element {element}. "
-            "Pass it in ion_info[i]['metadata']['resp_radius']."
-        )
+        get_resp_mk_radius(element)
     return radius
 
 
@@ -131,7 +115,7 @@ def run_local_charge_refit(request, local_model):
     spin = _local_spin(request, local_model)
     charges = resp_module.resp_fit(
         assignment,
-        basis=request.basis or "6-31g*",
+        basis=request.basis,
         charge=total_charge,
         spin=spin,
         grid_density=1,

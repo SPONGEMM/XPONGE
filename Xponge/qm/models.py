@@ -21,7 +21,9 @@ class QMMolecule:
 @dataclass(slots=True)
 class QMRunOptions:
     backend: str | None = None
-    basis: str = "6-31g*"
+    basis: Any = "6-31g*"
+    ecp: Any = None
+    cart: bool | None = None
     method: str = "scf"
     reference: str | None = None
     optimize_geometry: bool = False

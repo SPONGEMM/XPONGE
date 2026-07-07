@@ -70,13 +70,26 @@ def qmmolecule_from_assign(assign, charge, spin):
     )
 
 
-def run_scf(assign, *, backend=None, basis="6-31g*", charge=0, spin=0, optimize_geometry=False, return_timings=False):
+def run_scf(
+    assign,
+    *,
+    backend=None,
+    basis="6-31g*",
+    ecp=None,
+    cart=None,
+    charge=0,
+    spin=0,
+    optimize_geometry=False,
+    return_timings=False,
+):
     backend_name = normalize_backend_name(backend)
     backend_module = get_backend(backend_name)
     molecule = qmmolecule_from_assign(assign, charge, spin)
     options = QMRunOptions(
         backend=backend_name,
         basis=basis,
+        ecp=ecp,
+        cart=cart,
         method="scf",
         reference=None,
         optimize_geometry=optimize_geometry,
@@ -107,13 +120,25 @@ def compute_esp_on_grid(scf_result, grid_points_bohr, *, memory_limit=None, chun
         backend_import_or_hint(scf_result.backend_name, exc)
 
 
-def optimize_geometry(assign, *, backend=None, basis="6-31g*", charge=0, spin=0, return_timings=False) -> OptimizationResult:
+def optimize_geometry(
+    assign,
+    *,
+    backend=None,
+    basis="6-31g*",
+    ecp=None,
+    cart=None,
+    charge=0,
+    spin=0,
+    return_timings=False,
+) -> OptimizationResult:
     backend_name = normalize_backend_name(backend)
     backend_module = get_backend(backend_name)
     molecule = qmmolecule_from_assign(assign, charge, spin)
     options = QMRunOptions(
         backend=backend_name,
         basis=basis,
+        ecp=ecp,
+        cart=cart,
         method="scf",
         reference=None,
         optimize_geometry=True,
@@ -126,13 +151,25 @@ def optimize_geometry(assign, *, backend=None, basis="6-31g*", charge=0, spin=0,
         backend_import_or_hint(backend_name, exc)
 
 
-def compute_hessian(assign, *, backend=None, basis="6-31g*", charge=0, spin=0, return_timings=False) -> HessianResult:
+def compute_hessian(
+    assign,
+    *,
+    backend=None,
+    basis="6-31g*",
+    ecp=None,
+    cart=None,
+    charge=0,
+    spin=0,
+    return_timings=False,
+) -> HessianResult:
     backend_name = normalize_backend_name(backend)
     backend_module = get_backend(backend_name)
     molecule = qmmolecule_from_assign(assign, charge, spin)
     options = QMRunOptions(
         backend=backend_name,
         basis=basis,
+        ecp=ecp,
+        cart=cart,
         method="scf",
         reference=None,
         optimize_geometry=False,

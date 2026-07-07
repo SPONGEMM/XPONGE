@@ -46,13 +46,18 @@ def _build_atom_block(molecule: QMMolecule):
 
 
 def _build_molecule(molecule: QMMolecule, options: QMRunOptions, gto):
-    return gto.M(
-        atom=_build_atom_block(molecule),
-        verbose=0,
-        basis=options.basis,
-        charge=molecule.total_charge,
-        spin=molecule.spin,
-    )
+    kwargs = {
+        "atom": _build_atom_block(molecule),
+        "verbose": 0,
+        "basis": options.basis,
+        "charge": molecule.total_charge,
+        "spin": molecule.spin,
+    }
+    if options.ecp is not None:
+        kwargs["ecp"] = options.ecp
+    if options.cart is not None:
+        kwargs["cart"] = bool(options.cart)
+    return gto.M(**kwargs)
 
 
 def _build_wavefunction(mol, molecule: QMMolecule, scf):
@@ -286,6 +291,8 @@ def optimize_geometry(molecule: QMMolecule, options: QMRunOptions, assign=None, 
         QMRunOptions(
             backend=options.backend,
             basis=options.basis,
+            ecp=options.ecp,
+            cart=options.cart,
             method=options.method,
             reference=options.reference,
             optimize_geometry=True,

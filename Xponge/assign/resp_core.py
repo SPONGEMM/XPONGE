@@ -7,11 +7,10 @@ from __future__ import annotations
 import numpy as np
 
 from ..helper import get_fibonacci_grid
+from ..qm.resp_parameters import RESP_PARAMETERS_BY_SYMBOL, get_resp_mk_radius
 
 # Pay Attention To !!!UNIT!!!
-default_radius = {"H": 1.2, "C": 1.5, "N": 1.5,
-                  "O": 1.4, "P": 1.8, "S": 1.75,
-                  "F": 1.35, "Cl": 1.7, "Br": 2.3}
+default_radius = {symbol: get_resp_mk_radius(symbol) for symbol in RESP_PARAMETERS_BY_SYMBOL}
 
 
 class _RadiusDict(dict):
