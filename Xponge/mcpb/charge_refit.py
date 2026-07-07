@@ -94,10 +94,10 @@ def build_local_resp_assignment(request, local_model):
 
     for residue in local_model.molecule.residues:
         for template_atom, bonded_atoms in residue.type.connectivity.items():
-            atom1 = residue.atoms[residue.type.atom2index(template_atom)]
+            atom1 = residue.name2atom(template_atom.name)
             atom1_id = int(local_model.molecule.atom_index[atom1])
             for template_neighbor in bonded_atoms:
-                atom2 = residue.atoms[residue.type.atom2index(template_neighbor)]
+                atom2 = residue.name2atom(template_neighbor.name)
                 atom2_id = int(local_model.molecule.atom_index[atom2])
                 if atom1_id < atom2_id:
                     assignment.add_bond(atom1_id, atom2_id, 1)

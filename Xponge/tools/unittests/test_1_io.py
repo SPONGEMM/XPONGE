@@ -14,6 +14,7 @@ __all__ = ["test_pdb_general",
            "test_pdb_hybrid36_export_overflow",
            "test_pdb_export_metadata",
            "test_set_box_padding",
+           "test_save_mol2_uses_actual_residue_atom_order",
            "test_mol2_general"]
 
 def test_pdb_general():
@@ -1231,6 +1232,51 @@ XLP   12.00  0.00
     assert float(atom_line[30:38]) == 72.610
     assert float(atom_line[38:46]) == 47.770
     assert float(atom_line[46:54]) == 57.850
+
+
+def test_save_mol2_uses_actual_residue_atom_order(tmp_path):
+    """
+        test saving MOL2 bonds when residue atom order differs from the template
+    """
+    import Xponge
+    import Xponge.forcefield.base.mass_base
+    import Xponge.forcefield.base.charge_base
+
+    Xponge.AtomType.New_From_String(r"""
+name  mass   charge[e]
+XORD  12.00  0.00
+""")
+    residue_type = Xponge.ResidueType(name="XORD")
+    residue_type.add_atom("A", "XORD", 0.0, 0.0, 0.0)
+    residue_type.add_atom("B", "XORD", 1.0, 0.0, 0.0)
+    residue_type.add_atom("C", "XORD", 2.0, 0.0, 0.0)
+    residue_type.add_connectivity("A", "B")
+    residue_type.add_connectivity("B", "C")
+
+    residue = Xponge.Residue(residue_type, name="XORD")
+    residue.add_atom("B")
+    residue.add_atom("C")
+    residue.add_atom("A")
+    mol = Xponge.Molecule(name="ORDER")
+    mol.add_residue(residue)
+
+    outfile = tmp_path / "order.mol2"
+    Xponge.save_mol2(mol, str(outfile))
+
+    bonds = set()
+    in_bond_section = False
+    for line in outfile.read_text().splitlines():
+        if line == "@<TRIPOS>BOND":
+            in_bond_section = True
+            continue
+        if line.startswith("@<TRIPOS>") and in_bond_section:
+            break
+        if in_bond_section and line.strip():
+            _, atom1, atom2, *_ = line.split()
+            bonds.add(tuple(sorted((int(atom1), int(atom2)))))
+
+    assert bonds == {(1, 2), (1, 3)}
+
 
 def test_mol2_general():
     """
