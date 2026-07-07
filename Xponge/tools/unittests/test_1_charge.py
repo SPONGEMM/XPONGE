@@ -361,6 +361,51 @@ def test_qm_scheduler_runs_pyscf_esp_grid_chunk_mode_smoke():
     assert esp_result.diagnostics["grid_chunk_size"] == 1
 
 
+def test_pyscf_esp_fake_charge_molecule_inherits_cartesian_basis():
+    """
+        Test PySCF ESP fake charge molecules inherit the main molecule cart setting
+    """
+    import numpy as np
+    from types import SimpleNamespace
+    from Xponge.qm.backends import pyscf_backend
+
+    fake_molecules = []
+
+    class FakeGTO:
+        @staticmethod
+        def fakemol_for_charges(grid_points):
+            fakemol = SimpleNamespace(cart=False, grid_points=np.asarray(grid_points))
+            fake_molecules.append(fakemol)
+            return fakemol
+
+    class FakeDFIncore:
+        @staticmethod
+        def aux_e2(mol, fakemol, shls_slice=None):
+            assert fakemol.cart is True
+            if shls_slice is not None:
+                grid_count = shls_slice[-1] - shls_slice[-2]
+            else:
+                grid_count = len(fakemol.grid_points)
+            return np.ones((1, 1, grid_count))
+
+    fake_df = SimpleNamespace(incore=FakeDFIncore)
+    mol = SimpleNamespace(cart=True)
+    dm = np.ones((1, 1))
+    grids = np.zeros((2, 3))
+
+    full = pyscf_backend._compute_esp_full(np, FakeGTO, fake_df, mol, dm, grids)
+    chunked = pyscf_backend._compute_esp_grid_chunked(np, FakeGTO, fake_df, mol, dm, grids, 1)
+    dual = pyscf_backend._compute_esp_shell_grid_chunked(
+        np, FakeGTO, fake_df, mol, dm, grids, [(0, 1, 0, 1)], 1
+    )
+
+    assert full.tolist() == [1.0, 1.0]
+    assert chunked.tolist() == [1.0, 1.0]
+    assert dual.tolist() == [1.0, 1.0]
+    assert fake_molecules
+    assert all(fakemol.cart is True for fakemol in fake_molecules)
+
+
 def test_qm_scheduler_runs_pyscf_esp_dual_chunk_mode_smoke():
     """
         Test the PySCF backend can execute dual shell/grid chunk ESP evaluation
