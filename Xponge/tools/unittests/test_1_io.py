@@ -8,6 +8,9 @@ __all__ = ["test_pdb_general",
            "test_pdb_oxt_terminal_with_calcium_ion",
            "test_pdb_ssbond_link_and_conect",
            "test_pdb_unterminal_residue_overrides",
+           "test_mmcif_explicit_terminal_residues_disable_inference",
+           "test_mmcif_internal_and_external_residue_links",
+           "test_mmcif_multi_model_requires_model_id",
            "test_pdb_hybrid36_atom_serial",
            "test_pdb_hybrid36_resseq",
            "test_pdb_hybrid36_export_resseq_and_link",
@@ -1020,6 +1023,168 @@ TER
         infer_terminals=False,
     )
     assert p.residues[0].name == "NVAL"
+
+
+def test_mmcif_explicit_terminal_residues_disable_inference():
+    """
+        test explicit terminal selectors as the only source of terminal mapping for mmCIF
+    """
+    import Xponge
+    import Xponge.forcefield.amber.ff14sb
+    s = StringIO(r"""
+data_test
+loop_
+_atom_site.group_PDB
+_atom_site.id
+_atom_site.type_symbol
+_atom_site.label_atom_id
+_atom_site.label_alt_id
+_atom_site.label_comp_id
+_atom_site.label_asym_id
+_atom_site.label_entity_id
+_atom_site.label_seq_id
+_atom_site.pdbx_PDB_ins_code
+_atom_site.Cartn_x
+_atom_site.Cartn_y
+_atom_site.Cartn_z
+_atom_site.occupancy
+_atom_site.B_iso_or_equiv
+_atom_site.auth_seq_id
+_atom_site.auth_comp_id
+_atom_site.auth_asym_id
+_atom_site.auth_atom_id
+_atom_site.pdbx_PDB_model_num
+ATOM 1 N N . VAL A 1 1 ? 0.000 0.000 0.000 1.00 0.00 2 VAL A N 1
+ATOM 2 C CA . VAL A 1 1 ? 1.000 0.000 0.000 1.00 0.00 2 VAL A CA 1
+ATOM 3 C C . VAL A 1 1 ? 2.000 0.000 0.000 1.00 0.00 2 VAL A C 1
+ATOM 4 O O . VAL A 1 1 ? 3.000 0.000 0.000 1.00 0.00 2 VAL A O 1
+ATOM 5 N N . TRP A 1 2 ? 4.000 0.000 0.000 1.00 0.00 3 TRP A N 1
+ATOM 6 C CA . TRP A 1 2 ? 5.000 0.000 0.000 1.00 0.00 3 TRP A CA 1
+ATOM 7 C C . TRP A 1 2 ? 6.000 0.000 0.000 1.00 0.00 3 TRP A C 1
+ATOM 8 O O . TRP A 1 2 ? 7.000 0.000 0.000 1.00 0.00 3 TRP A O 1
+#
+""")
+    p = Xponge.load_mmcif(
+        s,
+        ignore_hydrogen=True,
+        terminal_residues=[{"chain_id": "A", "res_seq": 2, "n_terminal": True}],
+        infer_terminals=False,
+    )
+    assert p.residues[0].name == "NVAL"
+    assert p.residues[1].name == "TRP"
+    assert p.get_residue_link(p.residues[0].C, p.residues[1].N) is not None
+
+
+def test_mmcif_internal_and_external_residue_links():
+    """
+        test mmCIF internal links are loaded first and external residue_links are deduplicated
+    """
+    import Xponge
+    Xponge.AtomType.New_From_String(r"""
+name
+MMA
+MMB
+""")
+    residue_a = Xponge.ResidueType(name="MMA")
+    residue_a.add_atom("A1", Xponge.AtomType.get_type("MMA"), 0, 0, 0)
+    residue_b = Xponge.ResidueType(name="MMB")
+    residue_b.add_atom("B1", Xponge.AtomType.get_type("MMB"), 0, 0, 0)
+    s = StringIO(r"""
+data_test
+loop_
+_atom_site.group_PDB
+_atom_site.id
+_atom_site.type_symbol
+_atom_site.label_atom_id
+_atom_site.label_alt_id
+_atom_site.label_comp_id
+_atom_site.label_asym_id
+_atom_site.label_entity_id
+_atom_site.label_seq_id
+_atom_site.pdbx_PDB_ins_code
+_atom_site.Cartn_x
+_atom_site.Cartn_y
+_atom_site.Cartn_z
+_atom_site.occupancy
+_atom_site.B_iso_or_equiv
+_atom_site.auth_seq_id
+_atom_site.auth_comp_id
+_atom_site.auth_asym_id
+_atom_site.auth_atom_id
+_atom_site.pdbx_PDB_model_num
+HETATM 1 C A1 . MMA X 1 1 ? 0.000 0.000 0.000 1.00 0.00 10 MMA X A1 1
+HETATM 2 C B1 . MMB X 1 2 ? 1.000 0.000 0.000 1.00 0.00 11 MMB X B1 1
+#
+loop_
+_struct_conn.id
+_struct_conn.conn_type_id
+_struct_conn.ptnr1_label_asym_id
+_struct_conn.ptnr1_label_comp_id
+_struct_conn.ptnr1_label_seq_id
+_struct_conn.pdbx_ptnr1_PDB_ins_code
+_struct_conn.ptnr1_label_atom_id
+_struct_conn.ptnr2_label_asym_id
+_struct_conn.ptnr2_label_comp_id
+_struct_conn.ptnr2_label_seq_id
+_struct_conn.pdbx_ptnr2_PDB_ins_code
+_struct_conn.ptnr2_label_atom_id
+1 covale X MMA 1 ? A1 X MMB 2 ? B1
+#
+""")
+    p = Xponge.load_mmcif(
+        s,
+        residue_links=[{
+            "atom_a": {"chain_id": "X", "residue_seq": 10, "residue_name": "MMA", "atom_name": "A1"},
+            "atom_b": {"chain_id": "X", "residue_seq": 11, "residue_name": "MMB", "atom_name": "B1"},
+        }],
+    )
+    assert p.get_residue_link(p.residues[0].A1, p.residues[1].B1) is not None
+    assert len(p.residue_links) == 1
+
+
+def test_mmcif_multi_model_requires_model_id():
+    """
+        test multi-model mmCIF inputs cannot be loaded without an explicit model id
+    """
+    import Xponge
+    import Xponge.forcefield.amber.ff14sb
+    s = StringIO(r"""
+data_test
+loop_
+_atom_site.group_PDB
+_atom_site.id
+_atom_site.type_symbol
+_atom_site.label_atom_id
+_atom_site.label_alt_id
+_atom_site.label_comp_id
+_atom_site.label_asym_id
+_atom_site.label_entity_id
+_atom_site.label_seq_id
+_atom_site.pdbx_PDB_ins_code
+_atom_site.Cartn_x
+_atom_site.Cartn_y
+_atom_site.Cartn_z
+_atom_site.occupancy
+_atom_site.B_iso_or_equiv
+_atom_site.auth_seq_id
+_atom_site.auth_comp_id
+_atom_site.auth_asym_id
+_atom_site.auth_atom_id
+_atom_site.pdbx_PDB_model_num
+ATOM 1 N N . GLY A 1 1 ? 0.000 0.000 0.000 1.00 0.00 1 GLY A N 1
+ATOM 2 N N . GLY A 1 1 ? 1.000 0.000 0.000 1.00 0.00 1 GLY A N 2
+#
+""")
+    try:
+        Xponge.load_mmcif(s)
+    except ValueError as exc:
+        assert "multiple models" in str(exc)
+    else:
+        raise RuntimeError("Expected ValueError for multi-model mmCIF without model_id")
+
+    s.seek(0)
+    p = Xponge.load_mmcif(s, model_id=2)
+    assert len(p.residues) == 1
 
 
 def test_pdb_hybrid36_atom_serial():

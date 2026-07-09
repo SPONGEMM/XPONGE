@@ -72,7 +72,7 @@ The atoms in a ``Residue`` or a ``ResidueType`` can be obtained by their names. 
 
 """
 
-__version__ = "1.6b1"
+__version__ = "1.6b2"
 
 import os
 import time
@@ -90,7 +90,7 @@ from .helper import GlobalSetting, Type, AbstractMolecule, ResidueType, Entity, 
     AtomType, set_global_alternative_names, generate_new_pairwise_force_type, generate_new_bonded_force_type, source, \
     Xprint, debug
 from .helper.file import *
-from .load import load_pdb, load_mol2, load_ffitp, load_molitp, load_molpsf, load_gro, \
+from .load import load_pdb, load_mmcif, load_mol2, load_ffitp, load_molitp, load_molpsf, load_gro, \
     load_rst7, load_frcmod, load_parmdat, load_coordinate
 from .build import save_mol2, save_pdb, save_sponge_input, save_gro, build_bonded_force, get_mindsponge_system_energy
 from .process import impose_bond, impose_angle, impose_dihedral, add_solvent_box, h_mass_repartition, solvent_replace, \
