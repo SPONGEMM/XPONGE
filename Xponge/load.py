@@ -1132,7 +1132,7 @@ def load_mmcif(file, judge_histone=True, position_need="A", ignore_hydrogen=Fals
             _mmcif_first(row, [f"_struct_conn.{partner}_auth_atom_id", f"_struct_conn.{partner}_label_atom_id"]),
             _mmcif_first(row, [f"_struct_conn.pdbx_{partner}_pdb_ins_code"]),
         )
-        return atom_by_label_key.get(label_key) or atom_by_auth_key.get(auth_key)
+        return atom_by_auth_key.get(auth_key) or atom_by_label_key.get(label_key)
 
     for row in _mmcif_rows(data, "struct_conn"):
         atom1 = resolve_struct_conn_atom(row, "ptnr1")

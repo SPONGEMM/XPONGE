@@ -4,7 +4,83 @@
 from io import StringIO
 
 __all__ = ["test_cof",
-           "test_som"]
+           "test_som",
+           "test_mmcif_struct_conn_prefers_auth_identity"]
+
+
+MMCIF_AUTH_LABEL_COLLISION_TEXT = """\
+data_auth_label_collision
+loop_
+_atom_site.group_PDB
+_atom_site.id
+_atom_site.type_symbol
+_atom_site.label_atom_id
+_atom_site.auth_atom_id
+_atom_site.label_comp_id
+_atom_site.auth_comp_id
+_atom_site.label_asym_id
+_atom_site.auth_asym_id
+_atom_site.label_seq_id
+_atom_site.auth_seq_id
+_atom_site.pdbx_PDB_ins_code
+_atom_site.label_alt_id
+_atom_site.Cartn_x
+_atom_site.Cartn_y
+_atom_site.Cartn_z
+_atom_site.occupancy
+_atom_site.B_iso_or_equiv
+_atom_site.pdbx_PDB_model_num
+ATOM 1 N N N ALA ALA A A 1 -1 ? . 0.000 0.000 0.000 1.00 0.00 1
+ATOM 2 C CA CA ALA ALA A A 1 -1 ? . 1.000 0.000 0.000 1.00 0.00 1
+ATOM 3 C C C ALA ALA A A 1 -1 ? . 2.000 0.000 0.000 1.00 0.00 1
+ATOM 4 O O O ALA ALA A A 1 -1 ? . 3.000 0.000 0.000 1.00 0.00 1
+ATOM 5 N N N GLY GLY A A 2 0 ? . 4.000 0.000 0.000 1.00 0.00 1
+ATOM 6 C CA CA GLY GLY A A 2 0 ? . 5.000 0.000 0.000 1.00 0.00 1
+ATOM 7 C C C GLY GLY A A 2 0 ? . 6.000 0.000 0.000 1.00 0.00 1
+ATOM 8 O O O GLY GLY A A 2 0 ? . 7.000 0.000 0.000 1.00 0.00 1
+ATOM 9 N N N LYS LYS A A 3 1 ? . 8.000 0.000 0.000 1.00 0.00 1
+ATOM 10 C CA CA LYS LYS A A 3 1 ? . 9.000 0.000 0.000 1.00 0.00 1
+ATOM 11 C C C LYS LYS A A 3 1 ? . 10.000 0.000 0.000 1.00 0.00 1
+ATOM 12 O O O LYS LYS A A 3 1 ? . 11.000 0.000 0.000 1.00 0.00 1
+ATOM 13 N N N GLY GLY A A 4 2 ? . 12.000 0.000 0.000 1.00 0.00 1
+ATOM 14 C CA CA GLY GLY A A 4 2 ? . 13.000 0.000 0.000 1.00 0.00 1
+ATOM 15 C C C GLY GLY A A 4 2 ? . 14.000 0.000 0.000 1.00 0.00 1
+ATOM 16 O O O GLY GLY A A 4 2 ? . 15.000 0.000 0.000 1.00 0.00 1
+loop_
+_struct_conn.id
+_struct_conn.conn_type_id
+_struct_conn.ptnr1_label_asym_id
+_struct_conn.ptnr1_label_seq_id
+_struct_conn.ptnr1_label_comp_id
+_struct_conn.ptnr1_label_atom_id
+_struct_conn.ptnr2_label_asym_id
+_struct_conn.ptnr2_label_seq_id
+_struct_conn.ptnr2_label_comp_id
+_struct_conn.ptnr2_label_atom_id
+_struct_conn.pdbx_ptnr1_PDB_ins_code
+_struct_conn.pdbx_ptnr2_PDB_ins_code
+conn1 covale A 1 LYS C A 2 GLY N ? ?
+"""
+
+
+def test_mmcif_struct_conn_prefers_auth_identity():
+    """
+        struct_conn fields from Mokda CIF can contain auth identifiers under label tags.
+    """
+    import Xponge
+    import Xponge.forcefield.amber.ff14sb  # noqa: F401
+
+    molecule = Xponge.load_mmcif(StringIO(MMCIF_AUTH_LABEL_COLLISION_TEXT), infer_terminals=False)
+    peptide_links = []
+    for link in molecule.residue_links:
+        atom1, atom2 = link.atom1, link.atom2
+        if {atom1.name, atom2.name} != {"C", "N"}:
+            continue
+        c_atom = atom1 if atom1.name == "C" else atom2
+        n_atom = atom2 if atom1.name == "C" else atom1
+        peptide_links.append((c_atom.residue.residue_seq, n_atom.residue.residue_seq))
+
+    assert sorted(peptide_links) == [(-1, 0), (0, 1), (1, 2)]
 
 def test_cof():
     """
