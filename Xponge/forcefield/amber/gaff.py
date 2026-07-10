@@ -1,6 +1,10 @@
 """
 This **module** sets the basic configuration for gaff
 """
+from ._forcefield_family import activate_forcefield_family
+
+activate_forcefield_family("small_molecule", "gaff")
+
 from tempfile import TemporaryDirectory
 from ...helper import source, Xprint, set_real_global_variable
 from ._alternating import apply_amber_alternating_type_adjustment

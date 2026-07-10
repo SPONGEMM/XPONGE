@@ -1,6 +1,10 @@
 """
 This **module** set the basic configuration for ff19sb
 """
+from ._forcefield_family import activate_forcefield_family
+
+activate_forcefield_family("protein", "ff19sb")
+
 from ...helper import source, Xprint, set_real_global_variable
 
 source("....")

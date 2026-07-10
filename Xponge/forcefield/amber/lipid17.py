@@ -1,6 +1,10 @@
 """
 This **module** set the basic configuration for lipid17
 """
+from ._forcefield_family import activate_forcefield_family
+
+activate_forcefield_family("lipid", "lipid17")
+
 import json
 
 from ...helper import source, Xprint
