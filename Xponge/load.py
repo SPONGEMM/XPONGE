@@ -1383,12 +1383,13 @@ def load_coordinate(filename, mol=None):
 # amber Format
 ##########################################################################
 def _frcmod_nb14(line, atoms):
-    nb14ee = re.findall(r"SCEE=[\d+\.]+", line)
-    nb14lj = re.findall(r"SCNB=[\d+\.]+", line)
+    number = r"([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][+-]?\d+)?)"
+    nb14ee = re.search(r"SCEE\s*=\s*" + number, line)
+    nb14lj = re.search(r"SCNB\s*=\s*" + number, line)
     if not nb14ee and not nb14lj:
         return ""
-    nb14ee = 1.0 / float(nb14ee[0].split("=")[1]) if nb14ee else 1.0 / 1.2
-    nb14lj = 1.0 / float(nb14lj[0].split("=")[1]) if nb14lj else 1.0 / 2.0
+    nb14ee = 1.0 / float(nb14ee.group(1)) if nb14ee else 1.0 / 1.2
+    nb14lj = 1.0 / float(nb14lj.group(1)) if nb14lj else 1.0 / 2.0
     return f"{atoms[0]}-{atoms[3]} {nb14ee} {nb14lj}\n"
 
 
@@ -1432,18 +1433,23 @@ def _frcmod_atoms_words(line, n, last_atoms=None):
     :param n:
     :return:
     """
-    if line[0] != " ":
-        return [word.strip() for word in line[:n].split("-")], line[n:].split()
-    return [last_atoms, line[n:].split()]
+    atom_field = line[:n]
+    if atom_field.strip():
+        return [word.strip() for word in atom_field.split("-")], line[n:].split()
+    if last_atoms is None:
+        raise ValueError("Amber parameter continuation line has no preceding atom types")
+    return list(last_atoms), line[n:].split()
 
 
-def load_frcmod(filename, nbtype="RE"):
+def load_frcmod(filename, nbtype="RE", include_nb14=False):
     """
     This **function** is used to load a frcmod file
 
     :param filename: the name of the file to load
     :param nbtype: the non-bonded interaction recording type in the frcmod file.
-    :return: a list of strings, including atoms, bonds, angles, propers, impropers, ljs, cmap information respectively
+    :param include_nb14: whether to include non-bonded 1-4 scaling parameters in the return value
+    :return: a list of strings, including atoms, bonds, angles, propers, impropers, ljs, cmap information respectively;
+        when include_nb14 is True, nb14 parameters are inserted before cmap
     """
     with open(filename) as f:
         f.readline()
@@ -1452,6 +1458,8 @@ def load_frcmod(filename, nbtype="RE"):
         bonds = ["name  k[kcal/mol·A^-2]    b[A]\n"]
         angles = ["name  k[kcal/mol·rad^-2]    b[degree]\n"]
         propers = ["name  k[kcal/mol]    phi0[degree]    periodicity    reset\n"]
+        nb14s = ["name    kLJ    kee\n"]
+        last_dihedral_atoms = None
         reset = 1
         impropers = ["name  k[kcal/mol]    phi0[degree]    periodicity\n"]
         cmap = {}
@@ -1470,6 +1478,9 @@ def load_frcmod(filename, nbtype="RE"):
             words = line.split()
             if flag != "CMAP" and len(words) == 1:
                 flag = line.strip()
+                if flag[:4] == "DIHE":
+                    last_dihedral_atoms = None
+                    reset = 1
             elif flag[:4] == "MASS":
                 atom_types[words[0]] = words[1]
             elif flag[:4] == "BOND":
@@ -1479,11 +1490,13 @@ def load_frcmod(filename, nbtype="RE"):
                 atoms, words = _frcmod_atoms_words(line, 8)
                 angles.append("-".join(atoms) + "\t" + words[0] + "\t" + words[1] + "\n")
             elif flag[:4] == "DIHE":
-                atoms, words = _frcmod_atoms_words(line, 11)
+                atoms, words = _frcmod_atoms_words(line, 11, last_dihedral_atoms)
+                last_dihedral_atoms = atoms
                 propers.append(
                     "-".join(atoms) + "\t" + str(float(words[1]) / int(words[0])) + "\t" + words[2] + "\t" + str(
                         abs(int(float(words[3])))) + "\t" + str(reset) + "\n"
                 )
+                nb14s.append(_frcmod_nb14(line, atoms))
                 if int(float(words[3])) < 0:
                     reset = 0
                 else:
@@ -1512,8 +1525,10 @@ def load_frcmod(filename, nbtype="RE"):
         "".join(propers),
         "".join(impropers),
         "".join(ljs),
-        cmap,
     ]
+    if include_nb14:
+        toret.append("".join(nb14s))
+    toret.append(cmap)
     return toret
 
 

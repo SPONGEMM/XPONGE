@@ -158,7 +158,7 @@ def load_parameters_from_frcmod(filename, include_cmap=False, prefix=True):
     """
     if prefix:
         filename = os.path.join(AMBER_DATA_DIR, filename)
-    atoms, bonds, angles, propers, impropers, ljs, cmap = load_frcmod(filename)
+    atoms, bonds, angles, propers, impropers, ljs, nb14s, cmap = load_frcmod(filename, include_nb14=True)
 
     AtomType.New_From_String(atoms)
     bond_base.BondType.New_From_String(bonds)
@@ -166,6 +166,7 @@ def load_parameters_from_frcmod(filename, include_cmap=False, prefix=True):
     dihedral_base.ProperType.New_From_String(propers)
     dihedral_base.ImproperType.New_From_String(impropers)
     lj_base.LJType.New_From_String(ljs)
+    nb14_base.NB14Type.New_From_String(nb14s)
 
     if include_cmap:
         global AmberCMapType
