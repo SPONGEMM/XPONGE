@@ -158,9 +158,7 @@ _correct_extra_equivalence = resp_core._correct_extra_equivalence
 _get_a20_and_b20 = resp_core._get_a20_and_b20
 _find_restrained_second_stage_groups = resp_core._find_restrained_second_stage_groups
 
-set_global_alternative_names()
-
-Xprint("""Reference for resp.py:
+RESP_REFERENCE_TEXT = """Reference for resp.py:
 1. pyscf
   Q. Sun, T. C. Berkelbach, N. S. Blunt, G. H. Booth, S. Guo, Z. Li, J. Liu, J. McClain, S. Sharma, S. Wouters, and G. K.-L. Chan
     PySCF: the Python-based simulations of chemistry framework
@@ -179,4 +177,12 @@ Xprint("""Reference for resp.py:
     Journal of Physical Chemistry 1993 97(40) 10269-10280
     DOI: 10.1021/j100142a004
 
-""")
+"""
+
+
+def print_references():
+    """Print RESP references explicitly without creating an import-time side effect."""
+    Xprint(RESP_REFERENCE_TEXT)
+
+
+set_global_alternative_names()

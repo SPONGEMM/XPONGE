@@ -1390,7 +1390,7 @@ def _frcmod_nb14(line, atoms):
         return ""
     nb14ee = 1.0 / float(nb14ee.group(1)) if nb14ee else 1.0 / 1.2
     nb14lj = 1.0 / float(nb14lj.group(1)) if nb14lj else 1.0 / 2.0
-    return f"{atoms[0]}-{atoms[3]} {nb14ee} {nb14lj}\n"
+    return f"{atoms[0]}-{atoms[3]} {nb14lj} {nb14ee}\n"
 
 
 def _frcmod_cmap(line, cmap, temp_cmp, cmap_flag):
