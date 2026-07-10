@@ -59,5 +59,5 @@ qE-qF-qG-qH  1  0.2  0.0  1.0  SCEE=1.0 SCNB=1.0
     )
     parsed = load_frcmod(frcmod, include_nb14=True)
     nb14 = parsed[6]
-    assert "qA-qD 0.5 0.8333333333333334" in nb14
-    assert "qE-qH 1.0 1.0" in nb14
+    assert "qA-qB-qC-qD 0.5 0.8333333333333334" in nb14
+    assert "qE-qF-qG-qH 1.0 1.0" in nb14
