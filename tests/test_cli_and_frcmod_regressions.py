@@ -21,7 +21,7 @@ def _run_python(code, *args):
 
 def test_cli_version_and_plain_import_have_no_reference_side_effect():
     version = _run_python("", "-m", "Xponge", "-v")
-    assert version.stdout.strip() == "1.6b3"
+    assert version.stdout.strip() == "1.6b4"
     assert version.stderr == ""
 
     imported = _run_python("import Xponge\n")
