@@ -28,6 +28,8 @@ def _run(code):
         ("ff19sb", "ff14sb", "protein", "ff19sb", "ff14sb"),
         ("gaff", "gaff2", "small_molecule", "gaff", "gaff2"),
         ("gaff2", "gaff", "small_molecule", "gaff2", "gaff"),
+        ("lipid17", "lipid21", "lipid", "lipid17", "lipid21"),
+        ("lipid21", "lipid17", "lipid", "lipid21", "lipid17"),
     ],
 )
 def test_incompatible_amber_forcefield_families_fail_before_replacement(
@@ -72,4 +74,3 @@ def test_family_activation_is_idempotent_and_dependencies_are_explicit():
     assert activate_forcefield_family("test-only", "one") == "one"
     assert activate_forcefield_family("test-only", "one") == "one"
     assert require_forcefield_family("test-only", {"one", "two"}) == "one"
-

@@ -87,6 +87,26 @@ Xponge.save_mol2(peptide2, "ala12.mol2")
 Xponge.save_sponge_input(peptide3, "ala5")
 ```
 
+### Amber lipid force fields
+
+Lipid17 and Lipid21 are available as mutually exclusive base lipid force fields:
+
+```python
+import Xponge.forcefield.amber.ff14sb   # optional protein family
+import Xponge.forcefield.amber.gaff2    # optional small-molecule family
+import Xponge.forcefield.amber.lipid21  # or lipid17, but not both
+```
+
+Loading either lipid force field also loads the bundled PACKMOL-Memgen-derived
+PI/phosphoinositide/LysoPL extension. Lipids use Amber's split residue templates
+(for example `PA + SPM + SA`); automatic conversion of full names such as `PSM`
+or `POPC` is not provided. The extension combines documented Lipid, GLYCAM,
+phosphate, and selected GAFF2-derived terms; its references are printed on load.
+
+The `protein` (`ff14sb`/`ff19sb`), `small_molecule` (`gaff`/`gaff2`), and
+`lipid` (`lipid17`/`lipid21`) families each allow one active base force field per
+Python process. Use a fresh process to compare alternatives.
+
 Then we can see `ala12.mol2` in VMD:
 
 ![pic2](https://gitee.com/gao_hyp_xyj_admin/xponge/raw/master/README_PICTURE/2.jpg)
