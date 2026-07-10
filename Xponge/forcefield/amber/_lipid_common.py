@@ -50,7 +50,7 @@ def configure_standard_chain(residue_name):
             ["H2R", "C12"],
             109.5,
             ["H2S", "H2R", "C12"],
-            -120,
+            -120 if position == "head" else 120,
         )
 
 
@@ -97,4 +97,3 @@ def configure_manifest(path):
                     [reference, next_atom, anchor], 180,
                 )
     return manifest
-

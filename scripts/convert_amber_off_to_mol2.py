@@ -116,13 +116,13 @@ def parse_off(path: Path) -> list[Template]:
     return result
 
 
-def render_mol2(templates: list[Template]) -> str:
+def render_mol2(source: Path, templates: list[Template]) -> str:
     """Render all templates as substructures in one Xponge-compatible MOL2."""
     atom_count = sum(len(template.atoms) for template in templates)
     bond_count = sum(len(template.bonds) for template in templates)
     lines = [
         "@<TRIPOS>MOLECULE",
-        "LIPID_EXT",
+        source.stem.upper(),
         f"{atom_count:6d} {bond_count:6d} {len(templates):6d} 0 1",
         "SMALL",
         "USER_CHARGES",
@@ -161,32 +161,79 @@ def render_mol2(templates: list[Template]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def build_manifest(source: Path, templates: list[Template]) -> dict:
+def _connection_metadata(template: Template, position: str, anchor: str | None) -> dict:
+    """Derive Xponge orientation metadata for a validated Amber lipid connection."""
+    if anchor is None:
+        return {
+            f"{position}_next_atom": None,
+            f"{position}_reference_atom": None,
+            f"{position}_link_conditions": [],
+            f"{position}_rule_source": "none",
+        }
+
+    atom_names = {atom.name for atom in template.atoms}
+
+    def result(next_atom, reference, angle_atoms, angle, dihedral_atoms, dihedral, source):
+        required = {anchor, next_atom, reference, *angle_atoms, *dihedral_atoms}
+        missing = required - atom_names
+        if missing:
+            raise ValueError(
+                f"{template.name}: {position} connection rule references missing atoms {sorted(missing)}"
+            )
+        if len({anchor, next_atom, reference}) != 3:
+            raise ValueError(
+                f"{template.name}: {position} anchor/next/reference atoms must be distinct"
+            )
+        return {
+            f"{position}_next_atom": next_atom,
+            f"{position}_reference_atom": reference,
+            f"{position}_link_conditions": [
+                {"atoms": angle_atoms, "parameter_degrees": angle},
+                {"atoms": dihedral_atoms, "parameter_degrees": dihedral},
+            ],
+            f"{position}_rule_source": source,
+        }
+
+    if template.name == "SPM" and position == "head":
+        return result("N11", "O12", ["N11", "C11"], 120.0,
+                      ["O12", "N11", "C11"], 180.0, "explicit_spm_amide")
+    if template.name == "SPM" and position == "tail":
+        return result("C2", "O22", ["C2", "C1"], 109.5,
+                      ["O22", "C2", "C1"], -120.0, "explicit_spm_sphingosine")
+    if template.name == "SA" and anchor == "C12":
+        return result("C13", "H2R", ["H2R", "C12"], 120.0,
+                      ["C13", "H2R", "C12"], 180.0, "explicit_sa_alkene")
+
+    if "C11" in anchor:
+        next_atom = anchor.replace("C11", "O11", 1)
+        reference = anchor.replace("C11", "O12", 1)
+        if next_atom in atom_names and reference in atom_names:
+            return result(next_atom, reference, [next_atom, anchor], 120.0,
+                          [reference, next_atom, anchor], 180.0, "carbonyl_head")
+    if "C21" in anchor:
+        next_atom = anchor.replace("C21", "O21", 1)
+        reference = anchor.replace("C21", "O22", 1)
+        if next_atom in atom_names and reference in atom_names:
+            return result(next_atom, reference, [next_atom, anchor], 120.0,
+                          [reference, next_atom, anchor], 180.0, "carbonyl_tail")
+    if anchor == "C12" and {"C13", "H2R", "H2S"}.issubset(atom_names):
+        return result("C13", "H2S", ["H2R", "C12"], 109.5,
+                      ["H2S", "H2R", "C12"],
+                      -120.0 if position == "head" else 120.0, "standard_chain")
+
+    raise ValueError(f"{template.name}: cannot derive {position} connection geometry for {anchor}")
+
+
+def build_manifest(source: Path, templates: list[Template], source_license: str) -> dict:
     entries = []
     for template in templates:
         charge = sum(atom.charge for atom in template.atoms)
+        if abs(charge) < 5e-9:
+            charge = 0.0
         head_index, tail_index = template.connect
-        atom_names = {atom.name for atom in template.atoms}
         head_atom = template.atoms[head_index - 1].name if head_index else None
         tail_atom = template.atoms[tail_index - 1].name if tail_index else None
-
-        def connection_names(anchor: str | None, position: str) -> tuple[str | None, str | None]:
-            if anchor is None:
-                return None, None
-            if position == "head":
-                next_name = anchor.replace("C11", "O11", 1)
-                reference_name = anchor.replace("C11", "O12", 1)
-            else:
-                next_name = anchor.replace("C21", "O21", 1)
-                reference_name = anchor.replace("C21", "O22", 1)
-            if next_name not in atom_names or reference_name not in atom_names:
-                raise ValueError(f"{template.name}: cannot derive {position} connection geometry")
-            return next_name, reference_name
-
-        head_next, head_reference = connection_names(head_atom, "head")
-        tail_next, tail_reference = connection_names(tail_atom, "tail")
-        entries.append(
-            {
+        entry = {
                 "template": template.name,
                 "source_unit_name": template.unit_name,
                 "atom_count": len(template.atoms),
@@ -194,20 +241,18 @@ def build_manifest(source: Path, templates: list[Template]) -> dict:
                 "total_charge": round(charge, 8),
                 "expected_integer_charge": round(charge),
                 "head_atom": head_atom,
-                "head_next_atom": head_next,
-                "head_reference_atom": head_reference,
                 "tail_atom": tail_atom,
-                "tail_next_atom": tail_next,
-                "tail_reference_atom": tail_reference,
                 "source_connect_indices": [head_index, tail_index],
                 "source_connectivity_flags": sorted({bond[2] for bond in template.bonds}),
-            }
-        )
+        }
+        entry.update(_connection_metadata(template, "head", head_atom))
+        entry.update(_connection_metadata(template, "tail", tail_atom))
+        entries.append(entry)
     return {
-        "format_version": 1,
+        "format_version": 2,
         "source": source.name,
         "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
-        "source_license": "Apache-2.0",
+        "source_license": source_license,
         "template_count": len(entries),
         "templates": entries,
     }
@@ -218,12 +263,20 @@ def main() -> None:
     parser.add_argument("source", type=Path, help="Amber OFF/lib input")
     parser.add_argument("mol2", type=Path, help="generated MOL2 output")
     parser.add_argument("manifest", type=Path, help="generated JSON manifest")
+    parser.add_argument(
+        "--source-license", default="Apache-2.0",
+        help="license/provenance label recorded in the generated manifest",
+    )
     args = parser.parse_args()
 
     templates = parse_off(args.source)
-    args.mol2.write_text(render_mol2(templates), encoding="utf-8")
+    args.mol2.write_text(render_mol2(args.source, templates), encoding="utf-8")
     args.manifest.write_text(
-        json.dumps(build_manifest(args.source, templates), indent=2, ensure_ascii=False) + "\n",
+        json.dumps(
+            build_manifest(args.source, templates, args.source_license),
+            indent=2,
+            ensure_ascii=False,
+        ) + "\n",
         encoding="utf-8",
     )
 

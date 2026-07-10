@@ -1,0 +1,14 @@
+AmberTools26 data provenance for Xponge Lipid21
+
+Source files:
+  dat/leap/parm/lipid21.dat
+  dat/leap/lib/lipid21.lib
+
+The AmberTools LICENSE states:
+
+  "The force field parameter files in the \"../dat/leap\" subdirectory have
+   been placed in the public domain by their authors."
+
+The generated lipid21.mol2 and lipid21_manifest.json retain the source file
+SHA256 in the manifest. Xponge conversion metadata does not change the
+scientific parameter values, atom names, atom types, charges, or connectivity.
