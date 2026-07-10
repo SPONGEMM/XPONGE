@@ -49,7 +49,7 @@ where = ["."]
 include = ["Xponge*"]
 
 [tool.setuptools.package-data]
-"*" = ["*.mol2", "*.frcmod", "*.dat", "*.itp"]
+"*" = ["*.mol2", "*.frcmod", "frcmod.*", "*.dat", "*.itp", "*.json", "*.txt"]
 
 [tool.setuptools.dynamic]
 version = { attr = "Xponge.__init__.__version__" }
