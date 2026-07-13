@@ -29,3 +29,31 @@ class BundlePathError(BundleError):
 
 class BundleConflictError(BundleError):
     """Raised when reverse conversion would overwrite an existing target."""
+
+
+class BundleMDAnalysisError(BundleValidationError):
+    """Base class for bundle-to-MDAnalysis integration failures."""
+
+
+class BundleTopologyError(BundleMDAnalysisError):
+    """Raised when a bundled topology cannot be exposed to MDAnalysis."""
+
+
+class BundleTrajectoryError(BundleMDAnalysisError):
+    """Raised when a SPONGE H5MD trajectory is invalid or unsupported."""
+
+
+class BundleUnitError(BundleMDAnalysisError):
+    """Raised when bundle units cannot be converted to MDAnalysis units."""
+
+
+class UnverifiedBundlePairError(BundleMDAnalysisError):
+    """Raised when topology/trajectory compatibility cannot be proven."""
+
+
+class IncompleteBundleError(BundleMDAnalysisError):
+    """Raised when a trajectory bundle is not finalized or is truncated."""
+
+
+class AmbiguousH5MDLayoutError(BundleTrajectoryError):
+    """Raised when a H5MD file matches conflicting SPONGE layouts."""

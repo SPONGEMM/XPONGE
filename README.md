@@ -182,6 +182,30 @@ Use `--dry-run` to validate and inspect the conversion manifest without
 writing output files. Existing targets are preserved unless `--overwrite` is
 specified.
 
+Bundled topology and trajectory files are registered as MDAnalysis formats.
+Import the XPONGE adapter once, then use the standard `Universe` entry point;
+no mdin, protocol, or restart file is required for analysis:
+
+```python
+import MDAnalysis as mda
+import Xponge.analysis.md_analysis
+
+universe = mda.Universe(
+    "topology.spgt.h5",
+    "trajectory.spg.h5md",
+    topology_format="SPONGE_TOPOLOGY_H5",
+    format="SPONGE_H5MD",
+    particle_stream="all",
+)
+```
+
+`Xponge.analysis.md_analysis.load_bundle_universe(topology, trajectory)` is a
+stricter convenience wrapper that additionally verifies topology and atom
+order hashes. The same `SPONGE_H5MD` reader retains support for historical
+`/particles/trajectory` and numbered walker layouts through the `walker`
+keyword, and delegates ordinary third-party H5MD files to MDAnalysis' native
+reader.
+
 ## CLI quick start (trajectory analysis)
 
 The `Xponge traj` subcommand provides cpptraj-like post-analysis for SPONGE trajectories.

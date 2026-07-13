@@ -314,6 +314,12 @@ class LegacyOutputBundleWriter:
                 ensure_hard_link(output_path, "/particles/all/step", parent + "/step")
             if _h5_path_exists(output_path, "/particles/all/time"):
                 ensure_hard_link(output_path, "/particles/all/time", parent + "/time")
+        if _h5_path_exists(output_path, "/particles/all/box/edges/value"):
+            set_attrs(
+                output_path,
+                "/particles/all/box",
+                {"dimension": 3, "boundary": np.asarray(["periodic"] * 3, dtype="S8")},
+            )
 
     def _link_observable_axes(self, output_path: Path) -> None:
         self._link_observable_axes_for_values(output_path, self._observable_values_by_bundle[output_path])

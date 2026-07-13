@@ -153,6 +153,10 @@ class BundleBuilder:
                 "/topology/atom_count",
                 np.asarray(metadata.atom_count, dtype=np.int64),
             )
+            try:
+                self.io.set_attrs(topology, "/atoms/charge", {"unit": "Amber"})
+            except KeyError:
+                pass
 
         if "protocol.spgp.h5" in touched:
             protocol = self.paths.protocol
@@ -203,14 +207,28 @@ class BundleBuilder:
                 "/parameters/sponge/schema/version",
                 schema_version,
             )
-            self._finalize_trajectory(trajectory, metadata.creator_version)
+            self._finalize_trajectory(trajectory, metadata)
 
-    def _finalize_trajectory(self, path: Path, creator_version: str) -> None:
+    def _finalize_trajectory(self, path: Path, metadata: BundleMetadata) -> None:
         self.io.ensure_group(path, "/h5md")
         self.io.ensure_group(path, "/h5md/creator")
         self.io.ensure_group(path, "/particles/all")
         self.io.set_attrs(path, "/h5md", {"version": np.asarray([1, 1], dtype=np.int32)})
-        self.io.set_attrs(path, "/h5md/creator", {"name": "XPONGE", "version": creator_version})
+        self.io.set_attrs(
+            path,
+            "/h5md/creator",
+            {"name": "XPONGE", "version": metadata.creator_version},
+        )
+        self.io.write_string(
+            path,
+            "/parameters/sponge/topology_compatibility/topology_hash",
+            metadata.topology_hash,
+        )
+        self.io.write_string(
+            path,
+            "/parameters/sponge/topology_compatibility/atom_order_hash",
+            metadata.atom_order_hash,
+        )
         self._link_particle_axes(path)
         self.io.set_attrs(path, "/particles/all/time", {"unit": "ps"})
         frame_count, last_step, last_time = _particle_completion_metadata(path)
@@ -256,6 +274,7 @@ class BundleBuilder:
         for value_path, unit in (
             ("/particles/all/position/value", "Angstrom"),
             ("/particles/all/velocity/value", "Angstrom ps-1"),
+            ("/particles/all/force/value", "kcal mol-1 Angstrom-1"),
             ("/particles/all/box/edges/value", "Angstrom"),
         ):
             try:
@@ -265,6 +284,14 @@ class BundleBuilder:
             parent = str(Path(value_path).parent).replace("\\", "/")
             self.io.ensure_hard_link(path, "/particles/all/step", parent + "/step")
             self.io.ensure_hard_link(path, "/particles/all/time", parent + "/time")
+        try:
+            self.io.set_attrs(
+                path,
+                "/particles/all/box",
+                {"dimension": 3, "boundary": np.asarray(["periodic"] * 3, dtype="S8")},
+            )
+        except KeyError:
+            pass
 
     def _write_completion(
         self,
