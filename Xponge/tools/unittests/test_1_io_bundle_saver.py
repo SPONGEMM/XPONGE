@@ -1,6 +1,8 @@
 """Tests for direct XPONGE object to bundled input saving."""
 
+import os
 from pathlib import Path
+import shutil
 import subprocess
 
 import numpy as np
@@ -11,6 +13,17 @@ from Xponge.io_bundle import convert_bundle_to_legacy
 from Xponge.io_bundle.contracts import classify_sponge_serializer_key
 from Xponge.io_bundle.errors import BundleCapabilityError, BundlePathError
 from Xponge.io_bundle.topology_parsers import parse_topology_file
+
+
+def _optional_executable(env_var: str, command: str | None = None) -> Path:
+    configured = os.environ.get(env_var)
+    discovered = configured or (shutil.which(command) if command else None)
+    if not discovered:
+        pytest.skip(f"set {env_var} to run this optional SPONGE integration test")
+    executable = Path(discovered).expanduser()
+    if not (executable.is_file() and executable.stat().st_mode & 0o111):
+        pytest.skip(f"{env_var} does not point to an executable file: {executable}")
+    return executable
 
 
 def _alanine_dipeptide():
@@ -133,9 +146,7 @@ def test_save_sponge_input_bundle_rejects_escaping_prefix(tmp_path):
 
 
 def test_saver_bundle_without_velocity_starts_optional_sponge(tmp_path):
-    sponge = Path("/home/youmans/sidereus/SPONGE/build-dev-cuda13/SPONGE")
-    if not (sponge.is_file() and sponge.stat().st_mode & 0o111):
-        pytest.skip("SPONGE executable is unavailable")
+    sponge = _optional_executable("SPONGE_EXECUTABLE", "SPONGE")
 
     molecule = _alanine_dipeptide()
     molecule.box_length = [50.0, 50.0, 50.0]
@@ -160,9 +171,7 @@ def test_saver_bundle_without_velocity_starts_optional_sponge(tmp_path):
 
 
 def test_reversed_saver_bundle_starts_optional_sponge(tmp_path):
-    sponge = Path("/home/youmans/sidereus/SPONGE/build-dev-cuda13/SPONGE")
-    if not (sponge.is_file() and sponge.stat().st_mode & 0o111):
-        pytest.skip("SPONGE executable is unavailable")
+    sponge = _optional_executable("SPONGE_EXECUTABLE", "SPONGE")
 
     bundle_dir = tmp_path / "bundle"
     legacy_dir = tmp_path / "legacy"
@@ -189,9 +198,7 @@ def test_reversed_saver_bundle_starts_optional_sponge(tmp_path):
 
 
 def test_save_sponge_input_bundle_restart_passes_optional_sponge_probe(tmp_path):
-    probe = Path("/home/youmans/sidereus/SPONGE/build-dev-cuda13/tests/h5_bundle/h5_restart_read_probe")
-    if not (probe.is_file() and probe.stat().st_mode & 0o111):
-        pytest.skip("SPONGE restart H5 probe is unavailable")
+    probe = _optional_executable("SPONGE_H5_RESTART_PROBE")
     molecule = _alanine_dipeptide()
     Xponge.save_sponge_input_bundle(molecule, "system", tmp_path)
     restart_path = tmp_path / "system_restart.spgr.h5"
