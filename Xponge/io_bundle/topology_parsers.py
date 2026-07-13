@@ -70,7 +70,7 @@ def parse_topology_file(key: str, path: Path) -> list[TypedDataset] | None:
             atom_columns=4,
             datasets=(
                 ("/forcefield/improper/atoms", np.int32, slice(0, 4)),
-                ("/forcefield/improper/k", np.float32, 4),
+                ("/forcefield/improper/pk", np.float32, 4),
                 ("/forcefield/improper/phi0", np.float32, 5),
             ),
         )

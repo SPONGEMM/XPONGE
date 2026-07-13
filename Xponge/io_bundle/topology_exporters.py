@@ -72,10 +72,13 @@ def export_dihedral(contract, reader, context) -> list[LegacyPayload]:
 
 
 def export_improper(contract, reader, context) -> list[LegacyPayload]:
+    parameter_path = "/forcefield/improper/pk"
+    if not reader.contains(contract.bundle_file, parameter_path):
+        parameter_path = "/forcefield/improper/k"
     return _fixed_table(
         contract,
         reader,
-        ("/forcefield/improper/atoms", "/forcefield/improper/k", "/forcefield/improper/phi0"),
+        ("/forcefield/improper/atoms", parameter_path, "/forcefield/improper/phi0"),
     )
 
 

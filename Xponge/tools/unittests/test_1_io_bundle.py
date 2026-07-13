@@ -21,12 +21,15 @@ from Xponge.io_bundle.topology_parsers import (
     parse_pairwise_force_data_file,
     parse_topology_file,
 )
+from Xponge.io_bundle.topology_exporters import export_improper
 from Xponge.io_bundle.trajectory_parsers import parse_trajectory_file
 from Xponge.tools.unittests.io_bundle_fixtures import write_basic_case
 
 
 __all__ = [
     "test_parse_mdin_text",
+    "test_improper_parser_uses_sponge_native_pk_schema",
+    "test_improper_exporter_prefers_pk_and_reads_legacy_k",
     "test_typed_topology_parsers",
     "test_typed_state_parsers",
     "test_typed_trajectory_parsers",
@@ -105,6 +108,73 @@ def test_parse_mdin_text():
     assert "[EAM]" not in rendered
     assert '[custom]\nkeep = "value.txt"' in rendered
     assert 'input_h5_topology_path = "topology.spgt.h5"' in rendered
+
+
+def test_improper_parser_uses_sponge_native_pk_schema():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = Path(tmpdir) / "improper.txt"
+        path.write_text("1\n0 1 2 3 10.0 0.2\n", encoding="utf-8")
+
+        for key in ("improper_dihedral_in_file", "improper_in_file"):
+            datasets = {
+                dataset.path: dataset.data
+                for dataset in parse_topology_file(key, path)
+            }
+            assert np.array_equal(
+                datasets["/forcefield/improper/atoms"],
+                np.asarray([[0, 1, 2, 3]], dtype=np.int32),
+            )
+            assert np.allclose(
+                datasets["/forcefield/improper/pk"],
+                np.asarray([10.0], dtype=np.float32),
+            )
+            assert np.allclose(
+                datasets["/forcefield/improper/phi0"],
+                np.asarray([0.2], dtype=np.float32),
+            )
+            assert "/forcefield/improper/k" not in datasets
+
+
+def test_improper_exporter_prefers_pk_and_reads_legacy_k():
+    class Contract:
+        bundle_file = "topology.spgt.h5"
+        contract_id = "input.topology.improper"
+        legacy_keys = ("improper_dihedral_in_file",)
+
+    class Reader:
+        def __init__(self, parameter_path):
+            self.parameter_path = parameter_path
+            self.read_paths = []
+
+        def contains(self, bundle_file, dataset_path):
+            assert bundle_file == Contract.bundle_file
+            return dataset_path == self.parameter_path
+
+        def read(self, bundle_file, dataset_path):
+            assert bundle_file == Contract.bundle_file
+            self.read_paths.append(dataset_path)
+            values = {
+                "/forcefield/improper/atoms": np.asarray(
+                    [[0, 1, 2, 3]], dtype=np.int32
+                ),
+                self.parameter_path: np.asarray([10.0], dtype=np.float32),
+                "/forcefield/improper/phi0": np.asarray([0.2], dtype=np.float32),
+            }
+            return values[dataset_path]
+
+    for parameter_path in ("/forcefield/improper/pk", "/forcefield/improper/k"):
+        reader = Reader(parameter_path)
+        payloads = export_improper(Contract(), reader, None)
+        assert len(payloads) == 1
+        assert payloads[0].key == "improper_dihedral_in_file"
+        assert payloads[0].data == "1\n0 1 2 3 10 0.200000003\n"
+        assert parameter_path in reader.read_paths
+        unused_path = (
+            "/forcefield/improper/k"
+            if parameter_path.endswith("/pk")
+            else "/forcefield/improper/pk"
+        )
+        assert unused_path not in reader.read_paths
 
 
 def test_typed_topology_parsers():
