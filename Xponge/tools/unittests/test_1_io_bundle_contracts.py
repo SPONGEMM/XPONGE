@@ -88,6 +88,14 @@ def test_improper_is_typed_required_with_alias_only_for_input():
     assert alias[0].reverse_policy == "alias"
 
 
+def test_residue_is_typed_required():
+    contracts = contracts_by_legacy_key()["residue_in_file"]
+
+    assert len(contracts) == 1
+    assert contracts[0].reverse_policy == "typed_required"
+    assert contracts[0].required_bundle_paths == ("/residues",)
+
+
 def test_contract_validation_rejects_duplicate_ids():
     duplicate = replace(CONTRACTS[0], bundle_path="/duplicate")
     with pytest.raises(ValueError, match="duplicate I/O contract id"):

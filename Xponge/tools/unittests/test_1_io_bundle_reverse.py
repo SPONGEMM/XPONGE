@@ -119,6 +119,33 @@ def test_bundle_to_legacy_improper_uses_mutated_typed_pk_without_sidecar(tmp_pat
     assert np.allclose(by_path["/forcefield/improper/pk"], np.asarray([7.25], dtype=np.float32))
 
 
+def test_bundle_to_legacy_residue_uses_mutated_typed_offsets_without_sidecar(tmp_path):
+    h5py = pytest.importorskip("h5py")
+    bundle_dir = _make_bundle(tmp_path)
+    with h5py.File(bundle_dir / "topology.spgt.h5", "a") as handle:
+        sidecar_keys = [
+            value.decode() if isinstance(value, bytes) else str(value)
+            for value in handle["/parameters/sponge/files/legacy_sidecars/key"][()]
+        ]
+        assert "residue_in_file" not in sidecar_keys
+        del handle["/residues/atom_offset"]
+        handle.create_dataset(
+            "/residues/atom_offset", data=np.asarray([0, 1, 2], dtype=np.int64)
+        )
+        handle["/atoms/residue_index"][...] = np.asarray([0, 1], dtype=np.int32)
+
+    output_dir = tmp_path / "legacy"
+    convert_bundle_to_legacy(bundle_dir, output_dir, prefix="updated")
+    datasets = parse_topology_file("residue_in_file", output_dir / "updated_residue.txt")
+    by_path = {dataset.path: dataset.data for dataset in datasets}
+    assert np.array_equal(
+        by_path["/residues/atom_offset"], np.asarray([0, 1, 2], dtype=np.int64)
+    )
+    assert np.array_equal(
+        by_path["/atoms/residue_index"], np.asarray([0, 1], dtype=np.int32)
+    )
+
+
 @pytest.mark.parametrize(
     ("key", "source_name", "exported_name"),
     (

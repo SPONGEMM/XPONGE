@@ -554,7 +554,9 @@ CONTRACTS: tuple[IOContract, ...] = (
         status="compatibility_import",
         payload_kind="file",
         reverse_policy=(
-            "typed_required" if key == "improper_dihedral_in_file" else None
+            "typed_required"
+            if key in {"improper_dihedral_in_file", "residue_in_file"}
+            else None
         ),
     )
     for key, path in TOPOLOGY_FILE_CONTRACTS.items()

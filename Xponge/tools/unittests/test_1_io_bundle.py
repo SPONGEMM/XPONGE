@@ -836,6 +836,9 @@ def test_legacy_to_bundle_bundled_mdin_sidecars_and_overrides():
             assert (bundle_dir / "legacy_sidecars" / "restrain_cv_in_file" / "restrain_cv.txt").exists()
             assert (bundle_dir / "legacy_sidecars" / "steer_cv_in_file" / "steer_cv.txt").exists()
             assert (bundle_dir / "legacy_sidecars" / "mass_in_file" / "mass.txt").exists()
+            assert not (
+                bundle_dir / "legacy_sidecars" / "residue_in_file" / "residue.txt"
+            ).exists()
             assert (bundle_dir / "legacy_sidecars" / "cmap_in_file" / "cmap.txt").exists()
             assert not (
                 bundle_dir / "legacy_sidecars" / "improper_dihedral_in_file" / "improper.txt"
@@ -957,6 +960,9 @@ def test_legacy_to_bundle_bundled_mdin_sidecars_and_overrides():
             assert hard_links[("trajectory.spg.h5md", "/particles/all/velocity/step")] == "/particles/all/step"
             assert hard_links[("trajectory.spg.h5md", "/particles/all/box/edges/step")] == "/particles/all/step"
             assert "mass_in_file" in string_arrays[
+                ("topology.spgt.h5", "/parameters/sponge/files/legacy_sidecars/key")
+            ]
+            assert "residue_in_file" not in string_arrays[
                 ("topology.spgt.h5", "/parameters/sponge/files/legacy_sidecars/key")
             ]
             assert "cmap_in_file" in string_arrays[
