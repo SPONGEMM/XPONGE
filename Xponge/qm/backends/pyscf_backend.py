@@ -46,13 +46,18 @@ def _build_atom_block(molecule: QMMolecule):
 
 
 def _build_molecule(molecule: QMMolecule, options: QMRunOptions, gto):
-    return gto.M(
-        atom=_build_atom_block(molecule),
-        verbose=0,
-        basis=options.basis,
-        charge=molecule.total_charge,
-        spin=molecule.spin,
-    )
+    kwargs = {
+        "atom": _build_atom_block(molecule),
+        "verbose": 0,
+        "basis": options.basis,
+        "charge": molecule.total_charge,
+        "spin": molecule.spin,
+    }
+    if options.ecp is not None:
+        kwargs["ecp"] = options.ecp
+    if options.cart is not None:
+        kwargs["cart"] = bool(options.cart)
+    return gto.M(**kwargs)
 
 
 def _build_wavefunction(mol, molecule: QMMolecule, scf):
@@ -66,15 +71,21 @@ def _collapse_density_matrix(dm, np):
     return dm
 
 
-def _compute_esp_full(np, gto, df_module, mol, dm, grid_points_bohr):
+def _fakemol_for_charges_like_mol(gto, mol, grid_points_bohr):
     fakemol = gto.fakemol_for_charges(grid_points_bohr)
+    fakemol.cart = bool(getattr(mol, "cart", False))
+    return fakemol
+
+
+def _compute_esp_full(np, gto, df_module, mol, dm, grid_points_bohr):
+    fakemol = _fakemol_for_charges_like_mol(gto, mol, grid_points_bohr)
     return np.einsum("ijp,ij->p", df_module.incore.aux_e2(mol, fakemol), dm)
 
 
 def _compute_esp_grid_chunked(np, gto, df_module, mol, dm, grid_points_bohr, chunk_size):
     electronic = np.zeros(len(grid_points_bohr), dtype=float)
     for start, stop in iter_chunk_slices(len(grid_points_bohr), chunk_size):
-        fakemol = gto.fakemol_for_charges(grid_points_bohr[start:stop])
+        fakemol = _fakemol_for_charges_like_mol(gto, mol, grid_points_bohr[start:stop])
         electronic[start:stop] = np.einsum("ijp,ij->p", df_module.incore.aux_e2(mol, fakemol), dm)
     return electronic
 
@@ -91,7 +102,7 @@ def _compute_esp_shell_grid_chunked(np, gto, df_module, mol, dm, grid_points_boh
     electronic = np.zeros(len(grid_points_bohr), dtype=float)
     for start, stop in iter_chunk_slices(len(grid_points_bohr), grid_chunk_size):
         grid_chunk = grid_points_bohr[start:stop]
-        fakemol = gto.fakemol_for_charges(grid_chunk)
+        fakemol = _fakemol_for_charges_like_mol(gto, mol, grid_chunk)
         chunk_esp = np.zeros(len(grid_chunk), dtype=float)
         for ish0, ish1, iao0, iao1 in shell_blocks:
             dm_rows = dm[iao0:iao1]
@@ -286,6 +297,8 @@ def optimize_geometry(molecule: QMMolecule, options: QMRunOptions, assign=None, 
         QMRunOptions(
             backend=options.backend,
             basis=options.basis,
+            ecp=options.ecp,
+            cart=options.cart,
             method=options.method,
             reference=options.reference,
             optimize_geometry=True,

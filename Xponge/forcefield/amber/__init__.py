@@ -3,6 +3,7 @@ This **package** sets the basic configuration of amber force field
 """
 import os
 import numpy as np
+from itertools import product
 from ...helper import set_global_alternative_names, Generate_New_Bonded_Force_Type, Xdict, GlobalSetting
 from ... import AtomType, load_parmdat, load_frcmod, Molecule, ResidueType
 
@@ -18,6 +19,35 @@ nb14_base.NB14Type.New_From_String(r"""
 name    kLJ     kee
 X-X     0.5     0.833333
 """)
+
+
+@nb14_base.NB14Type.Type_Name_Getter
+def _amber_nb14_type_name(atoms):
+    """Prefer torsion-specific 1-4 scales while preserving pair fallbacks."""
+    atom1, atom4 = atoms
+    candidates = set()
+    for atom2 in atom1.linked_atoms.get(2, set()):
+        if atom2 is atom4:
+            continue
+        for atom3 in atom2.linked_atoms.get(2, set()):
+            if atom3 is atom1 or atom3 is atom4:
+                continue
+            if atom4 in atom3.linked_atoms.get(2, set()):
+                candidates.add(tuple(atom.type.name for atom in (atom1, atom2, atom3, atom4)))
+
+    registered = nb14_base.NB14Type.get_all_types()
+    best = None
+    for candidate in sorted(candidates):
+        best_score = -1
+        for choices in product(*((atom_type, "X") for atom_type in candidate)):
+            if "-".join(choices) in registered:
+                best_score = max(best_score, 4 - choices.count("X"))
+        rank = (best_score, candidate)
+        if best_score >= 0 and (best is None or rank > best[0]):
+            best = (rank, candidate)
+    if best is not None:
+        return "-".join(best[1])
+    return f"{atom1.type.name}-{atom4.type.name}"
 
 exclude_base.Exclude(4)
 
@@ -158,7 +188,7 @@ def load_parameters_from_frcmod(filename, include_cmap=False, prefix=True):
     """
     if prefix:
         filename = os.path.join(AMBER_DATA_DIR, filename)
-    atoms, bonds, angles, propers, impropers, ljs, cmap = load_frcmod(filename)
+    atoms, bonds, angles, propers, impropers, ljs, nb14s, cmap = load_frcmod(filename, include_nb14=True)
 
     AtomType.New_From_String(atoms)
     bond_base.BondType.New_From_String(bonds)
@@ -166,6 +196,7 @@ def load_parameters_from_frcmod(filename, include_cmap=False, prefix=True):
     dihedral_base.ProperType.New_From_String(propers)
     dihedral_base.ImproperType.New_From_String(impropers)
     lj_base.LJType.New_From_String(ljs)
+    nb14_base.NB14Type.New_From_String(nb14s)
 
     if include_cmap:
         global AmberCMapType

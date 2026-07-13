@@ -655,6 +655,524 @@ def _pdb_apply_tail_mapping(residue_name):
     return residue_name
 
 
+_MMCIF_MISSING_VALUES = {"", ".", "?"}
+
+
+def _mmcif_clean(value):
+    if value is None:
+        return ""
+    text = str(value).strip()
+    return "" if text in _MMCIF_MISSING_VALUES else text
+
+
+def _mmcif_first(row, names):
+    for name in names:
+        value = _mmcif_clean(row.get(name.lower()))
+        if value:
+            return value
+    return ""
+
+
+def _mmcif_parse_int(value):
+    value = _mmcif_clean(value)
+    if not value:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
+def _mmcif_parse_float(value):
+    value = _mmcif_clean(value)
+    if not value:
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
+
+
+def _mmcif_chain_id(value):
+    value = _mmcif_clean(value)
+    return value[0] if value else " "
+
+
+def _mmcif_insertion_code(value):
+    value = _mmcif_clean(value)
+    return value[0] if value else " "
+
+
+def _mmcif_tokenize(text):
+    tokens = []
+    lines = text.splitlines()
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if line.startswith(";"):
+            block = [line[1:]]
+            i += 1
+            while i < len(lines) and not lines[i].startswith(";"):
+                block.append(lines[i])
+                i += 1
+            if i >= len(lines):
+                raise ValueError("unterminated mmCIF text field")
+            tokens.append("\n".join(block))
+            i += 1
+            continue
+        j = 0
+        current = []
+        quote = None
+        while j < len(line):
+            char = line[j]
+            if quote:
+                if char == quote and (j + 1 == len(line) or line[j + 1].isspace()):
+                    tokens.append("".join(current))
+                    current = []
+                    quote = None
+                else:
+                    current.append(char)
+                j += 1
+                continue
+            if char == "#":
+                break
+            if char.isspace():
+                if current:
+                    tokens.append("".join(current))
+                    current = []
+                j += 1
+                continue
+            if char in ("'", '"'):
+                if current:
+                    current.append(char)
+                else:
+                    quote = char
+                j += 1
+                continue
+            current.append(char)
+            j += 1
+        if quote:
+            raise ValueError("unterminated mmCIF quoted value")
+        if current:
+            tokens.append("".join(current))
+        i += 1
+    return tokens
+
+
+def _mmcif_parse(file):
+    text = file.read()
+    tokens = _mmcif_tokenize(text)
+    data = {}
+    i = 0
+    while i < len(tokens):
+        token = tokens[i]
+        lower = token.lower()
+        if lower.startswith("data_") or lower.startswith("save_"):
+            i += 1
+            continue
+        if lower == "loop_":
+            i += 1
+            tags = []
+            while i < len(tokens) and tokens[i].startswith("_"):
+                tags.append(tokens[i].lower())
+                i += 1
+            if not tags:
+                raise ValueError("mmCIF loop without tags")
+            values = []
+            while i < len(tokens):
+                next_lower = tokens[i].lower()
+                at_row_boundary = len(values) % len(tags) == 0
+                if at_row_boundary and (
+                    next_lower == "loop_" or next_lower.startswith("data_") or
+                    next_lower.startswith("save_") or tokens[i].startswith("_")
+                ):
+                    break
+                values.append(tokens[i])
+                i += 1
+            if len(values) % len(tags) != 0:
+                raise ValueError("mmCIF loop row has incomplete values")
+            for tag_index, tag in enumerate(tags):
+                data[tag] = values[tag_index::len(tags)]
+            continue
+        if token.startswith("_"):
+            if i + 1 >= len(tokens):
+                raise ValueError(f"mmCIF tag without value: {token}")
+            data[token.lower()] = [tokens[i + 1]]
+            i += 2
+            continue
+        i += 1
+    return data
+
+
+def _mmcif_rows(data, category):
+    prefix = "_" + category.lower() + "."
+    tags = [tag for tag in data if tag.startswith(prefix)]
+    if not tags:
+        return []
+    count = max(len(data[tag]) for tag in tags)
+    rows = []
+    for index in range(count):
+        row = {}
+        for tag in tags:
+            values = data[tag]
+            row[tag] = values[index] if index < len(values) else ""
+        rows.append(row)
+    return rows
+
+
+def _mmcif_scalar(data, tag):
+    values = data.get(tag.lower(), [])
+    return _mmcif_clean(values[0]) if values else ""
+
+
+def _mmcif_atom_identity_key(asym_id, seq_id, comp_id, atom_id, insertion_code):
+    return (
+        _mmcif_clean(asym_id),
+        _mmcif_clean(seq_id),
+        _mmcif_clean(comp_id).upper(),
+        _mmcif_clean(atom_id).upper(),
+        _mmcif_insertion_code(insertion_code),
+    )
+
+
+def _mmcif_apply_histidine_mapping(residue_name, atom_names):
+    if residue_name not in GlobalSetting.HISMap["HIS"].keys():
+        return residue_name
+    has_delta_h = GlobalSetting.HISMap["DeltaH"] in atom_names
+    has_epsilon_h = GlobalSetting.HISMap["EpsilonH"] in atom_names
+    if has_delta_h:
+        if has_epsilon_h:
+            return GlobalSetting.HISMap["HIS"][residue_name]["HIP"]
+        return GlobalSetting.HISMap["HIS"][residue_name]["HID"]
+    return GlobalSetting.HISMap["HIS"][residue_name]["HIE"]
+
+
+def _mmcif_add_connection(molecule, atom1, atom2):
+    if atom1 is None or atom2 is None or atom1 is atom2:
+        return
+    if atom1.residue == atom2.residue:
+        atom1.residue.add_connectivity(atom1, atom2)
+        return
+    if molecule.get_residue_link(atom1, atom2) is None:
+        molecule.add_residue_link(atom1, atom2)
+
+
+def _mmcif_remove_connection(molecule, atom1, atom2):
+    if atom1 is None or atom2 is None or atom1 is atom2:
+        return
+    if atom1.residue == atom2.residue:
+        atom1.residue.connectivity.get(atom1, set()).discard(atom2)
+        atom2.residue.connectivity.get(atom2, set()).discard(atom1)
+        return
+    if molecule.get_residue_link(atom1, atom2) is not None:
+        molecule.del_residue_link(atom1, atom2)
+
+
+def _mmcif_external_atom_key(atom):
+    chain_id = _mmcif_chain_id(atom.get("chain_id"))
+    resseq = _mmcif_parse_int(atom.get("residue_seq", atom.get("res_seq")))
+    if resseq is None:
+        return None
+    residue_name = _mmcif_clean(atom.get("residue_name")).upper()
+    atom_name = _mmcif_clean(atom.get("atom_name")).upper()
+    insertion_code = _mmcif_insertion_code(atom.get("insertion_code", atom.get("icode")))
+    if not atom_name:
+        return None
+    return chain_id, resseq, insertion_code, residue_name, atom_name
+
+
+def _mmcif_apply_external_residue_links(molecule, residue_links, atom_by_external_key):
+    if not residue_links:
+        return
+    for link in residue_links:
+        atom_a = link.get("atom_a") or {}
+        atom_b = link.get("atom_b") or {}
+        key_a = _mmcif_external_atom_key(atom_a)
+        key_b = _mmcif_external_atom_key(atom_b)
+        if key_a is None or key_b is None:
+            raise ValueError(f"invalid residue link atom selector: {link}")
+        atom1 = atom_by_external_key.get(key_a)
+        atom2 = atom_by_external_key.get(key_b)
+        if atom1 is None or atom2 is None:
+            raise ValueError(f"residue link atom selector did not match mmCIF atoms: {link}")
+        _mmcif_add_connection(molecule, atom1, atom2)
+
+
+def load_mmcif(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
+               ignore_unknown_name=False, ignore_seqres=True, read_cell=True,
+               unterminal_residues=None, terminal_residues=None, infer_terminals=True,
+               model_id=None, residue_links=None):
+    """
+    This **function** is used to load a Mokda chemcore-exported mmCIF file as a Molecule.
+
+    :param file: the name of the input file or an instance of io.IOBase
+    :param judge_histone: judge the protonized state of the histone residues
+    :param position_need: the alternate location character to read
+    :param ignore_hydrogen: do not read hydrogen atoms
+    :param ignore_unknown_name: do not read atoms with unknown names
+    :param ignore_seqres: reserved for PDB API parity
+    :param read_cell: read mmCIF cell dimensions to set box length and angle
+    :param unterminal_residues: selectors to suppress head/tail terminal mapping
+    :param terminal_residues: selectors that explicitly mark N/C terminal residues
+    :param infer_terminals: whether to infer terminal mapping from chain boundaries and OXT atoms
+    :param model_id: required when the mmCIF contains multiple model numbers
+    :param residue_links: optional external residue links to merge after CIF internal links
+    :return: a Molecule instance
+    """
+    should_close = not isinstance(file, io.IOBase)
+    if should_close:
+        filename = file
+        file = open(file)
+    else:
+        filename = "in-memory-string"
+    try:
+        data = _mmcif_parse(file)
+    finally:
+        if should_close:
+            file.close()
+
+    molecule = Molecule(os.path.splitext(os.path.basename(filename))[0])
+    atom_rows = _mmcif_rows(data, "atom_site")
+    if not atom_rows:
+        raise ValueError("mmCIF file does not contain _atom_site records")
+
+    model_values = {
+        _mmcif_first(row, ["_atom_site.pdbx_pdb_model_num"]) or "1"
+        for row in atom_rows
+    }
+    selected_model = str(model_id) if model_id is not None else None
+    if selected_model is None and len(model_values) > 1:
+        raise ValueError("mmCIF contains multiple models; pass model_id explicitly")
+
+    unterminal_selectors = _pdb_parse_unterminal_residues(unterminal_residues)
+    terminal_selectors = _pdb_parse_terminal_residues(terminal_residues)
+    residue_infos = []
+    current_key = None
+    residue_index_by_key = {}
+    for row in atom_rows:
+        row_model = _mmcif_first(row, ["_atom_site.pdbx_pdb_model_num"]) or "1"
+        if selected_model is not None and row_model != selected_model:
+            continue
+        alt_id = _mmcif_first(row, ["_atom_site.label_alt_id"])
+        if alt_id and alt_id != position_need:
+            continue
+        atom_name = _mmcif_first(row, ["_atom_site.auth_atom_id", "_atom_site.label_atom_id"])
+        if ignore_hydrogen and (
+            atom_name.startswith("H") or (len(atom_name) > 1 and atom_name[0] in "123" and atom_name[1] == "H")
+        ):
+            continue
+        residue_name = _mmcif_first(row, ["_atom_site.auth_comp_id", "_atom_site.label_comp_id"])
+        residue_name = GlobalSetting.PDBResidueAliasMap.get(residue_name, residue_name)
+        auth_seq = _mmcif_first(row, ["_atom_site.auth_seq_id"])
+        label_seq = _mmcif_first(row, ["_atom_site.label_seq_id"])
+        resseq = _mmcif_parse_int(auth_seq) if auth_seq else None
+        if resseq is None:
+            resseq = _mmcif_parse_int(label_seq)
+        if resseq is None:
+            resseq = len(residue_infos) + 1
+        chain_id = _mmcif_chain_id(_mmcif_first(row, ["_atom_site.auth_asym_id", "_atom_site.label_asym_id"]))
+        insertion_code = _mmcif_insertion_code(_mmcif_first(row, ["_atom_site.pdbx_pdb_ins_code"]))
+        key = (chain_id, resseq, insertion_code, residue_name)
+        if key != current_key:
+            current_key = key
+            residue_index_by_key[key] = len(residue_infos)
+            residue_infos.append({
+                "chain_id": chain_id,
+                "res_seq": resseq,
+                "icode": insertion_code,
+                "base_resname": residue_name,
+                "resname": residue_name,
+                "atoms": [],
+                "atom_names": set(),
+                "has_oxt": False,
+            })
+        site_id = _mmcif_first(row, ["_atom_site.id"])
+        atom_info = {
+            "site_id": site_id,
+            "atom_name": atom_name,
+            "x": _mmcif_first(row, ["_atom_site.cartn_x"]),
+            "y": _mmcif_first(row, ["_atom_site.cartn_y"]),
+            "z": _mmcif_first(row, ["_atom_site.cartn_z"]),
+            "label_key": _mmcif_atom_identity_key(
+                _mmcif_first(row, ["_atom_site.label_asym_id"]),
+                label_seq,
+                _mmcif_first(row, ["_atom_site.label_comp_id"]),
+                _mmcif_first(row, ["_atom_site.label_atom_id"]),
+                insertion_code,
+            ),
+            "auth_key": _mmcif_atom_identity_key(
+                _mmcif_first(row, ["_atom_site.auth_asym_id", "_atom_site.label_asym_id"]),
+                auth_seq or label_seq,
+                _mmcif_first(row, ["_atom_site.auth_comp_id", "_atom_site.label_comp_id"]),
+                atom_name,
+                insertion_code,
+            ),
+        }
+        residue_infos[-1]["atoms"].append(atom_info)
+        residue_infos[-1]["atom_names"].add(atom_name)
+        if atom_name == "OXT":
+            residue_infos[-1]["has_oxt"] = True
+
+    if not residue_infos:
+        raise ValueError("mmCIF model selection produced no atoms")
+
+    chain_first = {}
+    chain_last = {}
+    for index, info in enumerate(residue_infos):
+        chain_first.setdefault(info["chain_id"], index)
+        chain_last[info["chain_id"]] = index
+
+    for index, info in enumerate(residue_infos):
+        resname = info["base_resname"]
+        if judge_histone:
+            resname = _mmcif_apply_histidine_mapping(resname, info["atom_names"])
+        skip_terminal_mapping = _pdb_match_unterminal_residue(
+            unterminal_selectors, info["chain_id"], info["res_seq"], info["icode"]
+        )
+        explicit_n_terminal, explicit_c_terminal = _pdb_match_terminal_residue(
+            terminal_selectors, info["chain_id"], info["res_seq"], info["icode"]
+        )
+        should_map_head = explicit_n_terminal or (
+            infer_terminals and not skip_terminal_mapping and chain_first[info["chain_id"]] == index
+        )
+        should_map_tail = explicit_c_terminal or (
+            infer_terminals and not skip_terminal_mapping and (
+                chain_last[info["chain_id"]] == index or info["has_oxt"]
+            )
+        )
+        if should_map_head and resname in GlobalSetting.PDBResidueNameMap["head"].keys():
+            resname = GlobalSetting.PDBResidueNameMap["head"][resname]
+        if should_map_tail:
+            resname = _pdb_apply_tail_mapping(resname)
+        info["resname"] = resname
+
+    atom_by_site_id = {}
+    atom_by_label_key = {}
+    atom_by_auth_key = {}
+    atom_by_external_key = {}
+    atom_map = {}
+    residue_objects = []
+    for info in residue_infos:
+        current_residue = Residue(ResidueType.get_type(info["resname"]))
+        current_residue.chain_id = info["chain_id"]
+        current_residue.residue_seq = info["res_seq"]
+        current_residue.res_seq = info["res_seq"]
+        current_residue.icode = info["icode"]
+        current_residue.insertion_code = info["icode"]
+        current_residue.source_residue_name = info["base_resname"]
+        for atom_info in info["atoms"]:
+            atom_index = atom_info["site_id"] or str(len(atom_map) + 1)
+            added = _pdb_add_atom(
+                current_residue,
+                atom_info["atom_name"],
+                atom_info["x"],
+                atom_info["y"],
+                atom_info["z"],
+                False,
+                ignore_unknown_name,
+                atom_map,
+                atom_index,
+            )
+            if not added:
+                continue
+            atom = atom_map[atom_index]
+            if atom_info["site_id"]:
+                atom_by_site_id[atom_info["site_id"]] = atom
+            atom_by_label_key[atom_info["label_key"]] = atom
+            atom_by_auth_key[atom_info["auth_key"]] = atom
+            external_key = (
+                info["chain_id"],
+                info["res_seq"],
+                info["icode"],
+                info["base_resname"].upper(),
+                atom.name.upper(),
+            )
+            atom_by_external_key[external_key] = atom
+        molecule.Add_Residue(current_residue)
+        residue_objects.append(current_residue)
+
+    for index in range(1, len(residue_objects)):
+        previous_info = residue_infos[index - 1]
+        current_info = residue_infos[index]
+        if previous_info["chain_id"] != current_info["chain_id"]:
+            continue
+        previous_residue = residue_objects[index - 1]
+        current_residue = residue_objects[index]
+        if previous_residue.type.tail and current_residue.type.head:
+            _mmcif_add_connection(
+                molecule,
+                previous_residue.name2atom(previous_residue.type.tail),
+                current_residue.name2atom(current_residue.type.head),
+            )
+
+    chem_comp_bonds = {}
+    for row in _mmcif_rows(data, "chem_comp_bond"):
+        comp_id = _mmcif_first(row, ["_chem_comp_bond.comp_id"]).upper()
+        atom1 = _mmcif_first(row, ["_chem_comp_bond.atom_id_1"]).upper()
+        atom2 = _mmcif_first(row, ["_chem_comp_bond.atom_id_2"]).upper()
+        if comp_id and atom1 and atom2:
+            chem_comp_bonds.setdefault(comp_id, []).append((atom1, atom2))
+    for info, residue in zip(residue_infos, residue_objects):
+        for atom1_name, atom2_name in chem_comp_bonds.get(info["base_resname"].upper(), []):
+            if atom1_name in residue._name2atom and atom2_name in residue._name2atom:
+                _mmcif_add_connection(molecule, residue.name2atom(atom1_name), residue.name2atom(atom2_name))
+
+    def resolve_struct_conn_atom(row, partner):
+        label_key = _mmcif_atom_identity_key(
+            _mmcif_first(row, [f"_struct_conn.{partner}_label_asym_id"]),
+            _mmcif_first(row, [f"_struct_conn.{partner}_label_seq_id"]),
+            _mmcif_first(row, [f"_struct_conn.{partner}_label_comp_id"]),
+            _mmcif_first(row, [f"_struct_conn.{partner}_label_atom_id"]),
+            _mmcif_first(row, [f"_struct_conn.pdbx_{partner}_pdb_ins_code"]),
+        )
+        auth_key = _mmcif_atom_identity_key(
+            _mmcif_first(row, [f"_struct_conn.{partner}_auth_asym_id", f"_struct_conn.{partner}_label_asym_id"]),
+            _mmcif_first(row, [f"_struct_conn.{partner}_auth_seq_id", f"_struct_conn.{partner}_label_seq_id"]),
+            _mmcif_first(row, [f"_struct_conn.{partner}_auth_comp_id", f"_struct_conn.{partner}_label_comp_id"]),
+            _mmcif_first(row, [f"_struct_conn.{partner}_auth_atom_id", f"_struct_conn.{partner}_label_atom_id"]),
+            _mmcif_first(row, [f"_struct_conn.pdbx_{partner}_pdb_ins_code"]),
+        )
+        return atom_by_auth_key.get(auth_key) or atom_by_label_key.get(label_key)
+
+    for row in _mmcif_rows(data, "struct_conn"):
+        atom1 = resolve_struct_conn_atom(row, "ptnr1")
+        atom2 = resolve_struct_conn_atom(row, "ptnr2")
+        _mmcif_add_connection(molecule, atom1, atom2)
+
+    for row in _mmcif_rows(data, "mokda_bond_semantic"):
+        atom1 = atom_by_site_id.get(_mmcif_first(row, ["_mokda_bond_semantic.atom_site_id_1"]))
+        atom2 = atom_by_site_id.get(_mmcif_first(row, ["_mokda_bond_semantic.atom_site_id_2"]))
+        _mmcif_add_connection(molecule, atom1, atom2)
+
+    for row in _mmcif_rows(data, "mokda_edit_operation"):
+        operation = _mmcif_first(row, ["_mokda_edit_operation.operation_type"]).lower()
+        atom1 = atom_by_site_id.get(_mmcif_first(row, ["_mokda_edit_operation.atom_site_id_1"]))
+        atom2 = atom_by_site_id.get(_mmcif_first(row, ["_mokda_edit_operation.atom_site_id_2"]))
+        if operation == "delete_bond":
+            _mmcif_remove_connection(molecule, atom1, atom2)
+        elif operation in {"add_bond", "create_bond", "update_bond"}:
+            _mmcif_add_connection(molecule, atom1, atom2)
+
+    _mmcif_apply_external_residue_links(molecule, residue_links, atom_by_external_key)
+
+    if read_cell:
+        lengths = [
+            _mmcif_parse_float(_mmcif_scalar(data, "_cell.length_a")),
+            _mmcif_parse_float(_mmcif_scalar(data, "_cell.length_b")),
+            _mmcif_parse_float(_mmcif_scalar(data, "_cell.length_c")),
+        ]
+        angles = [
+            _mmcif_parse_float(_mmcif_scalar(data, "_cell.angle_alpha")),
+            _mmcif_parse_float(_mmcif_scalar(data, "_cell.angle_beta")),
+            _mmcif_parse_float(_mmcif_scalar(data, "_cell.angle_gamma")),
+        ]
+        if all(value is not None for value in lengths + angles):
+            molecule.box_length = lengths
+            molecule.box_angle = angles
+
+    return molecule
+
+
 def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
              ignore_unknown_name=False, ignore_seqres=True, ignore_conect=True, read_cryst1=True,
              unterminal_residues=None, terminal_residues=None, infer_terminals=True):
@@ -865,13 +1383,14 @@ def load_coordinate(filename, mol=None):
 # amber Format
 ##########################################################################
 def _frcmod_nb14(line, atoms):
-    nb14ee = re.findall(r"SCEE=[\d+\.]+", line)
-    nb14lj = re.findall(r"SCNB=[\d+\.]+", line)
+    number = r"([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][+-]?\d+)?)"
+    nb14ee = re.search(r"SCEE\s*=\s*" + number, line)
+    nb14lj = re.search(r"SCNB\s*=\s*" + number, line)
     if not nb14ee and not nb14lj:
         return ""
-    nb14ee = 1.0 / float(nb14ee[0].split("=")[1]) if nb14ee else 1.0 / 1.2
-    nb14lj = 1.0 / float(nb14lj[0].split("=")[1]) if nb14lj else 1.0 / 2.0
-    return f"{atoms[0]}-{atoms[3]} {nb14ee} {nb14lj}\n"
+    nb14ee = 1.0 / float(nb14ee.group(1)) if nb14ee else 1.0 / 1.2
+    nb14lj = 1.0 / float(nb14lj.group(1)) if nb14lj else 1.0 / 2.0
+    return f"{'-'.join(atoms)} {nb14lj} {nb14ee}\n"
 
 
 def _frcmod_cmap(line, cmap, temp_cmp, cmap_flag):
@@ -914,18 +1433,23 @@ def _frcmod_atoms_words(line, n, last_atoms=None):
     :param n:
     :return:
     """
-    if line[0] != " ":
-        return [word.strip() for word in line[:n].split("-")], line[n:].split()
-    return [last_atoms, line[n:].split()]
+    atom_field = line[:n]
+    if atom_field.strip():
+        return [word.strip() for word in atom_field.split("-")], line[n:].split()
+    if last_atoms is None:
+        raise ValueError("Amber parameter continuation line has no preceding atom types")
+    return list(last_atoms), line[n:].split()
 
 
-def load_frcmod(filename, nbtype="RE"):
+def load_frcmod(filename, nbtype="RE", include_nb14=False):
     """
     This **function** is used to load a frcmod file
 
     :param filename: the name of the file to load
     :param nbtype: the non-bonded interaction recording type in the frcmod file.
-    :return: a list of strings, including atoms, bonds, angles, propers, impropers, ljs, cmap information respectively
+    :param include_nb14: whether to include non-bonded 1-4 scaling parameters in the return value
+    :return: a list of strings, including atoms, bonds, angles, propers, impropers, ljs, cmap information respectively;
+        when include_nb14 is True, nb14 parameters are inserted before cmap
     """
     with open(filename) as f:
         f.readline()
@@ -934,6 +1458,8 @@ def load_frcmod(filename, nbtype="RE"):
         bonds = ["name  k[kcal/mol·A^-2]    b[A]\n"]
         angles = ["name  k[kcal/mol·rad^-2]    b[degree]\n"]
         propers = ["name  k[kcal/mol]    phi0[degree]    periodicity    reset\n"]
+        nb14s = ["name    kLJ    kee\n"]
+        last_dihedral_atoms = None
         reset = 1
         impropers = ["name  k[kcal/mol]    phi0[degree]    periodicity\n"]
         cmap = {}
@@ -952,6 +1478,9 @@ def load_frcmod(filename, nbtype="RE"):
             words = line.split()
             if flag != "CMAP" and len(words) == 1:
                 flag = line.strip()
+                if flag[:4] == "DIHE":
+                    last_dihedral_atoms = None
+                    reset = 1
             elif flag[:4] == "MASS":
                 atom_types[words[0]] = words[1]
             elif flag[:4] == "BOND":
@@ -961,11 +1490,13 @@ def load_frcmod(filename, nbtype="RE"):
                 atoms, words = _frcmod_atoms_words(line, 8)
                 angles.append("-".join(atoms) + "\t" + words[0] + "\t" + words[1] + "\n")
             elif flag[:4] == "DIHE":
-                atoms, words = _frcmod_atoms_words(line, 11)
+                atoms, words = _frcmod_atoms_words(line, 11, last_dihedral_atoms)
+                last_dihedral_atoms = atoms
                 propers.append(
                     "-".join(atoms) + "\t" + str(float(words[1]) / int(words[0])) + "\t" + words[2] + "\t" + str(
                         abs(int(float(words[3])))) + "\t" + str(reset) + "\n"
                 )
+                nb14s.append(_frcmod_nb14(line, atoms))
                 if int(float(words[3])) < 0:
                     reset = 0
                 else:
@@ -994,8 +1525,10 @@ def load_frcmod(filename, nbtype="RE"):
         "".join(propers),
         "".join(impropers),
         "".join(ljs),
-        cmap,
     ]
+    if include_nb14:
+        toret.append("".join(nb14s))
+    toret.append(cmap)
     return toret
 
 

@@ -7,7 +7,16 @@ from __future__ import annotations
 
 from ..helper import Xprint, set_global_alternative_names
 from ..qm import scheduler as qm_scheduler
+from ..qm.resp_basis import resolve_default_resp_basis, resolve_resp_basis
+from ..qm.resp_parameters import get_resp_radius_overrides, normalize_element_symbol
 from . import resp_core
+
+
+_RESP_BASE_REFERENCES = (
+    "Bayly1993_RESP",
+    "SinghKollman1984_MK",
+    "BeslerMerzKollman1990_ESP",
+)
 
 
 def _normalize_backend_name(backend):
@@ -26,10 +35,49 @@ def _normalize_core_name(core):
     return core_name
 
 
-def resp_fit(assign, basis="6-31g*", opt=False, charge=None, spin=0, extra_equivalence=None,
+def _resolve_basis_for_resp(assign, basis):
+    elements = set(assign.atoms)
+    if basis is None:
+        return resolve_default_resp_basis(elements)
+    return resolve_resp_basis(basis, elements)
+
+
+def _merge_resp_radii(assign, radius):
+    resolved = get_resp_radius_overrides(assign.atoms)
+    if radius:
+        resolved.update({normalize_element_symbol(element): float(value) for element, value in dict(radius).items()})
+    return resolved
+
+
+def _build_resp_metadata(assign, resolved_basis, radius):
+    references = []
+    for reference in _RESP_BASE_REFERENCES + tuple(resolved_basis.references):
+        if reference not in references:
+            references.append(reference)
+    return {
+        "method": "RESP",
+        "esp_setup": "standard_mk_hf",
+        "basis_family": resolved_basis.label,
+        "basis": resolved_basis.basis,
+        "ecp": resolved_basis.ecp,
+        "cart": resolved_basis.cart,
+        "radius_set": "standard MK radii",
+        "radius": dict(radius),
+        "references": references,
+    }
+
+
+def get_resp_setup_metadata(assign, basis=None, radius=None):
+    resolved_basis = _resolve_basis_for_resp(assign, basis)
+    resolved_radius = _merge_resp_radii(assign, radius)
+    return _build_resp_metadata(assign, resolved_basis, resolved_radius)
+
+
+def resp_fit(assign, basis=None, opt=False, charge=None, spin=0, extra_equivalence=None,
              grid_density=6, grid_cell_layer=4, radius=None, a1=0.0005, a2=0.001,
              two_stage=True, only_esp=False, backend=None, core=None,
-             esp_memory_limit=None, esp_chunk_policy="auto", esp_safety_factor=0.8):
+             esp_memory_limit=None, esp_chunk_policy="auto", esp_safety_factor=0.8,
+             return_metadata=False):
     """
     This **function** fits the RESP partial charge for an Assign instance.
 
@@ -57,11 +105,16 @@ def resp_fit(assign, basis="6-31g*", opt=False, charge=None, spin=0, extra_equiv
 
     backend_name = _normalize_backend_name(backend)
     _normalize_core_name(core)
+    resolved_basis = _resolve_basis_for_resp(assign, basis)
+    resolved_radius = _merge_resp_radii(assign, radius)
+    metadata = _build_resp_metadata(assign, resolved_basis, resolved_radius)
 
     scf_result = qm_scheduler.run_scf(
         assign,
         backend=backend_name,
-        basis=basis,
+        basis=resolved_basis.basis,
+        ecp=resolved_basis.ecp,
+        cart=resolved_basis.cart,
         charge=charge,
         spin=spin,
         optimize_geometry=opt,
@@ -71,7 +124,7 @@ def resp_fit(assign, basis="6-31g*", opt=False, charge=None, spin=0, extra_equiv
         scf_result.coordinates_bohr,
         area_density=grid_density,
         layer=grid_cell_layer,
-        radius=radius,
+        radius=resolved_radius,
     )
     esp_result = qm_scheduler.compute_esp_on_grid(
         scf_result,
@@ -80,7 +133,7 @@ def resp_fit(assign, basis="6-31g*", opt=False, charge=None, spin=0, extra_equiv
         chunk_policy=esp_chunk_policy,
         safety_factor=esp_safety_factor,
     )
-    return resp_core.fit_resp_from_esp(
+    charges = resp_core.fit_resp_from_esp(
         assign,
         atom_coordinates_bohr=scf_result.coordinates_bohr,
         nuclear_charges=scf_result.nuclear_charges,
@@ -93,6 +146,9 @@ def resp_fit(assign, basis="6-31g*", opt=False, charge=None, spin=0, extra_equiv
         two_stage=two_stage,
         only_esp=only_esp,
     )
+    if return_metadata:
+        return {"charges": charges, "metadata": metadata}
+    return charges
 
 
 _get_mk_grid = resp_core._get_mk_grid
@@ -102,9 +158,7 @@ _correct_extra_equivalence = resp_core._correct_extra_equivalence
 _get_a20_and_b20 = resp_core._get_a20_and_b20
 _find_restrained_second_stage_groups = resp_core._find_restrained_second_stage_groups
 
-set_global_alternative_names()
-
-Xprint("""Reference for resp.py:
+RESP_REFERENCE_TEXT = """Reference for resp.py:
 1. pyscf
   Q. Sun, T. C. Berkelbach, N. S. Blunt, G. H. Booth, S. Guo, Z. Li, J. Liu, J. McClain, S. Sharma, S. Wouters, and G. K.-L. Chan
     PySCF: the Python-based simulations of chemistry framework
@@ -123,4 +177,12 @@ Xprint("""Reference for resp.py:
     Journal of Physical Chemistry 1993 97(40) 10269-10280
     DOI: 10.1021/j100142a004
 
-""")
+"""
+
+
+def print_references():
+    """Print RESP references explicitly without creating an import-time side effect."""
+    Xprint(RESP_REFERENCE_TEXT)
+
+
+set_global_alternative_names()

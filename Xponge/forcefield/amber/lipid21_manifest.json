@@ -1,0 +1,899 @@
+{
+  "format_version": 2,
+  "source": "lipid21.lib",
+  "source_sha256": "03fab780a94ff7f80f912cf08e80967ef63bae3ae5d9b204bb88bee51f1fae3d",
+  "source_license": "Public Domain (AmberTools dat/leap)",
+  "template_count": 16,
+  "templates": [
+    {
+      "template": "AR",
+      "source_unit_name": "AR",
+      "atom_count": 50,
+      "bond_count": 49,
+      "total_charge": 0.0,
+      "expected_integer_charge": 0,
+      "head_atom": "C12",
+      "tail_atom": "C12",
+      "source_connect_indices": [
+        35,
+        35
+      ],
+      "source_connectivity_flags": [
+        1,
+        2
+      ],
+      "head_next_atom": "C13",
+      "head_reference_atom": "H2S",
+      "head_link_conditions": [
+        {
+          "atoms": [
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": 109.5
+        },
+        {
+          "atoms": [
+            "H2S",
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": -120.0
+        }
+      ],
+      "head_rule_source": "standard_chain",
+      "tail_next_atom": "C13",
+      "tail_reference_atom": "H2S",
+      "tail_link_conditions": [
+        {
+          "atoms": [
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": 109.5
+        },
+        {
+          "atoms": [
+            "H2S",
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": 120.0
+        }
+      ],
+      "tail_rule_source": "standard_chain"
+    },
+    {
+      "template": "CHL",
+      "source_unit_name": "CHL",
+      "atom_count": 74,
+      "bond_count": 77,
+      "total_charge": 0.0,
+      "expected_integer_charge": 0,
+      "head_atom": null,
+      "tail_atom": null,
+      "source_connect_indices": [
+        0,
+        0
+      ],
+      "source_connectivity_flags": [
+        1,
+        2
+      ],
+      "head_next_atom": null,
+      "head_reference_atom": null,
+      "head_link_conditions": [],
+      "head_rule_source": "none",
+      "tail_next_atom": null,
+      "tail_reference_atom": null,
+      "tail_link_conditions": [],
+      "tail_rule_source": "none"
+    },
+    {
+      "template": "DHA",
+      "source_unit_name": "DHA",
+      "atom_count": 52,
+      "bond_count": 51,
+      "total_charge": 0.0,
+      "expected_integer_charge": 0,
+      "head_atom": "C12",
+      "tail_atom": "C12",
+      "source_connect_indices": [
+        34,
+        34
+      ],
+      "source_connectivity_flags": [
+        1,
+        2
+      ],
+      "head_next_atom": "C13",
+      "head_reference_atom": "H2S",
+      "head_link_conditions": [
+        {
+          "atoms": [
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": 109.5
+        },
+        {
+          "atoms": [
+            "H2S",
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": -120.0
+        }
+      ],
+      "head_rule_source": "standard_chain",
+      "tail_next_atom": "C13",
+      "tail_reference_atom": "H2S",
+      "tail_link_conditions": [
+        {
+          "atoms": [
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": 109.5
+        },
+        {
+          "atoms": [
+            "H2S",
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": 120.0
+        }
+      ],
+      "tail_rule_source": "standard_chain"
+    },
+    {
+      "template": "LAL",
+      "source_unit_name": "LAL",
+      "atom_count": 34,
+      "bond_count": 33,
+      "total_charge": 0.0,
+      "expected_integer_charge": 0,
+      "head_atom": "C12",
+      "tail_atom": "C12",
+      "source_connect_indices": [
+        32,
+        32
+      ],
+      "source_connectivity_flags": [
+        1
+      ],
+      "head_next_atom": "C13",
+      "head_reference_atom": "H2S",
+      "head_link_conditions": [
+        {
+          "atoms": [
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": 109.5
+        },
+        {
+          "atoms": [
+            "H2S",
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": -120.0
+        }
+      ],
+      "head_rule_source": "standard_chain",
+      "tail_next_atom": "C13",
+      "tail_reference_atom": "H2S",
+      "tail_link_conditions": [
+        {
+          "atoms": [
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": 109.5
+        },
+        {
+          "atoms": [
+            "H2S",
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": 120.0
+        }
+      ],
+      "tail_rule_source": "standard_chain"
+    },
+    {
+      "template": "MY",
+      "source_unit_name": "MY",
+      "atom_count": 40,
+      "bond_count": 39,
+      "total_charge": 0.0,
+      "expected_integer_charge": 0,
+      "head_atom": "C12",
+      "tail_atom": "C12",
+      "source_connect_indices": [
+        38,
+        38
+      ],
+      "source_connectivity_flags": [
+        1
+      ],
+      "head_next_atom": "C13",
+      "head_reference_atom": "H2S",
+      "head_link_conditions": [
+        {
+          "atoms": [
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": 109.5
+        },
+        {
+          "atoms": [
+            "H2S",
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": -120.0
+        }
+      ],
+      "head_rule_source": "standard_chain",
+      "tail_next_atom": "C13",
+      "tail_reference_atom": "H2S",
+      "tail_link_conditions": [
+        {
+          "atoms": [
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": 109.5
+        },
+        {
+          "atoms": [
+            "H2S",
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": 120.0
+        }
+      ],
+      "tail_rule_source": "standard_chain"
+    },
+    {
+      "template": "OL",
+      "source_unit_name": "OL",
+      "atom_count": 50,
+      "bond_count": 49,
+      "total_charge": 0.0,
+      "expected_integer_charge": 0,
+      "head_atom": "C12",
+      "tail_atom": "C12",
+      "source_connect_indices": [
+        1,
+        1
+      ],
+      "source_connectivity_flags": [
+        1,
+        2
+      ],
+      "head_next_atom": "C13",
+      "head_reference_atom": "H2S",
+      "head_link_conditions": [
+        {
+          "atoms": [
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": 109.5
+        },
+        {
+          "atoms": [
+            "H2S",
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": -120.0
+        }
+      ],
+      "head_rule_source": "standard_chain",
+      "tail_next_atom": "C13",
+      "tail_reference_atom": "H2S",
+      "tail_link_conditions": [
+        {
+          "atoms": [
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": 109.5
+        },
+        {
+          "atoms": [
+            "H2S",
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": 120.0
+        }
+      ],
+      "tail_rule_source": "standard_chain"
+    },
+    {
+      "template": "PA",
+      "source_unit_name": "PA",
+      "atom_count": 46,
+      "bond_count": 45,
+      "total_charge": 0.0,
+      "expected_integer_charge": 0,
+      "head_atom": "C12",
+      "tail_atom": "C12",
+      "source_connect_indices": [
+        44,
+        44
+      ],
+      "source_connectivity_flags": [
+        1
+      ],
+      "head_next_atom": "C13",
+      "head_reference_atom": "H2S",
+      "head_link_conditions": [
+        {
+          "atoms": [
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": 109.5
+        },
+        {
+          "atoms": [
+            "H2S",
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": -120.0
+        }
+      ],
+      "head_rule_source": "standard_chain",
+      "tail_next_atom": "C13",
+      "tail_reference_atom": "H2S",
+      "tail_link_conditions": [
+        {
+          "atoms": [
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": 109.5
+        },
+        {
+          "atoms": [
+            "H2S",
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": 120.0
+        }
+      ],
+      "tail_rule_source": "standard_chain"
+    },
+    {
+      "template": "PC",
+      "source_unit_name": "PC",
+      "atom_count": 38,
+      "bond_count": 37,
+      "total_charge": 0.0,
+      "expected_integer_charge": 0,
+      "head_atom": "C11",
+      "tail_atom": "C21",
+      "source_connect_indices": [
+        1,
+        37
+      ],
+      "source_connectivity_flags": [
+        1,
+        2
+      ],
+      "head_next_atom": "O11",
+      "head_reference_atom": "O12",
+      "head_link_conditions": [
+        {
+          "atoms": [
+            "O11",
+            "C11"
+          ],
+          "parameter_degrees": 120.0
+        },
+        {
+          "atoms": [
+            "O12",
+            "O11",
+            "C11"
+          ],
+          "parameter_degrees": 180.0
+        }
+      ],
+      "head_rule_source": "carbonyl_head",
+      "tail_next_atom": "O21",
+      "tail_reference_atom": "O22",
+      "tail_link_conditions": [
+        {
+          "atoms": [
+            "O21",
+            "C21"
+          ],
+          "parameter_degrees": 120.0
+        },
+        {
+          "atoms": [
+            "O22",
+            "O21",
+            "C21"
+          ],
+          "parameter_degrees": 180.0
+        }
+      ],
+      "tail_rule_source": "carbonyl_tail"
+    },
+    {
+      "template": "PE",
+      "source_unit_name": "PE",
+      "atom_count": 29,
+      "bond_count": 28,
+      "total_charge": 0.0,
+      "expected_integer_charge": 0,
+      "head_atom": "C11",
+      "tail_atom": "C21",
+      "source_connect_indices": [
+        1,
+        28
+      ],
+      "source_connectivity_flags": [
+        1,
+        2
+      ],
+      "head_next_atom": "O11",
+      "head_reference_atom": "O12",
+      "head_link_conditions": [
+        {
+          "atoms": [
+            "O11",
+            "C11"
+          ],
+          "parameter_degrees": 120.0
+        },
+        {
+          "atoms": [
+            "O12",
+            "O11",
+            "C11"
+          ],
+          "parameter_degrees": 180.0
+        }
+      ],
+      "head_rule_source": "carbonyl_head",
+      "tail_next_atom": "O21",
+      "tail_reference_atom": "O22",
+      "tail_link_conditions": [
+        {
+          "atoms": [
+            "O21",
+            "C21"
+          ],
+          "parameter_degrees": 120.0
+        },
+        {
+          "atoms": [
+            "O22",
+            "O21",
+            "C21"
+          ],
+          "parameter_degrees": 180.0
+        }
+      ],
+      "tail_rule_source": "carbonyl_tail"
+    },
+    {
+      "template": "PGR",
+      "source_unit_name": "PGR",
+      "atom_count": 31,
+      "bond_count": 30,
+      "total_charge": -1.0,
+      "expected_integer_charge": -1,
+      "head_atom": "C11",
+      "tail_atom": "C21",
+      "source_connect_indices": [
+        1,
+        28
+      ],
+      "source_connectivity_flags": [
+        1,
+        2
+      ],
+      "head_next_atom": "O11",
+      "head_reference_atom": "O12",
+      "head_link_conditions": [
+        {
+          "atoms": [
+            "O11",
+            "C11"
+          ],
+          "parameter_degrees": 120.0
+        },
+        {
+          "atoms": [
+            "O12",
+            "O11",
+            "C11"
+          ],
+          "parameter_degrees": 180.0
+        }
+      ],
+      "head_rule_source": "carbonyl_head",
+      "tail_next_atom": "O21",
+      "tail_reference_atom": "O22",
+      "tail_link_conditions": [
+        {
+          "atoms": [
+            "O21",
+            "C21"
+          ],
+          "parameter_degrees": 120.0
+        },
+        {
+          "atoms": [
+            "O22",
+            "O21",
+            "C21"
+          ],
+          "parameter_degrees": 180.0
+        }
+      ],
+      "tail_rule_source": "carbonyl_tail"
+    },
+    {
+      "template": "PGS",
+      "source_unit_name": "PGS",
+      "atom_count": 31,
+      "bond_count": 30,
+      "total_charge": -1.0,
+      "expected_integer_charge": -1,
+      "head_atom": "C11",
+      "tail_atom": "C21",
+      "source_connect_indices": [
+        1,
+        28
+      ],
+      "source_connectivity_flags": [
+        1,
+        2
+      ],
+      "head_next_atom": "O11",
+      "head_reference_atom": "O12",
+      "head_link_conditions": [
+        {
+          "atoms": [
+            "O11",
+            "C11"
+          ],
+          "parameter_degrees": 120.0
+        },
+        {
+          "atoms": [
+            "O12",
+            "O11",
+            "C11"
+          ],
+          "parameter_degrees": 180.0
+        }
+      ],
+      "head_rule_source": "carbonyl_head",
+      "tail_next_atom": "O21",
+      "tail_reference_atom": "O22",
+      "tail_link_conditions": [
+        {
+          "atoms": [
+            "O21",
+            "C21"
+          ],
+          "parameter_degrees": 120.0
+        },
+        {
+          "atoms": [
+            "O22",
+            "O21",
+            "C21"
+          ],
+          "parameter_degrees": 180.0
+        }
+      ],
+      "tail_rule_source": "carbonyl_tail"
+    },
+    {
+      "template": "PH-",
+      "source_unit_name": "PH-",
+      "atom_count": 20,
+      "bond_count": 19,
+      "total_charge": -1.0,
+      "expected_integer_charge": -1,
+      "head_atom": "C11",
+      "tail_atom": "C21",
+      "source_connect_indices": [
+        1,
+        19
+      ],
+      "source_connectivity_flags": [
+        1,
+        2
+      ],
+      "head_next_atom": "O11",
+      "head_reference_atom": "O12",
+      "head_link_conditions": [
+        {
+          "atoms": [
+            "O11",
+            "C11"
+          ],
+          "parameter_degrees": 120.0
+        },
+        {
+          "atoms": [
+            "O12",
+            "O11",
+            "C11"
+          ],
+          "parameter_degrees": 180.0
+        }
+      ],
+      "head_rule_source": "carbonyl_head",
+      "tail_next_atom": "O21",
+      "tail_reference_atom": "O22",
+      "tail_link_conditions": [
+        {
+          "atoms": [
+            "O21",
+            "C21"
+          ],
+          "parameter_degrees": 120.0
+        },
+        {
+          "atoms": [
+            "O22",
+            "O21",
+            "C21"
+          ],
+          "parameter_degrees": 180.0
+        }
+      ],
+      "tail_rule_source": "carbonyl_tail"
+    },
+    {
+      "template": "PS",
+      "source_unit_name": "PS",
+      "atom_count": 31,
+      "bond_count": 30,
+      "total_charge": -1.0,
+      "expected_integer_charge": -1,
+      "head_atom": "C11",
+      "tail_atom": "C21",
+      "source_connect_indices": [
+        1,
+        28
+      ],
+      "source_connectivity_flags": [
+        1,
+        2
+      ],
+      "head_next_atom": "O11",
+      "head_reference_atom": "O12",
+      "head_link_conditions": [
+        {
+          "atoms": [
+            "O11",
+            "C11"
+          ],
+          "parameter_degrees": 120.0
+        },
+        {
+          "atoms": [
+            "O12",
+            "O11",
+            "C11"
+          ],
+          "parameter_degrees": 180.0
+        }
+      ],
+      "head_rule_source": "carbonyl_head",
+      "tail_next_atom": "O21",
+      "tail_reference_atom": "O22",
+      "tail_link_conditions": [
+        {
+          "atoms": [
+            "O21",
+            "C21"
+          ],
+          "parameter_degrees": 120.0
+        },
+        {
+          "atoms": [
+            "O22",
+            "O21",
+            "C21"
+          ],
+          "parameter_degrees": 180.0
+        }
+      ],
+      "tail_rule_source": "carbonyl_tail"
+    },
+    {
+      "template": "SA",
+      "source_unit_name": "SA",
+      "atom_count": 44,
+      "bond_count": 43,
+      "total_charge": -0.069718,
+      "expected_integer_charge": 0,
+      "head_atom": "C12",
+      "tail_atom": "C12",
+      "source_connect_indices": [
+        43,
+        43
+      ],
+      "source_connectivity_flags": [
+        1
+      ],
+      "head_next_atom": "C13",
+      "head_reference_atom": "H2R",
+      "head_link_conditions": [
+        {
+          "atoms": [
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": 120.0
+        },
+        {
+          "atoms": [
+            "C13",
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": 180.0
+        }
+      ],
+      "head_rule_source": "explicit_sa_alkene",
+      "tail_next_atom": "C13",
+      "tail_reference_atom": "H2R",
+      "tail_link_conditions": [
+        {
+          "atoms": [
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": 120.0
+        },
+        {
+          "atoms": [
+            "C13",
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": 180.0
+        }
+      ],
+      "tail_rule_source": "explicit_sa_alkene"
+    },
+    {
+      "template": "SPM",
+      "source_unit_name": "SPM",
+      "atom_count": 37,
+      "bond_count": 36,
+      "total_charge": 0.069721,
+      "expected_integer_charge": 0,
+      "head_atom": "C11",
+      "tail_atom": "C1",
+      "source_connect_indices": [
+        32,
+        34
+      ],
+      "source_connectivity_flags": [
+        1
+      ],
+      "head_next_atom": "N11",
+      "head_reference_atom": "O12",
+      "head_link_conditions": [
+        {
+          "atoms": [
+            "N11",
+            "C11"
+          ],
+          "parameter_degrees": 120.0
+        },
+        {
+          "atoms": [
+            "O12",
+            "N11",
+            "C11"
+          ],
+          "parameter_degrees": 180.0
+        }
+      ],
+      "head_rule_source": "explicit_spm_amide",
+      "tail_next_atom": "C2",
+      "tail_reference_atom": "O22",
+      "tail_link_conditions": [
+        {
+          "atoms": [
+            "C2",
+            "C1"
+          ],
+          "parameter_degrees": 109.5
+        },
+        {
+          "atoms": [
+            "O22",
+            "C2",
+            "C1"
+          ],
+          "parameter_degrees": -120.0
+        }
+      ],
+      "tail_rule_source": "explicit_spm_sphingosine"
+    },
+    {
+      "template": "ST",
+      "source_unit_name": "ST",
+      "atom_count": 52,
+      "bond_count": 51,
+      "total_charge": 0.0,
+      "expected_integer_charge": 0,
+      "head_atom": "C12",
+      "tail_atom": "C12",
+      "source_connect_indices": [
+        50,
+        50
+      ],
+      "source_connectivity_flags": [
+        1
+      ],
+      "head_next_atom": "C13",
+      "head_reference_atom": "H2S",
+      "head_link_conditions": [
+        {
+          "atoms": [
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": 109.5
+        },
+        {
+          "atoms": [
+            "H2S",
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": -120.0
+        }
+      ],
+      "head_rule_source": "standard_chain",
+      "tail_next_atom": "C13",
+      "tail_reference_atom": "H2S",
+      "tail_link_conditions": [
+        {
+          "atoms": [
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": 109.5
+        },
+        {
+          "atoms": [
+            "H2S",
+            "H2R",
+            "C12"
+          ],
+          "parameter_degrees": 120.0
+        }
+      ],
+      "tail_rule_source": "standard_chain"
+    }
+  ]
+}
