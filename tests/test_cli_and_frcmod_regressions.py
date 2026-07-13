@@ -21,8 +21,10 @@ def _run_python(code, *args):
 
 def test_cli_version_and_plain_import_have_no_reference_side_effect():
     version = _run_python("", "-m", "Xponge", "-v")
-    assert version.stdout.strip() == "1.6b4"
+    library_version = _run_python("import Xponge; print(Xponge.__version__)\n")
+    assert version.stdout == library_version.stdout
     assert version.stderr == ""
+    assert library_version.stderr == ""
 
     imported = _run_python("import Xponge\n")
     assert imported.stdout == ""
