@@ -41,6 +41,7 @@ __all__ = [
     "test_legacy_to_bundle_static_default_prefix_generates_required_protocol",
     "test_legacy_to_bundle_dynamic_custom_force_default_prefix",
     "test_legacy_to_bundle_writes_typed_topology",
+    "test_legacy_to_bundle_improper_alias_is_typed_only",
     "test_legacy_to_bundle_outputs_pass_sponge_h5_probes",
     "test_legacy_io_contract_matrix_dry_run",
     "test_legacy_output_mdout_parser",
@@ -545,6 +546,7 @@ def test_legacy_to_bundle_dry_run_manifest():
         assert entries["topology.bond"]["status"] == "typed_converted"
         assert entries["topology.angle"]["status"] == "typed_converted"
         assert entries["topology.dihedral"]["status"] == "typed_converted"
+        assert entries["topology.improper_dihedral"]["status"] == "typed_converted"
         assert entries["topology.nb14_extra"]["status"] == "typed_converted"
         assert entries["topology.urey_bradley"]["status"] == "typed_converted"
         assert entries["topology.cmap"]["status"] == "typed_converted"
@@ -788,6 +790,7 @@ def test_legacy_to_bundle_bundled_mdin_sidecars_and_overrides():
             assert 'input_h5_trajectory_particle_stream = "all"' in bundled_mdin
             assert "mass_in_file" not in bundled_mdin
             assert "cmap_in_file" not in bundled_mdin
+            assert "improper_dihedral_in_file" not in bundled_mdin
             assert "LJ_soft_core_in_file" not in bundled_mdin
             assert "subsys_division_in_file" not in bundled_mdin
             assert "EAM_in_file" not in bundled_mdin
@@ -834,6 +837,9 @@ def test_legacy_to_bundle_bundled_mdin_sidecars_and_overrides():
             assert (bundle_dir / "legacy_sidecars" / "steer_cv_in_file" / "steer_cv.txt").exists()
             assert (bundle_dir / "legacy_sidecars" / "mass_in_file" / "mass.txt").exists()
             assert (bundle_dir / "legacy_sidecars" / "cmap_in_file" / "cmap.txt").exists()
+            assert not (
+                bundle_dir / "legacy_sidecars" / "improper_dihedral_in_file" / "improper.txt"
+            ).exists()
             assert (bundle_dir / "legacy_sidecars" / "LJ_soft_core_in_file" / "lj_soft_core.txt").exists()
             assert (bundle_dir / "legacy_sidecars" / "EAM_in_file" / "eam.txt").exists()
             assert (bundle_dir / "legacy_sidecars" / "EAM_atom_type_in_file" / "eam_atom_type.txt").exists()
@@ -895,6 +901,8 @@ def test_legacy_to_bundle_bundled_mdin_sidecars_and_overrides():
             assert strings[("topology.spgt.h5", "/topology/topology_hash")].startswith("sha256:")
             assert strings[("topology.spgt.h5", "/topology/forcefield_hash")].startswith("sha256:")
             assert datasets[("topology.spgt.h5", "/topology/atom_count")] == ()
+            assert datasets[("topology.spgt.h5", "/forcefield/improper/pk")] == (1,)
+            assert ("topology.spgt.h5", "/forcefield/improper/k") not in datasets
             assert datasets[
                 ("topology.spgt.h5", "/forcefield/custom_force/pairwise/data/custom_pair/parameter/value")
             ] == (2, 1)
@@ -952,6 +960,9 @@ def test_legacy_to_bundle_bundled_mdin_sidecars_and_overrides():
                 ("topology.spgt.h5", "/parameters/sponge/files/legacy_sidecars/key")
             ]
             assert "cmap_in_file" in string_arrays[
+                ("topology.spgt.h5", "/parameters/sponge/files/legacy_sidecars/key")
+            ]
+            assert "improper_dihedral_in_file" not in string_arrays[
                 ("topology.spgt.h5", "/parameters/sponge/files/legacy_sidecars/key")
             ]
             assert "LJ_soft_core_in_file" in string_arrays[
@@ -1234,6 +1245,7 @@ def test_legacy_to_bundle_writes_typed_topology():
         entries = {entry["contract_id"]: entry for entry in manifest.to_dict()["entries"]}
         assert entries["topology.mass"]["status"] == "typed_converted"
         assert entries["topology.cmap"]["status"] == "typed_converted"
+        assert entries["topology.improper_dihedral"]["status"] == "typed_converted"
         assert entries["topology.LJ_soft_core"]["status"] == "typed_converted"
         assert entries["restart.SITS_nk"]["status"] == "typed_converted"
         assert entries["protocol.cv"]["status"] == "typed_converted"
@@ -1275,6 +1287,14 @@ def test_legacy_to_bundle_writes_typed_topology():
             assert np.array_equal(handle["/atoms/residue_index"][...], np.asarray([0, 0], dtype=np.int32))
             assert np.array_equal(handle["/forcefield/bond/atoms"][...], np.asarray([[0, 1]], dtype=np.int32))
             assert np.allclose(handle["/forcefield/bond/k"][...], np.asarray([100.0], dtype=np.float32))
+            assert np.array_equal(
+                handle["/forcefield/improper/atoms"][...],
+                np.asarray([[0, 1, 0, 1]], dtype=np.int32),
+            )
+            assert np.allclose(handle["/forcefield/improper/pk"][...], np.asarray([2.5], dtype=np.float32))
+            assert "/forcefield/improper/k" not in handle
+            sidecar_keys = _h5_string_list(handle["/parameters/sponge/files/legacy_sidecars/key"])
+            assert "improper_dihedral_in_file" not in sidecar_keys
             assert np.array_equal(handle["/forcefield/cmap/atoms"][...], np.asarray([[0, 1, 0, 1, 0]], dtype=np.int32))
             assert np.allclose(handle["/forcefield/gb/params"][...], np.asarray([[1.5, 0.8], [1.2, 0.85]], dtype=np.float32))
             assert np.array_equal(handle["/forcefield/virtual_atom/type"][...], np.asarray([2], dtype=np.int32))
@@ -1494,6 +1514,39 @@ def test_legacy_to_bundle_writes_typed_topology():
             assert np.array_equal(handle["/particles/all/step"][...], np.asarray([0, 1], dtype=np.int64))
             assert np.allclose(handle["/particles/all/box/edges/value"][1], np.diag([11.0, 21.0, 31.0]).astype(np.float32))
             assert np.allclose(handle["/particles/all/velocity/value"][0, 0], np.asarray([0.1, 0.2, 0.3], dtype=np.float32))
+
+
+def test_legacy_to_bundle_improper_alias_is_typed_only():
+    try:
+        import h5py
+    except ImportError:
+        return
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        case_dir = Path(tmpdir) / "case"
+        output_dir = Path(tmpdir) / "out"
+        case_dir.mkdir()
+        write_basic_case(case_dir)
+        mdin_path = case_dir / "mdin.spg.toml"
+        mdin_path.write_text(
+            mdin_path.read_text(encoding="utf-8").replace(
+                "improper_dihedral_in_file", "improper_in_file"
+            ),
+            encoding="utf-8",
+        )
+
+        manifest = convert_legacy_to_bundle(case_dir, output_dir)
+        entries = {entry["contract_id"]: entry for entry in manifest.to_dict()["entries"]}
+        assert entries["topology.improper"]["status"] == "typed_converted"
+
+        bundle_dir = output_dir / "bundle"
+        bundled_mdin = (bundle_dir / "mdin.bundled.spg.toml").read_text(encoding="utf-8")
+        assert "improper_in_file" not in bundled_mdin
+        assert not (bundle_dir / "legacy_sidecars" / "improper_in_file" / "improper.txt").exists()
+        with h5py.File(bundle_dir / "topology.spgt.h5", "r") as handle:
+            assert np.allclose(handle["/forcefield/improper/pk"][...], np.asarray([2.5], dtype=np.float32))
+            sidecar_keys = _h5_string_list(handle["/parameters/sponge/files/legacy_sidecars/key"])
+            assert "improper_in_file" not in sidecar_keys
 
 
 def test_legacy_to_bundle_outputs_pass_sponge_h5_probes():

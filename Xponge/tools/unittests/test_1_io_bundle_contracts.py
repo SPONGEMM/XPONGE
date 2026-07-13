@@ -76,6 +76,18 @@ def test_all_canonical_typed_contracts_have_exporters():
         assert contract.exporter_id in EXPORTERS, contract.contract_id
 
 
+def test_improper_is_typed_required_with_alias_only_for_input():
+    by_legacy_key = contracts_by_legacy_key()
+    canonical = by_legacy_key["improper_dihedral_in_file"]
+    alias = by_legacy_key["improper_in_file"]
+
+    assert len(canonical) == 1
+    assert canonical[0].reverse_policy == "typed_required"
+    assert canonical[0].required_bundle_paths == ("/forcefield/improper",)
+    assert len(alias) == 1
+    assert alias[0].reverse_policy == "alias"
+
+
 def test_contract_validation_rejects_duplicate_ids():
     duplicate = replace(CONTRACTS[0], bundle_path="/duplicate")
     with pytest.raises(ValueError, match="duplicate I/O contract id"):

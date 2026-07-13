@@ -13,7 +13,13 @@ import numpy as np
 from Xponge.load import load_coordinate
 
 from .bundle_builder import BundleBuilder, BundleIO, BundleMetadata, BundlePaths
-from .contracts import CONTRACTS, PROTOCOL_RESTART_SIDECAR_KEYS, IOContract, contracts_by_legacy_key
+from .contracts import (
+    CONTRACTS,
+    LEGACY_KEY_ALIASES,
+    PROTOCOL_RESTART_SIDECAR_KEYS,
+    IOContract,
+    contracts_by_legacy_key,
+)
 from .h5_writer import (
     ensure_dataset,
     ensure_group,
@@ -257,7 +263,8 @@ class LegacyToBundleConverter:
                         self._builder.add_datasets(contract.bundle_file, typed_datasets)
                     if contract.bundle_file == "restart.spgr.h5":
                         self._track_restart_state_component(key)
-                    self._stage_legacy_sidecar(contract, key, source_path, dry_run=dry_run)
+                    if self._typed_payload_requires_legacy_sidecar(key):
+                        self._stage_legacy_sidecar(contract, key, source_path, dry_run=dry_run)
                     self._add_manifest_entry(
                         contract,
                         "typed_converted",
@@ -453,6 +460,15 @@ class LegacyToBundleConverter:
             sidecar_abs.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source_path, sidecar_abs)
         return sidecar_rel
+
+    def _typed_payload_requires_legacy_sidecar(self, key: str) -> bool:
+        canonical_key = LEGACY_KEY_ALIASES.get(key, key)
+        canonical_contracts = self._contract_index.get(canonical_key, ())
+        return not any(
+            contract.status == "compatibility_import"
+            and contract.reverse_policy == "typed_required"
+            for contract in canonical_contracts
+        )
 
     def _stage_legacy_sidecar(
         self, contract: IOContract, key: str, source_path: Path, *, dry_run: bool

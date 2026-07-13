@@ -101,6 +101,7 @@ def write_basic_case(case_dir: Path) -> None:
     (case_dir / "bond.txt").write_text("1\n0 1 100.0 1.5\n", encoding="utf-8")
     (case_dir / "angle.txt").write_text("1\n0 1 0 50.0 1.9\n", encoding="utf-8")
     (case_dir / "dihedral.txt").write_text("1\n0 1 0 1 3 2.0 3.14\n", encoding="utf-8")
+    (case_dir / "improper.txt").write_text("1\n0 1 0 1 2.5 3.14\n", encoding="utf-8")
     (case_dir / "nb14_extra.txt").write_text("1\n0 1 1.0 2.0 0.5\n", encoding="utf-8")
     (case_dir / "urey_bradley.txt").write_text("1\n0 1 0 50.0 1.9 10.0 2.5\n", encoding="utf-8")
     (case_dir / "cmap.txt").write_text(
@@ -306,6 +307,7 @@ def write_basic_case(case_dir: Path) -> None:
         'bond_in_file = "bond.txt"\n'
         'angle_in_file = "angle.txt"\n'
         'dihedral_in_file = "dihedral.txt"\n'
+        'improper_dihedral_in_file = "improper.txt"\n'
         'nb14_extra_in_file = "nb14_extra.txt"\n'
         'urey_bradley_in_file = "urey_bradley.txt"\n'
         'cmap_in_file = "cmap.txt"\n'

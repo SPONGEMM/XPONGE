@@ -49,6 +49,7 @@ def test_bundle_to_legacy_full_case(tmp_path):
     assert entries["topology.bond"].status == "typed_exported"
     assert entries["topology.angle"].status == "typed_exported"
     assert entries["topology.dihedral"].status == "typed_exported"
+    assert entries["topology.improper_dihedral"].status == "typed_exported"
     assert entries["topology.LJ"].status == "typed_exported"
     assert entries["restart.coordinate"].status == "typed_exported"
     assert entries["restart.velocity"].status == "typed_exported"
@@ -65,6 +66,7 @@ def test_bundle_to_legacy_full_case(tmp_path):
     assert "input_h5_restart_path" not in mdin_text
     assert 'mass_in_file = "system_mass.txt"' in mdin_text
     assert 'coordinate_in_file = "system_coordinate.txt"' in mdin_text
+    assert 'improper_dihedral_in_file = "system_improper_dihedral.txt"' in mdin_text
     assert 'custom_pair_in_file = "system_custom_pair.txt"' in mdin_text
     assert 'crd = "system_crd.dat"' in mdin_text
 
@@ -96,9 +98,31 @@ def test_bundle_to_legacy_uses_typed_data_instead_of_stale_sidecar(tmp_path):
     assert np.allclose(by_path["/atoms/mass"], np.asarray([2.0, 18.0], dtype=np.float32))
 
 
+def test_bundle_to_legacy_improper_uses_mutated_typed_pk_without_sidecar(tmp_path):
+    h5py = pytest.importorskip("h5py")
+    bundle_dir = _make_bundle(tmp_path)
+    with h5py.File(bundle_dir / "topology.spgt.h5", "a") as handle:
+        sidecar_keys = [
+            value.decode() if isinstance(value, bytes) else str(value)
+            for value in handle["/parameters/sponge/files/legacy_sidecars/key"][()]
+        ]
+        assert "improper_dihedral_in_file" not in sidecar_keys
+        assert "improper_in_file" not in sidecar_keys
+        handle["/forcefield/improper/pk"][...] = np.asarray([7.25], dtype=np.float32)
+
+    output_dir = tmp_path / "legacy"
+    convert_bundle_to_legacy(bundle_dir, output_dir, prefix="updated")
+    datasets = parse_topology_file(
+        "improper_dihedral_in_file", output_dir / "updated_improper_dihedral.txt"
+    )
+    by_path = {dataset.path: dataset.data for dataset in datasets}
+    assert np.allclose(by_path["/forcefield/improper/pk"], np.asarray([7.25], dtype=np.float32))
+
+
 @pytest.mark.parametrize(
     ("key", "source_name", "exported_name"),
     (
+        ("improper_dihedral_in_file", "improper.txt", "system_improper_dihedral.txt"),
         ("nb14_extra_in_file", "nb14_extra.txt", "system_nb14_extra.txt"),
         ("urey_bradley_in_file", "urey_bradley.txt", "system_urey_bradley.txt"),
         ("cmap_in_file", "cmap.txt", "system_cmap.txt"),
@@ -261,6 +285,8 @@ def test_full_legacy_bundle_legacy_bundle_semantic_roundtrip(tmp_path):
             "/atoms/charge",
             "/residues/atom_offset",
             "/forcefield/bond/atoms",
+            "/forcefield/improper/pk",
+            "/forcefield/improper/phi0",
             "/forcefield/cmap/grid_value",
             "/forcefield/lj_soft_core/pair_AA",
             "/manybody/eam/embed/raw_ev",
