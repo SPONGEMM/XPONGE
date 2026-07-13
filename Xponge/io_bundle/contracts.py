@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class IOContract:
-    """A single legacy-to-bundle mapping contract."""
+    """A bidirectional mapping contract for one SPONGE I/O binding."""
 
     contract_id: str
     legacy_keys: tuple[str, ...]
@@ -26,6 +26,14 @@ class IOContract:
     comparison_rule: str
     status: str = "supported"
     payload_kind: str = "file"
+    parser_id: str | None = None
+    exporter_id: str | None = None
+    required_bundle_paths: tuple[str, ...] = ()
+    legacy_filename_stem: str | None = None
+    legacy_section: str | None = None
+    reverse_policy: str = "not_reversible"
+    aliases: tuple[str, ...] = ()
+    materialization_group: str | None = None
 
 
 def _contract(
@@ -41,7 +49,40 @@ def _contract(
     comparison_rule: str = "text",
     status: str = "supported",
     payload_kind: str = "file",
+    parser_id: str | None = None,
+    exporter_id: str | None = None,
+    required_bundle_paths: tuple[str, ...] | None = None,
+    legacy_filename_stem: str | None = None,
+    legacy_section: str | None = None,
+    reverse_policy: str | None = None,
+    aliases: tuple[str, ...] = (),
+    materialization_group: str | None = None,
 ) -> IOContract:
+    if payload_kind == "file" and direction == "input":
+        if parser_id is None and status == "compatibility_import":
+            parser_id = legacy_key
+        if exporter_id is None and legacy_key not in LEGACY_KEY_ALIASES and status == "compatibility_import":
+            exporter_id = LEGACY_KEY_EXPORTER_IDS.get(legacy_key, legacy_key)
+        if required_bundle_paths is None and status == "compatibility_import":
+            required_bundle_paths = (bundle_path,)
+        if legacy_filename_stem is None:
+            legacy_filename_stem = _legacy_filename_stem(legacy_key)
+        if legacy_section is None:
+            legacy_section = LEGACY_KEY_SECTIONS.get(legacy_key)
+        if not aliases:
+            aliases = tuple(
+                alias for alias, canonical in LEGACY_KEY_ALIASES.items() if canonical == legacy_key
+            )
+        if materialization_group is None:
+            materialization_group = MATERIALIZATION_GROUPS.get(legacy_key)
+        if reverse_policy is None:
+            reverse_policy = (
+                "alias" if legacy_key in LEGACY_KEY_ALIASES else "typed_or_sidecar"
+            )
+    if required_bundle_paths is None:
+        required_bundle_paths = ()
+    if reverse_policy is None:
+        reverse_policy = "not_reversible"
     return IOContract(
         contract_id=contract_id,
         legacy_keys=(legacy_key,),
@@ -54,7 +95,101 @@ def _contract(
         comparison_rule=comparison_rule,
         status=status,
         payload_kind=payload_kind,
+        parser_id=parser_id,
+        exporter_id=exporter_id,
+        required_bundle_paths=required_bundle_paths,
+        legacy_filename_stem=legacy_filename_stem,
+        legacy_section=legacy_section,
+        reverse_policy=reverse_policy,
+        aliases=aliases,
+        materialization_group=materialization_group,
     )
+
+
+REVERSE_POLICIES = frozenset(
+    {
+        "alias",
+        "embedded_text",
+        "not_reversible",
+        "scalar",
+        "sidecar_only",
+        "typed_or_sidecar",
+        "typed_required",
+    }
+)
+
+
+LEGACY_KEY_ALIASES = {
+    "improper_in_file": "improper_dihedral_in_file",
+    "virtual_atoms_in_file": "virtual_atom_in_file",
+    "hill_in_file": "hills_in_file",
+    "metad_hills_in_file": "hills_in_file",
+}
+
+
+LEGACY_KEY_SECTIONS = {
+    "EAM_in_file": "EAM",
+    "EAM_atom_type_in_file": "EAM",
+    "TERSOFF_in_file": "TERSOFF",
+    "REAXFF_in_file": "REAXFF",
+    "REAXFF_type_in_file": "REAXFF",
+}
+
+
+LEGACY_KEY_EXPORTER_IDS = {
+    "restrain_coordinate_in_file": "restraint_reference",
+    "restrain_amber_rst7": "restraint_reference",
+}
+
+
+MATERIALIZATION_GROUPS = {
+    "coordinate_in_file": "restart.coordinate_file",
+    "constrain_in_file": "protocol.constraint_file",
+    "LJ_in_file": "topology.lj_file",
+    "LJ_soft_core_in_file": "topology.lj_soft_core_file",
+    "cmap_in_file": "topology.cmap_file",
+    "restrain_coordinate_in_file": "restart.restraint_reference_file",
+    "restrain_amber_rst7": "restart.restraint_reference_file",
+}
+
+
+SPONGE_SERIALIZER_TO_LEGACY_KEY = {
+    "coordinate": "coordinate_in_file",
+    "mass": "mass_in_file",
+    "charge": "charge_in_file",
+    "residue": "residue_in_file",
+    "exclude": "exclude_in_file",
+    "bond": "bond_in_file",
+    "angle": "angle_in_file",
+    "dihedral": "dihedral_in_file",
+    "improper_dihedral": "improper_dihedral_in_file",
+    "LJ": "LJ_in_file",
+    "nb14": "nb14_in_file",
+    "nb14_extra": "nb14_extra_in_file",
+    "urey_bradley": "urey_bradley_in_file",
+    "cmap": "cmap_in_file",
+    "gb": "gb_in_file",
+    "virtual_atom": "virtual_atom_in_file",
+    "LJ_soft_core": "LJ_soft_core_in_file",
+    "subsys_division": "subsys_division_in_file",
+    "SW": "SW_in_file",
+    "EDIP": "EDIP_in_file",
+    "listed_forces": "listed_forces_in_file",
+}
+
+
+SPONGE_SERIALIZER_METADATA_KEYS = frozenset({"resname", "atom_name", "atom_type_name"})
+
+
+SPONGE_SERIALIZER_UNSUPPORTED_KEYS = frozenset(
+    {"bond_soft", "Ryckaert_Bellemans", "fake_mass", "fake_LJ", "fake_charge"}
+)
+
+
+def _legacy_filename_stem(key: str) -> str:
+    """Return the canonical legacy filename stem for a normalized mdin key."""
+
+    return key.removesuffix("_in_file")
 
 
 RUN_MDIN_KEYS = (
@@ -290,6 +425,15 @@ CONTRACTS: tuple[IOContract, ...] = (
         component="base",
         override_policy="forbidden",
         comparison_rule="float32",
+        parser_id="coordinate_in_file",
+        exporter_id="coordinate_in_file",
+        required_bundle_paths=(
+            "/particles/all/position/value",
+            "/particles/all/box/edges/value",
+        ),
+        legacy_filename_stem="coordinate",
+        reverse_policy="typed_required",
+        materialization_group="restart.coordinate_file",
     ),
     IOContract(
         contract_id="restart.velocity",
@@ -301,6 +445,11 @@ CONTRACTS: tuple[IOContract, ...] = (
         component="base",
         override_policy="forbidden",
         comparison_rule="float32",
+        parser_id="velocity_in_file",
+        exporter_id="velocity_in_file",
+        required_bundle_paths=("/particles/all/velocity/value",),
+        legacy_filename_stem="velocity",
+        reverse_policy="typed_or_sidecar",
     ),
     IOContract(
         contract_id="restart.box",
@@ -312,6 +461,15 @@ CONTRACTS: tuple[IOContract, ...] = (
         component="base",
         override_policy="forbidden",
         comparison_rule="float32",
+        parser_id="coordinate_in_file",
+        exporter_id="coordinate_in_file",
+        required_bundle_paths=(
+            "/particles/all/position/value",
+            "/particles/all/box/edges/value",
+        ),
+        legacy_filename_stem="coordinate",
+        reverse_policy="typed_required",
+        materialization_group="restart.coordinate_file",
     ),
     IOContract(
         contract_id="rerun.trajectory",
@@ -324,6 +482,7 @@ CONTRACTS: tuple[IOContract, ...] = (
         override_policy="forbidden",
         comparison_rule="float32",
         status="unsupported",
+        reverse_policy="not_reversible",
     ),
 ) + tuple(
     _contract(
@@ -336,6 +495,8 @@ CONTRACTS: tuple[IOContract, ...] = (
         comparison_rule="text",
         status="protocol_restart_sidecar",
         payload_kind="file",
+        legacy_filename_stem=_legacy_filename_stem(key),
+        reverse_policy="sidecar_only",
     )
     for key in PROTOCOL_RESTART_SIDECAR_KEYS
 ) + tuple(
@@ -350,6 +511,7 @@ CONTRACTS: tuple[IOContract, ...] = (
         comparison_rule="exact",
         status="run_mdin",
         payload_kind="scalar",
+        reverse_policy="scalar",
     )
     for key in RUN_MDIN_KEYS
 ) + tuple(
@@ -444,3 +606,97 @@ def contracts_by_legacy_key() -> dict[str, tuple[IOContract, ...]]:
         for key in contract.legacy_keys:
             index.setdefault(key, []).append(contract)
     return {key: tuple(value) for key, value in index.items()}
+
+
+def contracts_by_bundle_file() -> dict[str, tuple[IOContract, ...]]:
+    """Return all known contracts indexed by bundled artifact name."""
+
+    index: dict[str, list[IOContract]] = {}
+    for contract in CONTRACTS:
+        index.setdefault(contract.bundle_file, []).append(contract)
+    return {key: tuple(value) for key, value in index.items()}
+
+
+def reversible_contracts(mode: str) -> tuple[IOContract, ...]:
+    """Return canonical input contracts that participate in reverse conversion."""
+
+    mode_class = "rerun" if mode.strip().lower() == "rerun" else "normal"
+    return tuple(
+        contract
+        for contract in CONTRACTS
+        if contract.direction == "input"
+        and mode_class in contract.modes
+        and contract.reverse_policy not in {"alias", "not_reversible"}
+    )
+
+
+def classify_sponge_serializer_key(key: str) -> tuple[str, str | None]:
+    """Classify a registered ``save_sponge_input`` serializer key."""
+
+    if key in SPONGE_SERIALIZER_TO_LEGACY_KEY:
+        return "contract", SPONGE_SERIALIZER_TO_LEGACY_KEY[key]
+    if key in SPONGE_SERIALIZER_METADATA_KEYS:
+        return "metadata", None
+    if key in SPONGE_SERIALIZER_UNSUPPORTED_KEYS:
+        return "unsupported", None
+    return "unknown", None
+
+
+def validate_contract_registry(contracts: tuple[IOContract, ...] = CONTRACTS) -> None:
+    """Validate static invariants required by both conversion directions."""
+
+    contract_ids: set[str] = set()
+    legacy_keys = {key for contract in contracts for key in contract.legacy_keys}
+    canonical_exporters: dict[tuple[str, str], IOContract] = {}
+
+    for contract in contracts:
+        if contract.contract_id in contract_ids:
+            raise ValueError(f"duplicate I/O contract id: {contract.contract_id}")
+        contract_ids.add(contract.contract_id)
+
+        if not contract.legacy_keys:
+            raise ValueError(f"{contract.contract_id} has no legacy keys")
+        if not contract.bundle_file or not contract.bundle_path:
+            raise ValueError(f"{contract.contract_id} has an empty bundle binding")
+        if not contract.modes:
+            raise ValueError(f"{contract.contract_id} has no supported modes")
+        if contract.reverse_policy not in REVERSE_POLICIES:
+            raise ValueError(
+                f"{contract.contract_id} has unknown reverse policy {contract.reverse_policy!r}"
+            )
+        if contract.bundle_file not in {"run.mdin", "*.legacy"} and not contract.bundle_path.startswith("/"):
+            raise ValueError(
+                f"{contract.contract_id} has non-absolute HDF5 path {contract.bundle_path!r}"
+            )
+        if contract.reverse_policy in {"typed_or_sidecar", "typed_required"}:
+            if contract.exporter_id is None:
+                raise ValueError(f"{contract.contract_id} has no reverse exporter id")
+            if not contract.required_bundle_paths:
+                raise ValueError(f"{contract.contract_id} has no required bundle paths")
+            if contract.legacy_filename_stem is None:
+                raise ValueError(f"{contract.contract_id} has no legacy filename stem")
+        if contract.reverse_policy == "alias":
+            for key in contract.legacy_keys:
+                canonical = LEGACY_KEY_ALIASES.get(key)
+                if canonical is None or canonical not in legacy_keys:
+                    raise ValueError(
+                        f"{contract.contract_id} alias {key!r} has no canonical contract"
+                    )
+        for alias in contract.aliases:
+            if LEGACY_KEY_ALIASES.get(alias) not in contract.legacy_keys:
+                raise ValueError(
+                    f"{contract.contract_id} does not own declared alias {alias!r}"
+                )
+
+        if contract.exporter_id is not None and contract.bundle_file not in {"run.mdin", "*.legacy"}:
+            route = (contract.bundle_file, contract.bundle_path)
+            previous = canonical_exporters.get(route)
+            if previous is not None and (
+                previous.materialization_group != contract.materialization_group
+                or previous.exporter_id != contract.exporter_id
+            ):
+                raise ValueError(
+                    f"conflicting exporters for {route}: "
+                    f"{previous.contract_id} and {contract.contract_id}"
+                )
+            canonical_exporters[route] = contract

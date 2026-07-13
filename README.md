@@ -122,6 +122,46 @@ Then we can see `out.pdb` in VMD:
 
 All can be seen [here](https://spongemm.cn/%E6%96%87%E6%A1%A3/Xponge%E6%96%87%E6%A1%A3/Xponge).
 
+## SPONGE bundled inputs
+
+XPONGE can write the topology, protocol, and structural restart HDF5 inputs
+directly from a `Molecule`, `Residue`, or `ResidueType`:
+
+```python
+import Xponge
+import Xponge.forcefield.amber.ff14sb
+
+peptide = Xponge.get_peptide_from_sequence("AAAAA")
+Xponge.save_sponge_input_bundle(peptide, prefix="ala5", dirname="inputs")
+```
+
+This creates:
+
+```text
+inputs/ala5_topology.spgt.h5
+inputs/ala5_protocol.spgp.h5
+inputs/ala5_restart.spgr.h5
+```
+
+Bind them in the SPONGE mdin with `input_h5_topology_path`,
+`input_h5_protocol_path`, and `input_h5_restart_path`. The saver does not add
+run policy such as mode, step limit, thermostat, or output paths.
+
+Existing direct/legacy input cases can be converted in either direction:
+
+```bash
+Xponge legacy-to-bundle CASE_DIR -m mdin.spg.toml -o CONVERTED
+Xponge bundle-to-legacy CONVERTED/bundle -o RESTORED --prefix system
+```
+
+Reverse conversion treats typed HDF5 datasets as authoritative. Embedded
+legacy sidecars are used only for contracts without a typed representation.
+The current reader accepts the `xponge.legacy_to_bundle.v1` input schema and
+rejects unknown schema names or versions in strict mode.
+Use `--dry-run` to validate and inspect the conversion manifest without
+writing output files. Existing targets are preserved unless `--overwrite` is
+specified.
+
 ## CLI quick start (trajectory analysis)
 
 The `Xponge traj` subcommand provides cpptraj-like post-analysis for SPONGE trajectories.

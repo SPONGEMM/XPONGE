@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from .converter import convert_legacy_to_bundle
 from .output_writer import convert_legacy_outputs_to_bundle
+from .reverse_converter import convert_bundle_to_legacy
 
 
 def add_legacy_to_bundle_parser(subparsers) -> None:
@@ -29,6 +30,33 @@ def add_legacy_to_bundle_parser(subparsers) -> None:
     output_parser.add_argument("--atom-count", type=int, default=None, help="atom count for vector trajectory outputs")
     output_parser.add_argument("--dry-run", action="store_true", help="scan and build manifest without writing H5 files")
     output_parser.set_defaults(func=output_main)
+
+    reverse_parser = subparsers.add_parser(
+        "bundle-to-legacy",
+        help="convert bundled H5 input files to direct/legacy SPONGE inputs",
+    )
+    reverse_parser.add_argument("bundle_root", help="directory containing the bundled mdin")
+    reverse_parser.add_argument(
+        "-m",
+        "--mdin",
+        default="mdin.bundled.spg.toml",
+        help="bundled mdin path relative to bundle root",
+    )
+    reverse_parser.add_argument("-o", "--output", required=True, help="legacy output directory")
+    reverse_parser.add_argument("--prefix", default=None, help="legacy input filename prefix")
+    reverse_parser.add_argument(
+        "--no-strict",
+        action="store_false",
+        dest="strict",
+        help="record unsupported optional contracts instead of failing",
+    )
+    reverse_parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="allow replacement of planned legacy output files",
+    )
+    reverse_parser.add_argument("--dry-run", action="store_true", help="validate and plan without writing files")
+    reverse_parser.set_defaults(func=reverse_main, strict=True)
 
 
 def main(args) -> None:
@@ -58,3 +86,29 @@ def output_main(args) -> None:
     print(f"typed converted output entries: {typed_converted}")
     if missing:
         print(f"missing legacy output entries: {missing}")
+
+
+def reverse_main(args) -> None:
+    manifest = convert_bundle_to_legacy(
+        args.bundle_root,
+        args.output,
+        mdin=args.mdin,
+        prefix=args.prefix,
+        strict=args.strict,
+        overwrite=args.overwrite,
+        dry_run=args.dry_run,
+    )
+    typed = sum(1 for entry in manifest.entries if entry.status == "typed_exported")
+    fallback = sum(
+        1
+        for entry in manifest.entries
+        if entry.status in {"sidecar_restored", "embedded_exported", "compatibility_restored"}
+    )
+    unsupported = sum(1 for entry in manifest.entries if entry.status == "unsupported")
+    print(f"typed exported entries: {typed}")
+    if fallback:
+        print(f"fallback restored entries: {fallback}")
+    if unsupported:
+        print(f"unsupported entries: {unsupported}")
+    if manifest.generated_mdin is not None:
+        print(f"generated mdin: {manifest.generated_mdin}")

@@ -93,6 +93,7 @@ from .helper.file import *
 from .load import load_pdb, load_mol2, load_ffitp, load_molitp, load_molpsf, load_gro, \
     load_rst7, load_frcmod, load_parmdat, load_coordinate
 from .build import save_mol2, save_pdb, save_sponge_input, save_gro, build_bonded_force, get_mindsponge_system_energy
+from .io_bundle.saver import save_sponge_input_bundle
 from .process import impose_bond, impose_angle, impose_dihedral, add_solvent_box, h_mass_repartition, solvent_replace, \
     sort_atoms_by, main_axis_rotate, get_peptide_from_sequence, optimize, Region, UnionRegion, IntersectRegion, \
     BlockRegion, SphereRegion, FrustumRegion, PrismRegion, Lattice

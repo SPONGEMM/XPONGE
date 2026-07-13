@@ -12,6 +12,7 @@ import numpy as np
 
 from Xponge.load import load_coordinate
 
+from .bundle_builder import BundleBuilder, BundleIO, BundleMetadata, BundlePaths
 from .contracts import CONTRACTS, PROTOCOL_RESTART_SIDECAR_KEYS, IOContract, contracts_by_legacy_key
 from .h5_writer import (
     ensure_dataset,
@@ -46,6 +47,19 @@ class LegacyToBundleConverter:
         self.case = case
         self.output_dir = Path(output_dir).resolve()
         self.bundle_dir = self.output_dir / "bundle"
+        self._builder = BundleBuilder(
+            BundlePaths.canonical(self.bundle_dir),
+            io=BundleIO(
+                ensure_dataset=ensure_dataset,
+                ensure_group=ensure_group,
+                ensure_hard_link=ensure_hard_link,
+                set_attrs=set_attrs,
+                write_string=write_string,
+                write_bytes=write_bytes,
+                write_string_array=write_string_array,
+            ),
+            track_dataset_hashes=False,
+        )
         self.manifest = ConversionManifest(case_root=str(self.case.root), mode=self.case.mode)
         self._contract_index = contracts_by_legacy_key()
         self._handled_contract_ids: set[str] = set()
@@ -154,13 +168,29 @@ class LegacyToBundleConverter:
         coordinate, box = load_coordinate(str(coordinate_path))
         self._atom_count = int(coordinate.shape[0])
         box_edges = _box_to_edges(box)
-        restart_path = self.bundle_dir / "restart.spgr.h5"
 
         if not dry_run:
-            ensure_dataset(restart_path, "/particles/all/position/value", coordinate[np.newaxis, :, :])
-            ensure_dataset(restart_path, "/particles/all/box/edges/value", box_edges[np.newaxis, :, :])
-            ensure_dataset(restart_path, "/particles/all/step", np.asarray([0], dtype=np.int64))
-            ensure_dataset(restart_path, "/particles/all/time", np.asarray([0.0], dtype=np.float64))
+            builder = self._builder
+            builder.add_dataset(
+                "restart.spgr.h5",
+                "/particles/all/position/value",
+                coordinate[np.newaxis, :, :],
+            )
+            builder.add_dataset(
+                "restart.spgr.h5",
+                "/particles/all/box/edges/value",
+                box_edges[np.newaxis, :, :],
+            )
+            builder.add_dataset(
+                "restart.spgr.h5",
+                "/particles/all/step",
+                np.asarray([0], dtype=np.int64),
+            )
+            builder.add_dataset(
+                "restart.spgr.h5",
+                "/particles/all/time",
+                np.asarray([0.0], dtype=np.float64),
+            )
         self._restart_has_structural_state = True
 
         self._add_converted(self._find_contract("restart.coordinate"), "coordinate_in_file", coordinate_path)
@@ -172,7 +202,11 @@ class LegacyToBundleConverter:
                 raise ConversionError(f"velocity_in_file does not exist: {velocity_path}")
             velocity = _read_vector_file(velocity_path, expected_count=coordinate.shape[0])
             if not dry_run:
-                ensure_dataset(restart_path, "/particles/all/velocity/value", velocity[np.newaxis, :, :])
+                self._builder.add_dataset(
+                    "restart.spgr.h5",
+                    "/particles/all/velocity/value",
+                    velocity[np.newaxis, :, :],
+                )
             self._add_converted(self._find_contract("restart.velocity"), "velocity_in_file", velocity_path)
 
     def _convert_text_sidecars(self, *, dry_run: bool) -> None:
@@ -219,10 +253,8 @@ class LegacyToBundleConverter:
                     atom_count=self._infer_atom_count() if contract.component == "trajectory" else None,
                 )
                 if typed_datasets is not None:
-                    bundle_path = self.bundle_dir / contract.bundle_file
                     if not dry_run:
-                        for dataset in typed_datasets:
-                            ensure_dataset(bundle_path, dataset.path, dataset.data)
+                        self._builder.add_datasets(contract.bundle_file, typed_datasets)
                     if contract.bundle_file == "restart.spgr.h5":
                         self._track_restart_state_component(key)
                     self._stage_legacy_sidecar(contract, key, source_path, dry_run=dry_run)
@@ -387,9 +419,7 @@ class LegacyToBundleConverter:
     ) -> None:
         bundle_file = "topology.spgt.h5"
         if not dry_run:
-            bundle_path = self.bundle_dir / bundle_file
-            for dataset in typed_datasets:
-                ensure_dataset(bundle_path, dataset.path, dataset.data)
+            self._builder.add_datasets(bundle_file, typed_datasets)
         sidecar_rel = self._stage_dynamic_mdin_sidecar(source_key, source_path, dry_run=dry_run)
         self._source_paths_by_key[source_key] = source_path
         self._handled_keys.add(source_key)
@@ -483,110 +513,30 @@ class LegacyToBundleConverter:
             )
 
     def _write_legacy_sidecar_tables(self, *, dry_run: bool) -> None:
-        for bundle_file, sidecars in self._legacy_sidecars_by_bundle.items():
-            if not sidecars:
-                continue
-            keys = [key for key, _ in sidecars]
-            paths = [path for _, path in sidecars]
-            bundle_path = self.bundle_dir / bundle_file
-            if not dry_run:
-                write_string_array(bundle_path, "/parameters/sponge/files/legacy_sidecars/key", keys)
-                write_string_array(bundle_path, "/parameters/sponge/files/legacy_sidecars/path", paths)
+        if not dry_run:
+            self._builder.write_legacy_sidecars(self._legacy_sidecars_by_bundle)
 
     def _write_bundle_metadata(self, *, dry_run: bool) -> None:
         if dry_run:
             return
-        schema_version = "xponge.legacy_to_bundle.v1"
         topology_hash = self._content_hash("topology.spgt.h5")
         atom_order_hash = self._content_hash("topology.spgt.h5", include_keys=_TOPOLOGY_ATOM_ORDER_KEYS)
         forcefield_hash = self._content_hash("topology.spgt.h5", exclude_keys=_TOPOLOGY_ATOM_ORDER_KEYS)
         protocol_hash = self._content_hash("protocol.spgp.h5")
-
-        if "topology.spgt.h5" in self._bundle_files_touched:
-            topology_path = self.bundle_dir / "topology.spgt.h5"
-            write_string(topology_path, "/schema/name", "sponge.topology.h5")
-            write_string(topology_path, "/schema/version", schema_version)
-            write_string(topology_path, "/parameters/sponge/schema/name", "sponge.topology.h5")
-            write_string(topology_path, "/parameters/sponge/schema/version", schema_version)
-            write_string(topology_path, "/topology/atom_order_hash", atom_order_hash)
-            write_string(topology_path, "/topology/topology_hash", topology_hash)
-            write_string(topology_path, "/topology/forcefield_hash", forcefield_hash)
-            ensure_dataset(topology_path, "/topology/atom_count", np.asarray(self._infer_atom_count(), dtype=np.int64))
-
-        if "protocol.spgp.h5" in self._bundle_files_touched:
-            protocol_path = self.bundle_dir / "protocol.spgp.h5"
-            write_string(protocol_path, "/schema/name", "sponge.protocol.h5")
-            write_string(protocol_path, "/schema/version", schema_version)
-            write_string(protocol_path, "/parameters/sponge/schema/name", "sponge.protocol.h5")
-            write_string(protocol_path, "/parameters/sponge/schema/version", schema_version)
-            write_string(protocol_path, "/protocol/topology_compatibility/topology_hash", topology_hash)
-            write_string(protocol_path, "/identity/content_hash", protocol_hash)
-            cv_count, restraint_count, enhanced_methods = self._protocol_metadata_summary()
-            ensure_dataset(protocol_path, "/protocol/cv_count", np.asarray(cv_count, dtype=np.int64))
-            ensure_dataset(protocol_path, "/protocol/restraint_count", np.asarray(restraint_count, dtype=np.int64))
-            if enhanced_methods:
-                write_string(protocol_path, "/protocol/enhanced_sampling/method", ",".join(enhanced_methods))
-
-        if "restart.spgr.h5" in self._bundle_files_touched:
-            restart_path = self.bundle_dir / "restart.spgr.h5"
-            write_string(restart_path, "/parameters/sponge/schema/name", "sponge.restart.h5")
-            write_string(restart_path, "/parameters/sponge/schema/version", schema_version)
-            self._finalize_restart_h5_layout(restart_path)
-
-        if "trajectory.spg.h5md" in self._bundle_files_touched:
-            trajectory_path = self.bundle_dir / "trajectory.spg.h5md"
-            write_string(trajectory_path, "/parameters/sponge/schema/name", "sponge.output.h5md")
-            write_string(trajectory_path, "/parameters/sponge/schema/version", schema_version)
-            self._finalize_trajectory_h5md_layout(trajectory_path)
-
-    def _finalize_trajectory_h5md_layout(self, trajectory_path: Path) -> None:
-        ensure_group(trajectory_path, "/h5md")
-        ensure_group(trajectory_path, "/h5md/creator")
-        ensure_group(trajectory_path, "/particles/all")
-        set_attrs(trajectory_path, "/h5md", {"version": np.asarray([1, 1], dtype=np.int32)})
-        set_attrs(trajectory_path, "/h5md/creator", {"name": "XPONGE", "version": "legacy-to-bundle"})
-
-        self._link_particle_time_axis(
-            trajectory_path,
-            value_path="/particles/all/position/value",
-            step_path="/particles/all/position/step",
-            time_path="/particles/all/position/time",
-            value_attrs={"unit": "Angstrom"},
+        cv_count, restraint_count, enhanced_methods = self._protocol_metadata_summary()
+        self._builder.finalize(
+            self._bundle_files_touched,
+            BundleMetadata(
+                atom_count=self._infer_atom_count(),
+                topology_hash=topology_hash,
+                atom_order_hash=atom_order_hash,
+                forcefield_hash=forcefield_hash,
+                protocol_hash=protocol_hash,
+                cv_count=cv_count,
+                restraint_count=restraint_count,
+                enhanced_methods=tuple(enhanced_methods),
+            ),
         )
-        self._link_particle_time_axis(
-            trajectory_path,
-            value_path="/particles/all/velocity/value",
-            step_path="/particles/all/velocity/step",
-            time_path="/particles/all/velocity/time",
-            value_attrs={"unit": "Angstrom ps-1"},
-        )
-        self._link_particle_time_axis(
-            trajectory_path,
-            value_path="/particles/all/box/edges/value",
-            step_path="/particles/all/box/edges/step",
-            time_path="/particles/all/box/edges/time",
-            value_attrs={"unit": "Angstrom"},
-        )
-        set_attrs(trajectory_path, "/particles/all/time", {"unit": "ps"})
-        frame_count, last_step, last_time = _particle_completion_metadata(trajectory_path)
-        write_string(trajectory_path, "/parameters/sponge/output/mode", "single")
-        write_string(trajectory_path, "/parameters/sponge/output/status", "finalized")
-        ensure_dataset(
-            trajectory_path,
-            "/parameters/sponge/output/frame_count",
-            np.asarray([frame_count], dtype=np.int64),
-        )
-        ensure_dataset(
-            trajectory_path,
-            "/parameters/sponge/output/last_complete_step",
-            np.asarray([last_step], dtype=np.int64),
-        )
-        ensure_dataset(
-            trajectory_path,
-            "/parameters/sponge/output/last_complete_time",
-            np.asarray([last_time], dtype=np.float64),
-        )
-        write_string_array(trajectory_path, "/parameters/sponge/output/particle_streams", ["all"])
 
     def _protocol_metadata_summary(self) -> tuple[int, int, list[str]]:
         cv_count = 1 if self.case.resolve_legacy_input_path("cv_in_file") is not None else 0
@@ -623,88 +573,6 @@ class LegacyToBundleConverter:
         if self.case.resolve_legacy_input_path("soft_walls_in_file") is not None:
             enhanced_methods.append("soft_walls")
         return cv_count, restraint_count, enhanced_methods
-
-    def _finalize_restart_h5_layout(self, restart_path: Path) -> None:
-        ensure_group(restart_path, "/h5md")
-        ensure_group(restart_path, "/h5md/creator")
-        ensure_group(restart_path, "/run")
-        ensure_group(restart_path, "/particles/all")
-        ensure_group(restart_path, "/parameters/restart")
-        ensure_group(restart_path, "/parameters/restart/rng_state")
-        ensure_group(restart_path, "/parameters/restart/integrator_state")
-        ensure_group(restart_path, "/parameters/restart/thermostat")
-        ensure_group(restart_path, "/parameters/restart/barostat")
-        ensure_group(restart_path, "/parameters/restart/protocol_sidecars")
-        ensure_group(restart_path, "/parameters/restart/bias")
-        ensure_group(restart_path, "/parameters/restart/bias/sits")
-        ensure_group(restart_path, "/parameters/restart/bias/meta")
-        set_attrs(restart_path, "/h5md", {"version": np.asarray([1, 1], dtype=np.int32)})
-        set_attrs(restart_path, "/h5md/creator", {"name": "XPONGE", "version": "legacy-to-bundle"})
-
-        self._link_particle_time_axis(
-            restart_path,
-            value_path="/particles/all/position/value",
-            step_path="/particles/all/position/step",
-            time_path="/particles/all/position/time",
-            value_attrs={"unit": "Angstrom"},
-        )
-        self._link_particle_time_axis(
-            restart_path,
-            value_path="/particles/all/velocity/value",
-            step_path="/particles/all/velocity/step",
-            time_path="/particles/all/velocity/time",
-            value_attrs={"unit": "Angstrom ps-1"},
-        )
-        self._link_particle_time_axis(
-            restart_path,
-            value_path="/particles/all/box/edges/value",
-            step_path="/particles/all/box/edges/step",
-            time_path="/particles/all/box/edges/time",
-            value_attrs={"unit": "Angstrom"},
-        )
-        try:
-            set_attrs(restart_path, "/particles/all/time", {"unit": "ps"})
-        except KeyError:
-            pass
-
-        frame_count, last_step, last_time = _particle_completion_metadata(restart_path)
-        write_string(restart_path, "/parameters/sponge/output/status", "finalized")
-        ensure_dataset(
-            restart_path,
-            "/parameters/sponge/output/frame_count",
-            np.asarray([frame_count], dtype=np.int64),
-        )
-        ensure_dataset(
-            restart_path,
-            "/parameters/sponge/output/last_complete_step",
-            np.asarray([last_step], dtype=np.int64),
-        )
-        ensure_dataset(
-            restart_path,
-            "/parameters/sponge/output/last_complete_time",
-            np.asarray([last_time], dtype=np.float64),
-        )
-        if frame_count:
-            ensure_dataset(restart_path, "/run/current_step", np.asarray([last_step], dtype=np.int64))
-            ensure_dataset(restart_path, "/run/current_time", np.asarray([last_time], dtype=np.float64))
-            write_string(restart_path, "/run/state_type", "restart")
-            write_string_array(restart_path, "/parameters/sponge/output/particle_streams", ["all"])
-
-    def _link_particle_time_axis(
-        self,
-        trajectory_path: Path,
-        *,
-        value_path: str,
-        step_path: str,
-        time_path: str,
-        value_attrs: dict[str, str],
-    ) -> None:
-        try:
-            set_attrs(trajectory_path, value_path, value_attrs)
-        except KeyError:
-            return
-        ensure_hard_link(trajectory_path, "/particles/all/step", step_path)
-        ensure_hard_link(trajectory_path, "/particles/all/time", time_path)
 
     def _content_hash(
         self,
@@ -965,30 +833,6 @@ def _input_binding_keys_for_bundle_files(bundle_files: set[str]) -> set[str]:
     if "trajectory.spg.h5md" in bundle_files:
         keys.add("input_h5_trajectory_particle_stream")
     return keys
-
-
-def _particle_completion_metadata(bundle_path: Path) -> tuple[int, int, float]:
-    if not bundle_path.exists():
-        return 0, -1, 0.0
-    try:
-        import h5py  # type: ignore
-    except ImportError as exc:
-        raise ConversionError("h5py is required to finalize particle H5MD metadata") from exc
-
-    with h5py.File(bundle_path, "r") as handle:
-        if "/particles/all/step" not in handle:
-            return 0, -1, 0.0
-        steps = np.asarray(handle["/particles/all/step"][...])
-        if steps.size == 0:
-            return 0, -1, 0.0
-        frame_count = int(steps.shape[0])
-        last_step = int(steps[-1])
-        last_time = 0.0
-        if "/particles/all/time" in handle:
-            times = np.asarray(handle["/particles/all/time"][...], dtype=np.float64)
-            if times.size:
-                last_time = float(times[-1])
-        return frame_count, last_step, last_time
 
 
 def _parse_typed_payload(contract: IOContract, key: str, source_path: Path, *, atom_count: int | None = None):
