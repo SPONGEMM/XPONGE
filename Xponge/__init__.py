@@ -72,7 +72,7 @@ The atoms in a ``Residue`` or a ``ResidueType`` can be obtained by their names. 
 
 """
 
-__version__ = "1.6b5"
+__version__ = "1.6b6"
 
 import os
 import time
@@ -211,7 +211,11 @@ def _initialize():
                 mini[1] = atom.y
             if atom.z < mini[2]:
                 mini[2] = atom.z
-        if not GlobalSetting.nocenter and self.box_length is None:
+        if self.box_origin is not None:
+            towrite += "\n".join(
+                ["%f %f %f" % (atom.x - self.box_origin[0], atom.y - self.box_origin[1], atom.z - self.box_origin[2])
+                 for atom in self.atoms])
+        elif not GlobalSetting.nocenter and self.box_length is None:
             towrite += "\n".join(
                 ["%f %f %f" % (atom.x - mini[0] + 3, atom.y - mini[1] + 3, atom.z - mini[2] + 3) for atom in
                  self.atoms])

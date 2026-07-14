@@ -1447,6 +1447,8 @@ class Molecule():
         """whether to ignore missing residue template atoms when building bonded forces"""
         self.box_length = None
         """the box length of the molecule"""
+        self.box_origin = None
+        """the world-coordinate origin of an explicit orthorhombic periodic box"""
         self.box_angle = [90.0, 90.0, 90.0]
         """the box angle of the molecule"""
         self.vacuum_layer = [0, 0, 0]
@@ -1808,6 +1810,9 @@ If None, the information will be deleted between start and end
         """
         new_molecule = Molecule(self.name)
         new_molecule.ignore_missing_atoms = self.ignore_missing_atoms
+        new_molecule.box_length = copy.deepcopy(self.box_length)
+        new_molecule.box_origin = copy.deepcopy(self.box_origin)
+        new_molecule.box_angle = copy.deepcopy(self.box_angle)
         forcopy = hash(str(time.time()))
         for res in self.residues:
             new_molecule.Add_Residue(res.deepcopy(forcopy))
@@ -1875,6 +1880,7 @@ If None, the information will be deleted between start and end
         min_crd = np.min(crd, axis=0)
         max_crd = np.max(crd, axis=0)
         self.box_length = list(max_crd - min_crd + padding * 2)
+        self.box_origin = None
 
         if center:
             shift = padding - min_crd
@@ -1882,6 +1888,31 @@ If None, the information will be deleted between start and end
                 atom.x += shift[0]
                 atom.y += shift[1]
                 atom.z += shift[2]
+
+    def set_periodic_box(self, origin, lengths, angles=(90.0, 90.0, 90.0)):
+        """Set an explicit orthorhombic periodic box for SPONGE coordinate export.
+
+        The molecule keeps world coordinates. ``save_sponge_input`` translates
+        coordinates by ``origin`` only while writing ``*_coordinate.txt`` so
+        bonded molecules that cross the periodic boundary remain continuous.
+        """
+        try:
+            origin = [float(value) for value in origin]
+            lengths = [float(value) for value in lengths]
+            angles = [float(value) for value in angles]
+        except (TypeError, ValueError) as exc:
+            raise ValueError("origin, lengths and angles must be numeric") from exc
+        if len(origin) != 3 or len(lengths) != 3 or len(angles) != 3:
+            raise ValueError("origin, lengths and angles must each contain three values")
+        if not np.all(np.isfinite([*origin, *lengths, *angles])):
+            raise ValueError("origin, lengths and angles must be finite")
+        if any(length <= 0 for length in lengths):
+            raise ValueError("periodic box lengths must be positive")
+        if any(abs(angle - 90.0) > 1.0e-6 for angle in angles):
+            raise ValueError("only orthorhombic periodic boxes are supported")
+        self.box_origin = origin
+        self.box_length = lengths
+        self.box_angle = angles
 
     def divide_into_two_parts(self, atom1, atom2):
         """
