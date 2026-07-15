@@ -20,6 +20,7 @@ classifiers = [
 dependencies = [
     "numpy<2",
     "geometric>=1.1",
+    "h5py>=3.11.0",
     "matplotlib>=3.10.8",
     "mdanalysis>=2.9.0",
     "pubchempy>=1.0.5",

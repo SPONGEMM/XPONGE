@@ -549,6 +549,54 @@ def get_mindsponge_system_energy(cls, use_pbc=False):
     return system, energy
 
 
+def _prepare_sponge_input_molecule(cls):
+    """Normalize and build an object before SPONGE input serialization."""
+
+    if isinstance(cls, Molecule):
+        mol = cls
+    elif isinstance(cls, Residue):
+        mol = Molecule(name=cls.name)
+        mol.Add_Residue(cls)
+    elif isinstance(cls, ResidueType):
+        residue = Residue(cls, name=cls.name)
+        for atom in cls.atoms:
+            residue.Add_Atom(atom)
+        mol = Molecule(name=residue.name)
+        mol.Add_Residue(residue)
+    else:
+        raise TypeError(
+            "SPONGE input can only be saved from Molecule, Residue, or ResidueType, "
+            f"not {type(cls).__name__}"
+        )
+
+    _synchronize_linked_atom_slots(mol)
+    _reorder_residues_by_linked_components(mol)
+    build_bonded_force(mol)
+    _check_sponge_atom_components_are_contiguous(mol)
+    return mol
+
+
+def _synchronize_linked_atom_slots(mol):
+    """Add empty distance slots required by forces registered after atom creation."""
+
+    atoms = set()
+    for residue in mol.residues:
+        atoms.update(residue.atoms)
+        atoms.update(residue.type.atoms)
+    for atom in atoms:
+        for distance in range(2, GlobalSetting.farthest_bonded_force + 1):
+            atom.linked_atoms.setdefault(distance, set())
+
+
+def _iter_sponge_input_payloads(mol):
+    """Yield non-empty registered SPONGE serializer payloads."""
+
+    for key, func in getattr(Molecule, "_save_functions").items():
+        towrite = func(mol)
+        if towrite:
+            yield key, towrite
+
+
 def save_sponge_input(cls, prefix=None, dirname="."):
     """
     This **function** saves the iput object as SPONGE inputs
@@ -558,33 +606,13 @@ def save_sponge_input(cls, prefix=None, dirname="."):
     :param dirname: the directory to save the output files
     :return: the molecule instance built
     """
-    if isinstance(cls, Molecule):
-        mol = cls
-        _reorder_residues_by_linked_components(cls)
-        build_bonded_force(cls)
-        _check_sponge_atom_components_are_contiguous(cls)
-
-        if not prefix:
-            prefix = cls.name
-
-        for key, func in getattr(Molecule, "_save_functions").items():
-            towrite = func(cls)
-            if towrite:
-                f = Xopen(os.path.join(dirname, prefix + "_" + key + ".txt"), "w")
-                f.write(towrite)
-                f.close()
-
-    elif isinstance(cls, Residue):
-        mol = Molecule(name=cls.name)
-        mol.Add_Residue(cls)
-        save_sponge_input(mol, prefix, dirname)
-
-    elif isinstance(cls, ResidueType):
-        residue = Residue(cls, name=cls.name)
-        for atom in cls.atoms:
-            residue.Add_Atom(atom)
-        mol = save_sponge_input(residue, prefix, dirname)
-
+    mol = _prepare_sponge_input_molecule(cls)
+    if not prefix:
+        prefix = mol.name
+    for key, towrite in _iter_sponge_input_payloads(mol):
+        f = Xopen(os.path.join(dirname, prefix + "_" + key + ".txt"), "w")
+        f.write(towrite)
+        f.close()
     return mol
 
 

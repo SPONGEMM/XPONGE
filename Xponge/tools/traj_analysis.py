@@ -31,6 +31,15 @@ def load_Sponge_trajectory(topo, traj, box):
 
     if len(traj_list) == 1:
         traj_path = traj_list[0]
+        if xmda.BundleTopologyParser._format_hint(topo) and xmda.SpongeH5MDReader._format_hint(
+            traj_path
+        ):
+            return mda.Universe(
+                topo,
+                traj_path,
+                topology_format=xmda.BundleTopologyParser,
+                format=xmda.SpongeH5MDReader,
+            )
         if box:
             if isinstance(box, (list, tuple)) and len(box) == 1:
                 box = box[0]

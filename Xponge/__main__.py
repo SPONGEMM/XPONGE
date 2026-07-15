@@ -3,6 +3,7 @@ This **module** defines the terminal commands
 """
 import argparse
 from Xponge import tools
+from Xponge.io_bundle.cli import add_legacy_to_bundle_parser
 
 def _mytest(subparsers):
     """
@@ -374,6 +375,7 @@ def main():
     _exgen(subparsers)
     _traj_analysis(subparsers)
     _json2csv(subparsers)
+    add_legacy_to_bundle_parser(subparsers)
     _name2name(subparsers)
     _mol2rfe(subparsers)
     _converter(subparsers)

@@ -10,7 +10,7 @@ from .. import ResidueType
 from ..helper import Xopen, guess_element_from_mass
 try:
     import MDAnalysis as mda
-    from MDAnalysis.coordinates import base, H5MD
+    from MDAnalysis.coordinates import base
     from MDAnalysis.lib import util
     from MDAnalysis.topology.base import TopologyReaderBase
     from MDAnalysis.topology.guessers import guess_masses
@@ -19,6 +19,15 @@ try:
 except ModuleNotFoundError as exc:
     raise ModuleNotFoundError(
         "'MDAnalysis' package needed. Maybe you need 'pip install MDAnalysis'") from exc
+
+from .bundle_mdanalysis import (  # noqa: F401
+    BundleTopologyParser,
+    SPONGEH5MDReader,
+    SpongeH5MDReader,
+    load_bundle_universe,
+    register_mdanalysis_formats,
+    validate_bundle_pair,
+)
 
 # pylint: disable=abstract-method, arguments-differ, protected-access, unused-argument
 class SpongeNoneReader(base.ReaderBase):
@@ -59,6 +68,12 @@ class SpongeInputReader(TopologyReaderBase):
         Atomtypes
         Elements
     """
+    format = "SPONGE_MASS"
+
+    @staticmethod
+    def _format_hint(thing):
+        return isinstance(thing, str) and thing.endswith("_mass.txt")
+
     #pylint: disable=unused-argument
     def parse(self, **kwargs):
         """
@@ -368,6 +383,12 @@ class SpongeTrajectoryReader(base.ReaderBase):
 representing the 3 box lengths and 3 box angles.
     :param n_atoms: the number of atoms
     """
+    format = "SPONGE_TRAJ"
+
+    @staticmethod
+    def _format_hint(thing):
+        return isinstance(thing, str) and thing.endswith(".dat")
+
     def __init__(self, dat_file_name, n_atoms, **kwargs):
         super().__init__(dat_file_name, **kwargs)
         box = kwargs.get("box", None)
@@ -573,6 +594,12 @@ class SpongeCoordinateReader(base.ReaderBase):
 
     :param file_name: the name of the SPONGE coordinate trajectory file
     """
+    format = "SPONGE_CRD"
+
+    @staticmethod
+    def _format_hint(thing):
+        return isinstance(thing, str) and thing.endswith("_coordinate.txt")
+
     def __init__(self, file_name, n_atoms, **kwargs):
         super().__init__(file_name, **kwargs)
         self._n_atoms = n_atoms
@@ -720,106 +747,6 @@ class SpongeCoordinateWriter():
             towrite += "999 999 999 90 90 90\n"
         self.file.write(towrite)
 
-
-class SPONGEH5MDReader(base.ReaderBase):
-    """
-    This **class** is the interface to MDAnalysis.
-
-    :param dat_file_name: the name of the SPONGE h5md trajectory file
-    :param n_atoms: the number of atoms
-    """
-    def __init__(self, filename, n_atoms, **kwargs):
-        import h5py
-        super().__init__(filename, **kwargs)
-        self.file = h5py.File(filename, "r")
-        self.walker = kwargs.get("walker", 0)
-        if not isinstance(self.walker, int):
-            raise TypeError(f"walker should be an int, but {self.walker} is given")
-        if "trajectory" in self.file["particles"] or "trajectory0" in self.file["particles"]:
-            self._n_atoms = n_atoms
-            self.walker_length = len(self.file["particles"])
-            if self.walker >= self.walker_length:
-                raise ValueError(f"There are only {self.walker_length} in the h5md file {filename}, \
-but walker={self.walker} is given (index starts from 0)")
-            if self.walker_length == 1:
-                self.target = self.file["particles"]["trajectory"]
-            else:
-                self.target = self.file["particles"][f"trajectory{self.walker}"]
-            if "position" not in self.target or "value" not in self.target["position"]:
-                raise ValueError(f"There are no particle position information in the file {filename}")
-            self._n_frames = len(self.target["position"]["value"])
-            self.ts = self._Timestep(self.n_atoms, **self._ts_kwargs)
-            self._read_next_timestep()
-        else:
-            self.reader = H5MD.H5MDReader(filename, n_atoms, **kwargs)
-
-    @property
-    def n_frames(self):
-        """
-        The total number of frames in the trajectory file
-        """
-        if self.walker >= 0:
-            return self._n_frames
-        return self.reader.n_frames
-
-    @property
-    def n_atoms(self):
-        """
-        The total number of atoms in the trajectory file
-        """
-        if self.walker >= 0:
-            return self._n_atoms
-        return self.reader.n_atoms
-
-    def close(self):
-        """
-        Close all the opened file
-
-        :return: None
-        """
-        if self.walker >= 0:
-            self.file.close()
-        else:
-            self.reader.close()
-
-    def _reopen(self):
-        if self.walker < 0:
-            self.reader._reopen()
-
-    def _read_frame(self, frame):
-        """
-
-        :param frame:
-
-        :return:
-        """
-        if self.walker < 0:
-            self.reader._read_frame(frame)
-        self.ts.frame = frame - 1
-        return self._read_next_timestep()
-
-    def _read_next_timestep(self):
-        if self.walker < 0:
-            return self.reader._read_next_timestep()
-        ts = self.ts
-        if ts.frame >= self._n_frames:
-            ts.frame = -1
-            raise EOFError
-        ts.positions = self.target["position"]["value"][ts.frame]
-        ts.frame += 1
-        return ts
-
-mda._READERS["SPONGE_TRAJ"] = SpongeTrajectoryReader
-mda._READER_HINTS["SPONGE_TRAJ"] = lambda x: isinstance(x, str) and x.endswith(".dat")
-
-mda._PARSERS["SPONGE_MASS"] = SpongeInputReader
-mda._PARSER_HINTS["SPONGE_MASS"] = lambda x: isinstance(x, str) and x.endswith("_mass.txt")
-
-mda._READERS["SPONGE_CRD"] = SpongeCoordinateReader
-mda._READER_HINTS["SPONGE_CRD"] = lambda x: isinstance(x, str) and x.endswith("_coordinate.txt")
-
-mda._READERS["SPONGE_H5MD"] = SPONGEH5MDReader
-mda._READER_HINTS["SPONGE_H5MD"] = lambda x: isinstance(x, str) and x.endswith(".h5md")
 
 mda._SINGLEFRAME_WRITERS["SPONGE_CRD"] = SpongeCoordinateWriter
 mda._SINGLEFRAME_WRITERS["TXT"] = SpongeCoordinateWriter
