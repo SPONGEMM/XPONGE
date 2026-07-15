@@ -771,7 +771,13 @@ class SpongeH5MDReader(base.ReaderBase):
             )
         path = "/parameters/sponge/output/frame_count"
         if path in self._file and status == "finalized":
-            declared = int(np.asarray(self._file[path][...]).reshape(-1)[0])
+            values = np.asarray(self._file[path][...]).reshape(-1)
+            if values.size == 0:
+                raise IncompleteBundleError(f"{self.filename}:{path} is empty")
+            # SPONGE records completion as an append-only commit journal. The
+            # last entry is authoritative; a one-element legacy dataset still
+            # works through the same rule.
+            declared = int(values[-1])
             if declared != self._n_frames:
                 raise IncompleteBundleError(
                     f"{self.filename}:{path} is {declared}, actual complete frames are {self._n_frames}"

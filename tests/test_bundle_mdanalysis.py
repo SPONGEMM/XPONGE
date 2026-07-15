@@ -268,6 +268,20 @@ def test_historical_reader_name_is_supported_alias():
     )
 
 
+def test_bundle_reader_uses_last_append_only_completion_record(tmp_path):
+    topology = tmp_path / "topology.spgt.h5"
+    trajectory = tmp_path / "trajectory.spg.h5md"
+    _write_topology(topology)
+    _write_bundle_trajectory(trajectory)
+    with h5py.File(trajectory, "r+") as handle:
+        path = "/parameters/sponge/output/frame_count"
+        del handle[path]
+        handle.create_dataset(path, data=np.asarray([0, 1, 2], dtype=np.int64))
+
+    universe = xmda.load_bundle_universe(topology, trajectory)
+    assert universe.trajectory.n_frames == 2
+
+
 def test_bundle_builder_writes_mdanalysis_compatibility_metadata(tmp_path):
     paths = BundlePaths.canonical(tmp_path)
     builder = BundleBuilder(paths)

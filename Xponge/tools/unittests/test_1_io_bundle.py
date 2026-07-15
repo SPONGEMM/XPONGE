@@ -41,6 +41,7 @@ __all__ = [
     "test_legacy_to_bundle_static_default_prefix_generates_required_protocol",
     "test_legacy_to_bundle_dynamic_custom_force_default_prefix",
     "test_legacy_to_bundle_writes_typed_topology",
+    "test_legacy_to_bundle_imports_xponge_analysis_metadata",
     "test_legacy_to_bundle_improper_alias_is_typed_only",
     "test_legacy_to_bundle_outputs_pass_sponge_h5_probes",
     "test_legacy_io_contract_matrix_dry_run",
@@ -1520,6 +1521,40 @@ def test_legacy_to_bundle_writes_typed_topology():
             assert np.array_equal(handle["/particles/all/step"][...], np.asarray([0, 1], dtype=np.int64))
             assert np.allclose(handle["/particles/all/box/edges/value"][1], np.diag([11.0, 21.0, 31.0]).astype(np.float32))
             assert np.allclose(handle["/particles/all/velocity/value"][0, 0], np.asarray([0.1, 0.2, 0.3], dtype=np.float32))
+
+
+def test_legacy_to_bundle_imports_xponge_analysis_metadata():
+    try:
+        import h5py
+    except ImportError:
+        return
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        case_dir = Path(tmpdir) / "case"
+        output_dir = Path(tmpdir) / "out"
+        case_dir.mkdir()
+        write_basic_case(case_dir)
+        mdin = case_dir / "mdin.spg.toml"
+        mdin.write_text(
+            'default_in_file_prefix = "system"\n'
+            + mdin.read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        (case_dir / "system_resname.txt").write_text("1\nMOL\n", encoding="utf-8")
+        (case_dir / "system_atom_name.txt").write_text("2\nC\nH\n", encoding="utf-8")
+        (case_dir / "system_atom_type_name.txt").write_text("2\nCT\nHC\n", encoding="utf-8")
+
+        manifest = convert_legacy_to_bundle(case_dir, output_dir, dry_run=False)
+        entries = {
+            entry["contract_id"]: entry for entry in manifest.to_dict()["entries"]
+        }
+        for key in ("resname", "atom_name", "atom_type_name"):
+            assert entries[f"topology.metadata.{key}"]["status"] == "metadata_converted"
+
+        with h5py.File(output_dir / "bundle/topology.spgt.h5", "r") as handle:
+            assert _h5_string_list(handle["/parameters/xponge/residues/name"]) == ["MOL"]
+            assert _h5_string_list(handle["/parameters/xponge/atoms/name"]) == ["C", "H"]
+            assert _h5_string_list(handle["/parameters/xponge/atoms/type_name"]) == ["CT", "HC"]
 
 
 def test_legacy_to_bundle_improper_alias_is_typed_only():

@@ -42,6 +42,13 @@ from .topology_parsers import (
 from .trajectory_parsers import box_to_edges, parse_trajectory_file
 
 
+_XPONGE_METADATA_SIDECARS = {
+    "resname": "/parameters/xponge/residues/name",
+    "atom_name": "/parameters/xponge/atoms/name",
+    "atom_type_name": "/parameters/xponge/atoms/type_name",
+}
+
+
 class ConversionError(RuntimeError):
     """Raised when a legacy case cannot be converted."""
 
@@ -87,6 +94,7 @@ class LegacyToBundleConverter:
         self._convert_restart_structural_state(dry_run=dry_run)
         self._convert_text_sidecars(dry_run=dry_run)
         self._import_compatibility_payloads(dry_run=dry_run)
+        self._convert_xponge_metadata_sidecars(dry_run=dry_run)
         self._convert_protocol_restart_sidecars(dry_run=dry_run)
         self._convert_custom_force_dynamic_payloads(dry_run=dry_run)
         self._ensure_required_h5_input_bindings()
@@ -293,6 +301,51 @@ class LegacyToBundleConverter:
                         "native typed materialization for this contract is still required"
                     ),
                     )
+
+    def _convert_xponge_metadata_sidecars(self, *, dry_run: bool) -> None:
+        """Import optional names emitted by ``save_sponge_input``."""
+
+        prefix = self.case.commands.get("default_in_file_prefix")
+        if not prefix:
+            return
+        prefix_path = self.case.resolve_value_path(prefix)
+        for key, bundle_path in _XPONGE_METADATA_SIDECARS.items():
+            source_path = Path(f"{prefix_path}_{key}.txt")
+            if not source_path.exists():
+                continue
+            values = _read_counted_strings(source_path)
+            if key in {"atom_name", "atom_type_name"}:
+                atom_count = self._infer_atom_count()
+                if len(values) != atom_count:
+                    raise ConversionError(
+                        f"{source_path} contains {len(values)} names, expected {atom_count} atoms"
+                    )
+            if not dry_run:
+                self._builder.add_dataset(
+                    "topology.spgt.h5",
+                    bundle_path,
+                    np.asarray(values, dtype=object),
+                )
+            self._bundle_files_touched.add("topology.spgt.h5")
+            self.manifest.add(
+                ManifestEntry(
+                    contract_id=f"topology.metadata.{key}",
+                    status="metadata_converted",
+                    source_key=key,
+                    source_path=str(source_path),
+                    bundle_file="topology.spgt.h5",
+                    bundle_path=bundle_path,
+                    direction="input",
+                    component="topology",
+                    payload_kind="metadata",
+                    override_policy="forbidden",
+                    comparison_rule="exact",
+                    message=(
+                        "Xponge legacy analysis metadata materialized as "
+                        "typed HDF5 strings"
+                    ),
+                )
+            )
 
     def _convert_protocol_restart_sidecars(self, *, dry_run: bool) -> None:
         for key in _PROTOCOL_RESTART_SIDECAR_KEYS:
@@ -779,6 +832,23 @@ def _read_vector_file(path: Path, *, expected_count: int) -> np.ndarray:
     values = np.asarray([[float(item) for item in line[:3]] for line in lines], dtype=np.float32)
     if values.shape != (expected_count, 3):
         raise ConversionError(f"{path} has shape {values.shape}, expected ({expected_count}, 3)")
+    return values
+
+
+def _read_counted_strings(path: Path) -> list[str]:
+    lines = [
+        line.strip()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    if not lines:
+        raise ConversionError(f"{path} is empty")
+    declared = int(lines[0])
+    values = lines[1:]
+    if len(values) != declared:
+        raise ConversionError(
+            f"{path} declares {declared} strings but contains {len(values)}"
+        )
     return values
 
 
