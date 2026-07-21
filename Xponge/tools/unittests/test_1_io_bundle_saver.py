@@ -75,6 +75,45 @@ def test_save_sponge_input_bundle_writes_loadable_artifacts(tmp_path):
         assert handle["/particles/all/box/edges/value"].shape == (1, 3, 3)
 
 
+def test_save_sponge_input_wrapper_defaults_to_raw(tmp_path):
+    molecule = _alanine_dipeptide()
+
+    returned = Xponge.save_sponge_input(molecule, "system", tmp_path)
+
+    assert returned is molecule
+    assert (tmp_path / "system_coordinate.txt").is_file()
+    assert not (tmp_path / "system_topology.spgt.h5").exists()
+
+
+def test_save_sponge_input_wrapper_accepts_explicit_raw(tmp_path):
+    molecule = _alanine_dipeptide()
+
+    returned = Xponge.save_sponge_input(molecule, "system", tmp_path, format="raw")
+
+    assert returned is molecule
+    assert (tmp_path / "system_coordinate.txt").is_file()
+
+
+def test_save_sponge_input_wrapper_dispatches_bundle(tmp_path):
+    h5py = pytest.importorskip("h5py")
+    molecule = _alanine_dipeptide()
+
+    returned = Xponge.save_sponge_input(molecule, "system", tmp_path, format="bundle")
+
+    assert returned is molecule
+    assert (tmp_path / "system_topology.spgt.h5").is_file()
+    assert (tmp_path / "system_protocol.spgp.h5").is_file()
+    with h5py.File(tmp_path / "system_restart.spgr.h5", "r") as handle:
+        assert handle["/particles/all/position/value"].shape == (1, len(molecule.atoms), 3)
+
+
+def test_save_sponge_input_wrapper_rejects_unknown_format(tmp_path):
+    with pytest.raises(ValueError, match="must be 'raw' or 'bundle'"):
+        Xponge.save_sponge_input(
+            _alanine_dipeptide(), "system", tmp_path, format="future"
+        )
+
+
 def test_bundled_saver_matches_legacy_saver_semantics(tmp_path):
     molecule = _alanine_dipeptide()
     legacy_dir = tmp_path / "legacy"
@@ -138,6 +177,92 @@ def test_save_sponge_input_bundle_rejects_unknown_nonempty_serializer(tmp_path):
             Xponge.save_sponge_input_bundle(molecule, "system", tmp_path)
     finally:
         Xponge.Molecule.Del_Save_SPONGE_Input("future_force")
+
+
+def test_save_sponge_input_bundle_supports_soft_bond(tmp_path):
+    h5py = pytest.importorskip("h5py")
+    molecule = _alanine_dipeptide()
+    previous = Xponge.Molecule._save_functions.get("bond_soft")
+
+    @Xponge.Molecule.Set_Save_SPONGE_Input("bond_soft")
+    def write_soft_bond(_):
+        return "1\n0 1 12.5 1.25 1"
+
+    try:
+        Xponge.save_sponge_input_bundle(molecule, "system", tmp_path)
+    finally:
+        Xponge.Molecule.Del_Save_SPONGE_Input("bond_soft")
+        if previous is not None:
+            Xponge.Molecule.Set_Save_SPONGE_Input("bond_soft")(previous)
+
+    with h5py.File(tmp_path / "system_topology.spgt.h5", "r") as handle:
+        assert np.array_equal(handle["/forcefield/bond_soft/atoms"][:], [[0, 1]])
+        assert np.allclose(handle["/forcefield/bond_soft/k"][:], [12.5])
+        assert np.allclose(handle["/forcefield/bond_soft/r0"][:], [1.25])
+        assert np.array_equal(handle["/forcefield/bond_soft/from_a_or_b"][:], [1])
+
+    _write_saver_mdin(tmp_path, "system")
+    restored_dir = tmp_path / "restored"
+    convert_bundle_to_legacy(tmp_path, restored_dir, prefix="system")
+    restored = parse_topology_file(
+        "bond_soft_in_file", restored_dir / "system_bond_soft.txt"
+    )
+    restored_by_path = {dataset.path: dataset.data for dataset in restored}
+    assert np.array_equal(restored_by_path["/forcefield/bond_soft/atoms"], [[0, 1]])
+    assert np.array_equal(restored_by_path["/forcefield/bond_soft/from_a_or_b"], [1])
+
+
+def test_save_sponge_input_bundle_supports_ryckaert_bellemans(tmp_path):
+    h5py = pytest.importorskip("h5py")
+    molecule = _alanine_dipeptide()
+    assert classify_sponge_serializer_key("Ryckaert_Bellemans") == ("listed_force", None)
+    previous_descriptor = Xponge.Molecule._save_functions.get("listed_forces")
+    previous_data = Xponge.Molecule._save_functions.get("Ryckaert_Bellemans")
+
+    @Xponge.Molecule.Set_Save_SPONGE_Input("listed_forces")
+    def write_listed_forces(_):
+        return (
+            "[[[ Ryckaert_Bellemans ]]]\n"
+            "[[ parameters ]]\n"
+            "int atom_a, int atom_b, int atom_c, int atom_d, "
+            "float c0, float c1, float c2, float c3, float c4, float c5\n"
+            "[[ potential ]]\n"
+            "E = c0 + c1;\n"
+            "[[ end ]]\n"
+        )
+
+    @Xponge.Molecule.Set_Save_SPONGE_Input("Ryckaert_Bellemans")
+    def write_ryckaert_bellemans(_):
+        return "1\n0 1 2 3 0.1 0.2 0.3 0.4 0.5 0.6"
+
+    try:
+        Xponge.save_sponge_input_bundle(molecule, "system", tmp_path)
+    finally:
+        for key, previous in (
+            ("listed_forces", previous_descriptor),
+            ("Ryckaert_Bellemans", previous_data),
+        ):
+            Xponge.Molecule.Del_Save_SPONGE_Input(key)
+            if previous is not None:
+                Xponge.Molecule.Set_Save_SPONGE_Input(key)(previous)
+
+    root = "/forcefield/custom_force/listed/data/Ryckaert_Bellemans"
+    with h5py.File(tmp_path / "system_topology.spgt.h5", "r") as handle:
+        assert handle[f"{root}/item_count"][()] == 1
+        assert np.array_equal(handle[f"{root}/parameter/int_value"][0, :4], [0, 1, 2, 3])
+        assert np.allclose(handle[f"{root}/parameter/float_value"][0, 4:], [0.1, 0.2, 0.3, 0.4, 0.5, 0.6])
+
+    _write_saver_mdin(tmp_path, "system")
+    restored_dir = tmp_path / "restored"
+    convert_bundle_to_legacy(tmp_path, restored_dir, prefix="system")
+    restored_lines = (restored_dir / "system_Ryckaert_Bellemans.txt").read_text(
+        encoding="utf-8"
+    ).splitlines()
+    assert restored_lines[0] == "1"
+    assert np.allclose(
+        [float(value) for value in restored_lines[1].split()],
+        [0, 1, 2, 3, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
+    )
 
 
 def test_save_sponge_input_bundle_rejects_escaping_prefix(tmp_path):

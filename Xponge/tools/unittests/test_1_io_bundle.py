@@ -898,9 +898,9 @@ def test_legacy_to_bundle_bundled_mdin_sidecars_and_overrides():
                 if item[0] == "attrs"
             }
             assert strings[("topology.spgt.h5", "/schema/name")] == "sponge.topology.h5"
-            assert strings[("topology.spgt.h5", "/schema/version")] == "xponge.legacy_to_bundle.v1"
+            assert strings[("topology.spgt.h5", "/schema/version")] == "sponge.input.v2"
             assert strings[("topology.spgt.h5", "/parameters/sponge/schema/name")] == "sponge.topology.h5"
-            assert strings[("topology.spgt.h5", "/parameters/sponge/schema/version")] == "xponge.legacy_to_bundle.v1"
+            assert strings[("topology.spgt.h5", "/parameters/sponge/schema/version")] == "sponge.input.v2"
             assert strings[("topology.spgt.h5", "/topology/atom_order_hash")].startswith("sha256:")
             assert strings[("topology.spgt.h5", "/topology/topology_hash")].startswith("sha256:")
             assert strings[("topology.spgt.h5", "/topology/forcefield_hash")].startswith("sha256:")
@@ -917,9 +917,9 @@ def test_legacy_to_bundle_bundled_mdin_sidecars_and_overrides():
                 ("topology.spgt.h5", "/topology/topology_hash")
             ]
             assert strings[("protocol.spgp.h5", "/schema/name")] == "sponge.protocol.h5"
-            assert strings[("protocol.spgp.h5", "/schema/version")] == "xponge.legacy_to_bundle.v1"
+            assert strings[("protocol.spgp.h5", "/schema/version")] == "sponge.input.v2"
             assert strings[("protocol.spgp.h5", "/parameters/sponge/schema/name")] == "sponge.protocol.h5"
-            assert strings[("protocol.spgp.h5", "/parameters/sponge/schema/version")] == "xponge.legacy_to_bundle.v1"
+            assert strings[("protocol.spgp.h5", "/parameters/sponge/schema/version")] == "sponge.input.v2"
             assert strings[("protocol.spgp.h5", "/identity/content_hash")].startswith("sha256:")
             assert datasets[("protocol.spgp.h5", "/protocol/cv_count")] == ()
             assert datasets[("protocol.spgp.h5", "/protocol/restraint_count")] == ()
@@ -927,7 +927,7 @@ def test_legacy_to_bundle_bundled_mdin_sidecars_and_overrides():
                 "SITS,metadynamics,steer,soft_walls"
             )
             assert strings[("restart.spgr.h5", "/parameters/sponge/schema/name")] == "sponge.restart.h5"
-            assert strings[("restart.spgr.h5", "/parameters/sponge/schema/version")] == "xponge.legacy_to_bundle.v1"
+            assert strings[("restart.spgr.h5", "/parameters/sponge/schema/version")] == "sponge.input.v2"
             assert strings[("restart.spgr.h5", "/parameters/sponge/output/status")] == "finalized"
             assert datasets[("restart.spgr.h5", "/parameters/sponge/output/frame_count")] == (1,)
             assert datasets[("restart.spgr.h5", "/parameters/sponge/output/last_complete_step")] == (1,)
@@ -945,7 +945,7 @@ def test_legacy_to_bundle_bundled_mdin_sidecars_and_overrides():
                 "Meta potential"
             )
             assert strings[("trajectory.spg.h5md", "/parameters/sponge/schema/name")] == "sponge.output.h5md"
-            assert strings[("trajectory.spg.h5md", "/parameters/sponge/schema/version")] == "xponge.legacy_to_bundle.v1"
+            assert strings[("trajectory.spg.h5md", "/parameters/sponge/schema/version")] == "sponge.output.v2"
             assert strings[("trajectory.spg.h5md", "/parameters/sponge/output/mode")] == "single"
             assert strings[("trajectory.spg.h5md", "/parameters/sponge/output/status")] == "finalized"
             assert datasets[("trajectory.spg.h5md", "/parameters/sponge/output/frame_count")] == (1,)
@@ -1280,11 +1280,24 @@ def test_legacy_to_bundle_writes_typed_topology():
         assert entries["topology.REAXFF_type"]["status"] == "typed_converted"
         assert entries["trajectory.crd"]["status"] == "typed_converted"
 
+        bundle_root = output_dir / "bundle"
+        artifact_uuids = set()
+        for artifact_name in (
+            "topology.spgt.h5",
+            "protocol.spgp.h5",
+            "restart.spgr.h5",
+            "trajectory.spg.h5md",
+        ):
+            with h5py.File(bundle_root / artifact_name, "r") as handle:
+                artifact_uuids.add(_h5_string(handle["/identity/uuid"][()]))
+        assert len(artifact_uuids) == 1
+        assert next(iter(artifact_uuids))
+
         with h5py.File(output_dir / "bundle" / "topology.spgt.h5", "r") as handle:
             assert _h5_string(handle["/schema/name"][()]) == "sponge.topology.h5"
-            assert _h5_string(handle["/schema/version"][()]) == "xponge.legacy_to_bundle.v1"
+            assert _h5_string(handle["/schema/version"][()]) == "sponge.input.v2"
             assert _h5_string(handle["/parameters/sponge/schema/name"][()]) == "sponge.topology.h5"
-            assert _h5_string(handle["/parameters/sponge/schema/version"][()]) == "xponge.legacy_to_bundle.v1"
+            assert _h5_string(handle["/parameters/sponge/schema/version"][()]) == "sponge.input.v2"
             assert _h5_string(handle["/topology/atom_order_hash"][()]).startswith("sha256:")
             assert _h5_string(handle["/topology/topology_hash"][()]).startswith("sha256:")
             assert _h5_string(handle["/topology/forcefield_hash"][()]).startswith("sha256:")
@@ -1385,9 +1398,9 @@ def test_legacy_to_bundle_writes_typed_topology():
 
         with h5py.File(output_dir / "bundle" / "protocol.spgp.h5", "r") as handle:
             assert _h5_string(handle["/schema/name"][()]) == "sponge.protocol.h5"
-            assert _h5_string(handle["/schema/version"][()]) == "xponge.legacy_to_bundle.v1"
+            assert _h5_string(handle["/schema/version"][()]) == "sponge.input.v2"
             assert _h5_string(handle["/parameters/sponge/schema/name"][()]) == "sponge.protocol.h5"
-            assert _h5_string(handle["/parameters/sponge/schema/version"][()]) == "xponge.legacy_to_bundle.v1"
+            assert _h5_string(handle["/parameters/sponge/schema/version"][()]) == "sponge.input.v2"
             assert handle["/protocol/cv_count"][()] > 0
             assert handle["/protocol/restraint_count"][()] > 0
             assert _h5_string(handle["/protocol/enhanced_sampling/method"][()]) == (
@@ -1458,7 +1471,7 @@ def test_legacy_to_bundle_writes_typed_topology():
             assert np.array_equal(handle["/h5md"].attrs["version"], np.asarray([1, 1], dtype=np.int32))
             assert _h5_string(handle["/h5md/creator"].attrs["name"]) == "XPONGE"
             assert _h5_string(handle["/parameters/sponge/schema/name"][()]) == "sponge.restart.h5"
-            assert _h5_string(handle["/parameters/sponge/schema/version"][()]) == "xponge.legacy_to_bundle.v1"
+            assert _h5_string(handle["/parameters/sponge/schema/version"][()]) == "sponge.input.v2"
             assert _h5_string(handle["/parameters/sponge/output/status"][()]) == "finalized"
             assert np.array_equal(handle["/parameters/sponge/output/frame_count"][...], np.asarray([1], dtype=np.int64))
             assert np.array_equal(
@@ -1491,9 +1504,20 @@ def test_legacy_to_bundle_writes_typed_topology():
             assert np.array_equal(handle["/h5md"].attrs["version"], np.asarray([1, 1], dtype=np.int32))
             assert _h5_string(handle["/h5md/creator"].attrs["name"]) == "XPONGE"
             assert _h5_string(handle["/parameters/sponge/schema/name"][()]) == "sponge.output.h5md"
-            assert _h5_string(handle["/parameters/sponge/schema/version"][()]) == "xponge.legacy_to_bundle.v1"
+            assert _h5_string(handle["/parameters/sponge/schema/version"][()]) == "sponge.output.v2"
             assert _h5_string(handle["/parameters/sponge/output/mode"][()]) == "single"
             assert _h5_string(handle["/parameters/sponge/output/status"][()]) == "finalized"
+            assert np.array_equal(
+                handle["/parameters/sponge/output/publication_epoch"][...],
+                np.asarray([0, 1], dtype=np.int64),
+            )
+            assert np.array_equal(
+                handle["/parameters/sponge/output/streams/particles/committed_count"][...],
+                np.asarray([2], dtype=np.int64),
+            )
+            assert _h5_string(
+                handle["/parameters/sponge/output/streams/particles/logical_kind"][()]
+            ) == "trajectory_frames"
             assert np.array_equal(handle["/parameters/sponge/output/frame_count"][...], np.asarray([2], dtype=np.int64))
             assert np.array_equal(
                 handle["/parameters/sponge/output/last_complete_step"][...],
@@ -2001,7 +2025,7 @@ def test_legacy_outputs_to_h5md_bundle():
         with h5py.File(output_path, "r") as handle:
             assert np.array_equal(handle["/h5md"].attrs["version"], np.asarray([1, 1], dtype=np.int32))
             assert _h5_string(handle["/h5md/creator"].attrs["name"]) == "XPONGE"
-            assert _h5_string(handle["/parameters/sponge/schema/version"][()]) == "xponge.legacy_to_bundle.v1"
+            assert _h5_string(handle["/parameters/sponge/schema/version"][()]) == "sponge.output.v2"
             assert _h5_string(handle["/parameters/sponge/output/status"][()]) == "finalized"
             assert np.array_equal(handle["/parameters/sponge/output/frame_count"][...], np.asarray([2], dtype=np.int64))
             assert np.array_equal(
@@ -2084,7 +2108,7 @@ def test_legacy_outputs_restart_bundle():
 
         with h5py.File(restart_path, "r") as handle:
             assert _h5_string(handle["/parameters/sponge/schema/name"][()]) == "sponge.restart.h5"
-            assert _h5_string(handle["/parameters/sponge/schema/version"][()]) == "xponge.legacy_to_bundle.v1"
+            assert _h5_string(handle["/parameters/sponge/schema/version"][()]) == "sponge.input.v2"
             assert _h5_string(handle["/parameters/sponge/output/status"][()]) == "finalized"
             assert np.array_equal(handle["/parameters/sponge/output/frame_count"][...], np.asarray([1], dtype=np.int64))
             assert np.array_equal(
@@ -2153,7 +2177,7 @@ def test_legacy_outputs_diagnostic_bundle():
         with h5py.File(output_path, "r") as handle:
             assert "/particles" not in handle
             assert "/observables" not in handle
-            assert _h5_string(handle["/parameters/sponge/schema/version"][()]) == "xponge.legacy_to_bundle.v1"
+            assert _h5_string(handle["/parameters/sponge/schema/version"][()]) == "sponge.output.v2"
             assert _h5_string(handle["/parameters/sponge/output/mode"][()]) == "legacy_import"
             assert np.array_equal(handle["/parameters/sponge/output/frame_count"][...], np.asarray([0], dtype=np.int64))
             assert np.array_equal(
@@ -2264,24 +2288,33 @@ def test_legacy_outputs_to_vds_bundle():
                 handle["/parameters/sponge/output/shard_manifest/frame_count"][...],
                 np.asarray([1, 1], dtype=np.int64),
             )
+            assert np.all(
+                handle["/parameters/sponge/output/shard_manifest/byte_size"][...] > 0
+            )
+            assert _h5_string(
+                handle["/parameters/sponge/output/streams/particles/logical_kind"][()]
+            ) == "trajectory_frames"
+            assert _h5_string(
+                handle["/parameters/sponge/output/streams/observables/logical_kind"][()]
+            ) == "thermo_frames"
             assert np.array_equal(
-                handle["/parameters/sponge/output/shard_manifest/observable_frame_count"][...],
+                handle["/parameters/sponge/output/shard_manifest/stream_counts/observables"][...],
                 np.asarray([1, 1], dtype=np.int64),
             )
             assert np.array_equal(
-                handle["/parameters/sponge/output/shard_manifest/nhc_frame_count"][...],
+                handle["/parameters/sponge/output/shard_manifest/stream_counts/nose_hoover_chain"][...],
                 np.asarray([1, 1], dtype=np.int64),
             )
             assert np.array_equal(
-                handle["/parameters/sponge/output/shard_manifest/metadynamics_scalar_frame_count"][...],
+                handle["/parameters/sponge/output/shard_manifest/stream_counts/metadynamics"][...],
                 np.asarray([1, 1], dtype=np.int64),
             )
             assert np.array_equal(
-                handle["/parameters/sponge/output/shard_manifest/qc_frame_count"][...],
+                handle["/parameters/sponge/output/shard_manifest/stream_counts/qc"][...],
                 np.asarray([1, 1], dtype=np.int64),
             )
             assert np.array_equal(
-                handle["/parameters/sponge/output/shard_manifest/reaxff_frame_count"][...],
+                handle["/parameters/sponge/output/shard_manifest/stream_counts/reaxff"][...],
                 np.asarray([1, 1], dtype=np.int64),
             )
             assert np.array_equal(
@@ -2307,7 +2340,7 @@ def test_legacy_outputs_to_vds_bundle():
         with h5py.File(shard_dir / "segment_000001.spg.h5md", "r") as handle:
             assert np.array_equal(handle["/h5md"].attrs["version"], np.asarray([1, 1], dtype=np.int32))
             assert _h5_string(handle["/parameters/sponge/schema/name"][()]) == "sponge.output.h5md"
-            assert _h5_string(handle["/parameters/sponge/schema/version"][()]) == "xponge.legacy_to_bundle.v1"
+            assert _h5_string(handle["/parameters/sponge/schema/version"][()]) == "sponge.output.v2"
             assert _h5_string(handle["/parameters/sponge/output/status"][()]) == "finalized"
             assert np.array_equal(handle["/parameters/sponge/output/frame_count"][...], np.asarray([1], dtype=np.int64))
             assert np.array_equal(
@@ -2396,7 +2429,7 @@ def test_legacy_outputs_observable_path_splits_from_trajectory_bundle():
         with h5py.File(trajectory_path, "r") as handle:
             assert "/observables" not in handle
             assert "/parameters/sponge/log" not in handle
-            assert _h5_string(handle["/parameters/sponge/schema/version"][()]) == "xponge.legacy_to_bundle.v1"
+            assert _h5_string(handle["/parameters/sponge/schema/version"][()]) == "sponge.output.v2"
             assert _h5_string(handle["/parameters/sponge/output/mode"][()]) == "vds"
             assert np.array_equal(handle["/parameters/sponge/output/frame_count"][...], np.asarray([2], dtype=np.int64))
             assert np.array_equal(
@@ -2413,7 +2446,7 @@ def test_legacy_outputs_observable_path_splits_from_trajectory_bundle():
 
         with h5py.File(observable_path, "r") as handle:
             assert "/particles" not in handle
-            assert _h5_string(handle["/parameters/sponge/schema/version"][()]) == "xponge.legacy_to_bundle.v1"
+            assert _h5_string(handle["/parameters/sponge/schema/version"][()]) == "sponge.output.v2"
             assert _h5_string(handle["/parameters/sponge/output/mode"][()]) == "legacy_import"
             assert np.array_equal(handle["/parameters/sponge/output/frame_count"][...], np.asarray([2], dtype=np.int64))
             assert np.array_equal(
@@ -2502,7 +2535,7 @@ def test_legacy_outputs_observable_only_bundle():
         with h5py.File(output_path, "r") as handle:
             assert "/particles" not in handle
             assert np.array_equal(handle["/h5md"].attrs["version"], np.asarray([1, 1], dtype=np.int32))
-            assert _h5_string(handle["/parameters/sponge/schema/version"][()]) == "xponge.legacy_to_bundle.v1"
+            assert _h5_string(handle["/parameters/sponge/schema/version"][()]) == "sponge.output.v2"
             assert _h5_string(handle["/parameters/sponge/output/mode"][()]) == "legacy_import"
             assert np.array_equal(handle["/parameters/sponge/output/frame_count"][...], np.asarray([2], dtype=np.int64))
             assert np.array_equal(

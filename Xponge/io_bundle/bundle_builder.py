@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 import hashlib
 from pathlib import Path
 from typing import Any, Callable
+from uuid import uuid4
 
 import numpy as np
 
@@ -79,6 +80,7 @@ class BundleBuilder:
     io: BundleIO = field(default_factory=BundleIO)
     track_dataset_hashes: bool = True
     _dataset_hashes: dict[str, Any] = field(default_factory=dict, init=False)
+    identity_uuid: str = field(default_factory=lambda: str(uuid4()))
 
     def add_datasets(self, bundle_file: str, datasets) -> None:
         path = self.paths.for_bundle_file(bundle_file)
@@ -138,13 +140,15 @@ class BundleBuilder:
         return "sha256:" + digest.hexdigest()
 
     def finalize(self, touched: set[str], metadata: BundleMetadata) -> None:
-        schema_version = "xponge.legacy_to_bundle.v1"
+        input_schema_version = "sponge.input.v2"
+        output_schema_version = "sponge.output.v2"
         if "topology.spgt.h5" in touched:
             topology = self.paths.topology
             self.io.write_string(topology, "/schema/name", "sponge.topology.h5")
-            self.io.write_string(topology, "/schema/version", schema_version)
+            self.io.write_string(topology, "/schema/version", input_schema_version)
             self.io.write_string(topology, "/parameters/sponge/schema/name", "sponge.topology.h5")
-            self.io.write_string(topology, "/parameters/sponge/schema/version", schema_version)
+            self.io.write_string(topology, "/parameters/sponge/schema/version", input_schema_version)
+            self.io.write_string(topology, "/identity/uuid", self.identity_uuid)
             self.io.write_string(topology, "/topology/atom_order_hash", metadata.atom_order_hash)
             self.io.write_string(topology, "/topology/topology_hash", metadata.topology_hash)
             self.io.write_string(topology, "/topology/forcefield_hash", metadata.forcefield_hash)
@@ -161,9 +165,10 @@ class BundleBuilder:
         if "protocol.spgp.h5" in touched:
             protocol = self.paths.protocol
             self.io.write_string(protocol, "/schema/name", "sponge.protocol.h5")
-            self.io.write_string(protocol, "/schema/version", schema_version)
+            self.io.write_string(protocol, "/schema/version", input_schema_version)
             self.io.write_string(protocol, "/parameters/sponge/schema/name", "sponge.protocol.h5")
-            self.io.write_string(protocol, "/parameters/sponge/schema/version", schema_version)
+            self.io.write_string(protocol, "/parameters/sponge/schema/version", input_schema_version)
+            self.io.write_string(protocol, "/identity/uuid", self.identity_uuid)
             self.io.write_string(
                 protocol,
                 "/protocol/topology_compatibility/topology_hash",
@@ -190,7 +195,10 @@ class BundleBuilder:
         if "restart.spgr.h5" in touched:
             restart = self.paths.restart
             self.io.write_string(restart, "/parameters/sponge/schema/name", "sponge.restart.h5")
-            self.io.write_string(restart, "/parameters/sponge/schema/version", schema_version)
+            self.io.write_string(restart, "/parameters/sponge/schema/version", input_schema_version)
+            self.io.write_string(restart, "/schema/name", "sponge.restart.h5")
+            self.io.write_string(restart, "/schema/version", input_schema_version)
+            self.io.write_string(restart, "/identity/uuid", self.identity_uuid)
             self._finalize_restart(restart, metadata.creator_version)
 
         if "trajectory.spg.h5md" in touched:
@@ -205,8 +213,9 @@ class BundleBuilder:
             self.io.write_string(
                 trajectory,
                 "/parameters/sponge/schema/version",
-                schema_version,
+                output_schema_version,
             )
+            self.io.write_string(trajectory, "/identity/uuid", self.identity_uuid)
             self._finalize_trajectory(trajectory, metadata)
 
     def _finalize_trajectory(self, path: Path, metadata: BundleMetadata) -> None:
@@ -235,6 +244,51 @@ class BundleBuilder:
         self.io.write_string(path, "/parameters/sponge/output/mode", "single")
         self.io.write_string(path, "/parameters/sponge/output/status", "finalized")
         self._write_completion(path, frame_count, last_step, last_time)
+        self.io.ensure_dataset(
+            path,
+            "/parameters/sponge/output/publication_epoch",
+            np.asarray([0, 1], dtype=np.int64),
+        )
+        self.io.ensure_dataset(
+            path,
+            "/parameters/sponge/output/streams/particles/committed_count",
+            np.asarray([frame_count], dtype=np.int64),
+        )
+        self.io.write_string(
+            path,
+            "/parameters/sponge/output/streams/particles/logical_kind",
+            "trajectory_frames",
+        )
+        self.io.write_string(
+            path,
+            "/parameters/sponge/output/streams/particles/step_path",
+            "/particles/all/step",
+        )
+        self.io.write_string(
+            path,
+            "/parameters/sponge/output/streams/particles/time_path",
+            "/particles/all/time",
+        )
+        particle_values = [
+            value_path
+            for value_path in (
+                "/particles/all/position/value",
+                "/particles/all/box/edges/value",
+                "/particles/all/velocity/value",
+                "/particles/all/force/value",
+            )
+            if _h5_path_exists(path, value_path)
+        ]
+        self.io.write_string_array(
+            path,
+            "/parameters/sponge/output/streams/particles/value_paths",
+            particle_values,
+        )
+        self.io.write_string(
+            path,
+            "/parameters/sponge/output/streams/particles/experimental",
+            "false",
+        )
         self.io.write_string_array(path, "/parameters/sponge/output/particle_streams", ["all"])
 
     def _finalize_restart(self, path: Path, creator_version: str) -> None:
@@ -338,3 +392,12 @@ def _particle_completion_metadata(path: Path) -> tuple[int, int, float]:
             if times.size:
                 last_time = float(times[-1])
         return frame_count, last_step, last_time
+
+
+def _h5_path_exists(path: Path, dataset_path: str) -> bool:
+    if not path.exists():
+        return False
+    import h5py  # type: ignore
+
+    with h5py.File(path, "r") as handle:
+        return dataset_path in handle

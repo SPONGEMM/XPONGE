@@ -28,7 +28,7 @@ def _write_topology(path, *, topology_hash="top-hash", atom_order_hash="order-ha
     with h5py.File(path, "w") as handle:
         schema = handle.create_group("schema")
         _text(schema, "name", "sponge.topology.h5")
-        _text(schema, "version", "xponge.legacy_to_bundle.v1")
+        _text(schema, "version", "sponge.input.v2")
 
         topology = handle.create_group("topology")
         topology.create_dataset("atom_count", data=np.int64(2))
@@ -75,7 +75,7 @@ def _write_bundle_trajectory(
         sponge = handle.create_group("parameters").create_group("sponge")
         schema = sponge.create_group("schema")
         _text(schema, "name", "sponge.output.h5md")
-        _text(schema, "version", "xponge.legacy_to_bundle.v1")
+        _text(schema, "version", "sponge.output.v2")
         output = sponge.create_group("output")
         _text(output, "status", "finalized")
         output.create_dataset("frame_count", data=np.asarray([2], dtype=np.int64))

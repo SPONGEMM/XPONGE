@@ -43,6 +43,17 @@ def parse_topology_file(key: str, path: Path) -> list[TypedDataset] | None:
                 ("/forcefield/bond/r0", np.float32, 3),
             ),
         )
+    if key == "bond_soft_in_file":
+        return _parse_fixed_table(
+            path,
+            atom_columns=2,
+            datasets=(
+                ("/forcefield/bond_soft/atoms", np.int32, slice(0, 2)),
+                ("/forcefield/bond_soft/k", np.float32, 2),
+                ("/forcefield/bond_soft/r0", np.float32, 3),
+                ("/forcefield/bond_soft/from_a_or_b", np.int32, 4),
+            ),
+        )
     if key == "angle_in_file":
         return _parse_fixed_table(
             path,

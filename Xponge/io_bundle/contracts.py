@@ -160,6 +160,7 @@ SPONGE_SERIALIZER_TO_LEGACY_KEY = {
     "residue": "residue_in_file",
     "exclude": "exclude_in_file",
     "bond": "bond_in_file",
+    "bond_soft": "bond_soft_in_file",
     "angle": "angle_in_file",
     "dihedral": "dihedral_in_file",
     "improper_dihedral": "improper_dihedral_in_file",
@@ -181,8 +182,11 @@ SPONGE_SERIALIZER_TO_LEGACY_KEY = {
 SPONGE_SERIALIZER_METADATA_KEYS = frozenset({"resname", "atom_name", "atom_type_name"})
 
 
+SPONGE_SERIALIZER_LISTED_FORCE_KEYS = frozenset({"Ryckaert_Bellemans"})
+
+
 SPONGE_SERIALIZER_UNSUPPORTED_KEYS = frozenset(
-    {"bond_soft", "Ryckaert_Bellemans", "fake_mass", "fake_LJ", "fake_charge"}
+    {"fake_mass", "fake_LJ", "fake_charge"}
 )
 
 
@@ -335,6 +339,7 @@ TOPOLOGY_FILE_CONTRACTS = {
     "residue_in_file": "/residues",
     "exclude_in_file": "/topology/exclusions",
     "bond_in_file": "/forcefield/bond",
+    "bond_soft_in_file": "/forcefield/bond_soft",
     "angle_in_file": "/forcefield/angle",
     "dihedral_in_file": "/forcefield/dihedral",
     "improper_in_file": "/forcefield/improper",
@@ -642,6 +647,8 @@ def classify_sponge_serializer_key(key: str) -> tuple[str, str | None]:
         return "contract", SPONGE_SERIALIZER_TO_LEGACY_KEY[key]
     if key in SPONGE_SERIALIZER_METADATA_KEYS:
         return "metadata", None
+    if key in SPONGE_SERIALIZER_LISTED_FORCE_KEYS:
+        return "listed_force", None
     if key in SPONGE_SERIALIZER_UNSUPPORTED_KEYS:
         return "unsupported", None
     return "unknown", None

@@ -11,7 +11,8 @@ from .bundle_case import BundleCase
 from .errors import BundlePathError, BundleSchemaError, BundleValidationError
 
 
-_SCHEMA_VERSION = "xponge.legacy_to_bundle.v1"
+_INPUT_SCHEMA_VERSION = "sponge.input.v2"
+_OUTPUT_SCHEMA_VERSION = "sponge.output.v2"
 _SCHEMA_BINDINGS = {
     "topology.spgt.h5": ("/schema/name", "/schema/version", "sponge.topology.h5"),
     "protocol.spgp.h5": ("/schema/name", "/schema/version", "sponge.protocol.h5"),
@@ -143,9 +144,12 @@ class BundleReader:
             self._schema_problem(
                 f"{bundle_file} schema name is {name!r}, expected {expected_name!r}"
             )
-        if version != _SCHEMA_VERSION:
+        expected_version = (
+            _OUTPUT_SCHEMA_VERSION if bundle_file == "trajectory.spg.h5md" else _INPUT_SCHEMA_VERSION
+        )
+        if version != expected_version:
             self._schema_problem(
-                f"{bundle_file} schema version is {version!r}, expected {_SCHEMA_VERSION!r}"
+                f"{bundle_file} schema version is {version!r}, expected {expected_version!r}"
             )
 
     def _schema_problem(self, message: str) -> None:

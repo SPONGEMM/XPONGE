@@ -69,6 +69,10 @@ def add_molecule_to_bundle(mol, builder: BundleBuilder) -> None:
             raise BundleCapabilityError(
                 f"save_sponge_input_bundle does not support serializer {serializer_key!r}"
             )
+        if classification == "listed_force":
+            raise BundleCapabilityError(
+                f"listed force serializer {serializer_key!r} has no matching listed_forces definition"
+            )
         if classification == "unknown" or legacy_key is None:
             raise BundleCapabilityError(
                 f"save_sponge_input_bundle encountered unclassified serializer {serializer_key!r}"

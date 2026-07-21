@@ -152,7 +152,12 @@ import Xponge
 import Xponge.forcefield.amber.ff14sb
 
 peptide = Xponge.get_peptide_from_sequence("AAAAA")
-Xponge.save_sponge_input_bundle(peptide, prefix="ala5", dirname="inputs")
+Xponge.save_sponge_input(
+    peptide,
+    prefix="ala5",
+    dirname="inputs",
+    format="bundle",
+)
 ```
 
 This creates:
@@ -166,6 +171,11 @@ inputs/ala5_restart.spgr.h5
 Bind them in the SPONGE mdin with `input_h5_topology_path`,
 `input_h5_protocol_path`, and `input_h5_restart_path`. The saver does not add
 run policy such as mode, step limit, thermostat, or output paths.
+
+The default remains the legacy raw-text format. It can be selected explicitly
+with ``format="raw"``; the raw implementation is also available directly as
+``Xponge.save_sponge_input_raw``. ``Xponge.save_sponge_input_bundle`` remains
+available for callers that prefer the format-specific API.
 
 Existing direct/legacy input cases can be converted in either direction:
 

@@ -50,6 +50,19 @@ def export_bond(contract, reader, context) -> list[LegacyPayload]:
     )
 
 
+def export_bond_soft(contract, reader, context) -> list[LegacyPayload]:
+    return _fixed_table(
+        contract,
+        reader,
+        (
+            "/forcefield/bond_soft/atoms",
+            "/forcefield/bond_soft/k",
+            "/forcefield/bond_soft/r0",
+            "/forcefield/bond_soft/from_a_or_b",
+        ),
+    )
+
+
 def export_angle(contract, reader, context) -> list[LegacyPayload]:
     return _fixed_table(
         contract,
@@ -565,6 +578,7 @@ TOPOLOGY_EXPORTERS = {
     "residue_in_file": export_residue,
     "exclude_in_file": export_exclude,
     "bond_in_file": export_bond,
+    "bond_soft_in_file": export_bond_soft,
     "angle_in_file": export_angle,
     "dihedral_in_file": export_dihedral,
     "improper_dihedral_in_file": export_improper,

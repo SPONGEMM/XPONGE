@@ -29,7 +29,8 @@ from ..io_bundle.errors import (
 )
 
 
-_SCHEMA_VERSION = "xponge.legacy_to_bundle.v1"
+_INPUT_SCHEMA_VERSION = "sponge.input.v2"
+_OUTPUT_SCHEMA_VERSION = "sponge.output.v2"
 _TOPOLOGY_SCHEMA = "sponge.topology.h5"
 _TRAJECTORY_SCHEMA = "sponge.output.h5md"
 _LEGACY_WALKER_RE = re.compile(r"^trajectory(?P<index>\d+)$")
@@ -92,9 +93,12 @@ def _validate_schema(
         raise BundleSchemaError(
             f"{handle.filename}:{name_path} is {name!r}, expected {expected_name!r}"
         )
-    if version != _SCHEMA_VERSION:
+    expected_version = (
+        _OUTPUT_SCHEMA_VERSION if expected_name == _TRAJECTORY_SCHEMA else _INPUT_SCHEMA_VERSION
+    )
+    if version != expected_version:
         raise BundleSchemaError(
-            f"{handle.filename}:{version_path} is {version!r}, expected {_SCHEMA_VERSION!r}"
+            f"{handle.filename}:{version_path} is {version!r}, expected {expected_version!r}"
         )
 
 

@@ -5,6 +5,7 @@ Legacy SPONGE output files to H5MD bundle writer.
 from __future__ import annotations
 
 from pathlib import Path
+from uuid import uuid4
 from typing import Any
 
 import numpy as np
@@ -15,7 +16,8 @@ from .manifest import ConversionManifest, ManifestEntry
 from .output_parsers import parse_legacy_output_file
 
 
-_SCHEMA_VERSION = "xponge.legacy_to_bundle.v1"
+_INPUT_SCHEMA_VERSION = "sponge.input.v2"
+_OUTPUT_SCHEMA_VERSION = "sponge.output.v2"
 
 
 class LegacyOutputConversionError(RuntimeError):
@@ -37,6 +39,7 @@ class LegacyOutputBundleWriter:
         self._finalized_h5md_bundles: set[Path] = set()
         self._legacy_sources_by_bundle: dict[Path, list[tuple[str, str]]] = {}
         self._vds_bundles: set[Path] = set()
+        self.identity_uuid = str(uuid4())
 
     def convert(self, *, dry_run: bool = False) -> ConversionManifest:
         typed_datasets_by_bundle: dict[Path, list] = {}
@@ -254,11 +257,13 @@ class LegacyOutputBundleWriter:
         set_attrs(output_path, "/h5md", {"version": np.asarray([1, 1], dtype=np.int32)})
         set_attrs(output_path, "/h5md/creator", {"name": "XPONGE", "version": "legacy-output-import"})
         ensure_dataset(output_path, "/parameters/sponge/schema/name", "sponge.output.h5md")
-        ensure_dataset(output_path, "/parameters/sponge/schema/version", _SCHEMA_VERSION)
+        ensure_dataset(output_path, "/parameters/sponge/schema/version", _OUTPUT_SCHEMA_VERSION)
+        ensure_dataset(output_path, "/identity/uuid", self.identity_uuid)
         ensure_dataset(output_path, "/parameters/sponge/output/status", "finalized")
         self._write_legacy_source_table(output_path)
         self._write_output_completion(output_path)
         self._write_stream_tables(output_path)
+        self._write_v2_publication(output_path)
         ensure_dataset(
             output_path,
             "/parameters/sponge/output/mode",
@@ -351,7 +356,10 @@ class LegacyOutputBundleWriter:
         ensure_group(restart_path, "/parameters/restart")
         ensure_group(restart_path, "/parameters/sponge")
         ensure_dataset(restart_path, "/parameters/sponge/schema/name", "sponge.restart.h5")
-        ensure_dataset(restart_path, "/parameters/sponge/schema/version", _SCHEMA_VERSION)
+        ensure_dataset(restart_path, "/parameters/sponge/schema/version", _INPUT_SCHEMA_VERSION)
+        ensure_dataset(restart_path, "/schema/name", "sponge.restart.h5")
+        ensure_dataset(restart_path, "/schema/version", _INPUT_SCHEMA_VERSION)
+        ensure_dataset(restart_path, "/identity/uuid", self.identity_uuid)
         ensure_dataset(restart_path, "/parameters/sponge/output/status", "finalized")
         self._write_legacy_source_table(restart_path)
         self._write_output_completion(restart_path)
@@ -418,6 +426,33 @@ class LegacyOutputBundleWriter:
             write_string_array(output_path, "/parameters/sponge/output/particle_streams", particle_streams)
         if observable_streams:
             write_string_array(output_path, "/parameters/sponge/output/observable_streams", observable_streams)
+
+    def _write_v2_publication(self, output_path: Path) -> None:
+        ensure_dataset(
+            output_path,
+            "/parameters/sponge/output/publication_epoch",
+            np.asarray([0, 1], dtype=np.int64),
+        )
+        descriptors = []
+        particle_values = sorted(self._particle_values_by_bundle.get(output_path, set()))
+        if particle_values and _h5_path_exists(output_path, "/particles/all/step"):
+            descriptors.append(
+                ("particles", "trajectory_frames", "/particles/all/step", "/particles/all/time", particle_values)
+            )
+        observable_values = sorted(self._observable_values_by_bundle.get(output_path, set()))
+        if observable_values and _h5_path_exists(output_path, "/observables/all/step"):
+            descriptors.append(
+                ("observables", "thermo_frames", "/observables/all/step", "/observables/all/time", observable_values)
+            )
+        for name, logical_kind, step_path, time_path, value_paths in descriptors:
+            count = int(_dataset_extent(output_path, step_path))
+            root = f"/parameters/sponge/output/streams/{name}"
+            ensure_dataset(output_path, root + "/committed_count", np.asarray([count], dtype=np.int64))
+            ensure_dataset(output_path, root + "/logical_kind", logical_kind)
+            ensure_dataset(output_path, root + "/step_path", step_path)
+            ensure_dataset(output_path, root + "/time_path", time_path)
+            write_string_array(output_path, root + "/value_paths", value_paths)
+            ensure_dataset(output_path, root + "/experimental", "false")
 
     def _write_vds_bundle(self, output_path: Path, typed_datasets) -> None:
         h5py = _import_h5py()
@@ -530,32 +565,40 @@ class LegacyOutputBundleWriter:
             )
             ensure_dataset(
                 output_path,
-                "/parameters/sponge/output/shard_manifest/observable_frame_count",
+                "/parameters/sponge/output/shard_manifest/byte_size",
+                np.asarray(
+                    [(output_path.parent / entry["path"]).stat().st_size for entry in ordered],
+                    dtype=np.int64,
+                ),
+            )
+            ensure_dataset(
+                output_path,
+                "/parameters/sponge/output/shard_manifest/stream_counts/observables",
                 np.asarray([metadata["observable_frame_count"] for metadata in shard_metadata], dtype=np.int64),
             )
             ensure_dataset(
                 output_path,
-                "/parameters/sponge/output/shard_manifest/nhc_frame_count",
+                "/parameters/sponge/output/shard_manifest/stream_counts/nose_hoover_chain",
                 np.asarray([metadata["nhc_frame_count"] for metadata in shard_metadata], dtype=np.int64),
             )
             ensure_dataset(
                 output_path,
-                "/parameters/sponge/output/shard_manifest/sits_nk_frame_count",
+                "/parameters/sponge/output/shard_manifest/stream_counts/sits",
                 np.asarray([metadata["sits_nk_frame_count"] for metadata in shard_metadata], dtype=np.int64),
             )
             ensure_dataset(
                 output_path,
-                "/parameters/sponge/output/shard_manifest/metadynamics_scalar_frame_count",
+                "/parameters/sponge/output/shard_manifest/stream_counts/metadynamics",
                 np.asarray([metadata["metadynamics_scalar_frame_count"] for metadata in shard_metadata], dtype=np.int64),
             )
             ensure_dataset(
                 output_path,
-                "/parameters/sponge/output/shard_manifest/qc_frame_count",
+                "/parameters/sponge/output/shard_manifest/stream_counts/qc",
                 np.asarray([metadata["qc_frame_count"] for metadata in shard_metadata], dtype=np.int64),
             )
             ensure_dataset(
                 output_path,
-                "/parameters/sponge/output/shard_manifest/reaxff_frame_count",
+                "/parameters/sponge/output/shard_manifest/stream_counts/reaxff",
                 np.asarray([metadata["reaxff_frame_count"] for metadata in shard_metadata], dtype=np.int64),
             )
             ensure_dataset(
@@ -610,8 +653,10 @@ class LegacyOutputBundleWriter:
         set_attrs(shard_path, "/h5md", {"version": np.asarray([1, 1], dtype=np.int32)})
         set_attrs(shard_path, "/h5md/creator", {"name": "XPONGE", "version": "legacy-output-import"})
         ensure_dataset(shard_path, "/parameters/sponge/schema/name", "sponge.output.h5md")
-        ensure_dataset(shard_path, "/parameters/sponge/schema/version", _SCHEMA_VERSION)
+        ensure_dataset(shard_path, "/parameters/sponge/schema/version", _OUTPUT_SCHEMA_VERSION)
+        ensure_dataset(shard_path, "/identity/uuid", self.identity_uuid)
         ensure_dataset(shard_path, "/parameters/sponge/output/status", "finalized")
+        ensure_dataset(shard_path, "/parameters/sponge/output/mode", "vds_shard")
         self._write_vds_shard_completion(shard_path)
         self._write_output_completion(shard_path)
         self._write_stream_tables(shard_path)
@@ -619,6 +664,9 @@ class LegacyOutputBundleWriter:
             self._link_particle_axes_for_values(shard_path, particle_values)
         if observable_values:
             self._link_observable_axes_for_values(shard_path, observable_values)
+        self._particle_values_by_bundle[shard_path] = set(particle_values)
+        self._observable_values_by_bundle[shard_path] = set(observable_values)
+        self._write_v2_publication(shard_path)
 
     def _write_vds_shard_completion(self, shard_path: Path) -> None:
         frame_count, last_step, last_time = _completion_metadata(shard_path)
@@ -730,6 +778,14 @@ def _h5_path_exists(file_path: Path, object_path: str) -> bool:
         raise LegacyOutputConversionError("h5py is required to finalize output H5MD links") from exc
     with h5py.File(file_path, "r") as handle:
         return object_path in handle
+
+
+def _dataset_extent(file_path: Path, dataset_path: str) -> int:
+    h5py = _import_h5py()
+    with h5py.File(file_path, "r") as handle:
+        if dataset_path not in handle or not handle[dataset_path].shape:
+            return 0
+        return int(handle[dataset_path].shape[0])
 
 
 def _completion_metadata(file_path: Path) -> tuple[int, int, float]:

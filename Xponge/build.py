@@ -597,9 +597,9 @@ def _iter_sponge_input_payloads(mol):
             yield key, towrite
 
 
-def save_sponge_input(cls, prefix=None, dirname="."):
+def save_sponge_input_raw(cls, prefix=None, dirname="."):
     """
-    This **function** saves the iput object as SPONGE inputs
+    This **function** saves the input object as raw SPONGE input files.
 
     :param cls: the object to save
     :param prefix: the prefix of the output files
@@ -614,6 +614,27 @@ def save_sponge_input(cls, prefix=None, dirname="."):
         f.write(towrite)
         f.close()
     return mol
+
+
+def save_sponge_input(cls, prefix=None, dirname=".", format="raw"):  # pylint: disable=redefined-builtin
+    """Save an XPONGE object as raw or bundled SPONGE inputs.
+
+    :param cls: the object to save
+    :param prefix: the prefix of the output files
+    :param dirname: the directory to save the output files
+    :param format: ``"raw"`` for legacy text inputs or ``"bundle"`` for HDF5 inputs
+    :return: the molecule instance built
+    """
+    if format == "raw":
+        return save_sponge_input_raw(cls, prefix, dirname)
+    if format == "bundle":
+        # Keep the bundled implementation optional and avoid a build/io_bundle
+        # import cycle while this module is being initialized.
+        from .io_bundle.saver import save_sponge_input_bundle
+        return save_sponge_input_bundle(cls, prefix, dirname)
+    raise ValueError(
+        f"SPONGE input format must be 'raw' or 'bundle', not {format!r}"
+    )
 
 
 def _pdb_chain(cls: Molecule):
