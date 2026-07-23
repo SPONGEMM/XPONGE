@@ -11,9 +11,16 @@ from Xponge.build import _prepare_sponge_input_molecule
 from .bundle_builder import BundleBuilder, BundleMetadata, BundlePaths
 from .errors import BundlePathError
 from .molecule_adapter import add_molecule_to_bundle
+from .protocol import SpongeProtocol, add_protocol_to_bundle
 
 
-def save_sponge_input_bundle(cls, prefix=None, dirname="."):
+def save_sponge_input_bundle(
+    cls,
+    prefix=None,
+    dirname=".",
+    *,
+    protocol: SpongeProtocol | None = None,
+):
     """Save an XPONGE object as topology, protocol, and restart HDF5 inputs.
 
     The returned value matches :func:`Xponge.save_sponge_input`: the prepared
@@ -31,6 +38,11 @@ def save_sponge_input_bundle(cls, prefix=None, dirname="."):
         temporary_paths = BundlePaths.canonical(tempdir)
         builder = BundleBuilder(temporary_paths)
         add_molecule_to_bundle(mol, builder)
+        protocol_summary = add_protocol_to_bundle(
+            protocol,
+            builder,
+            atom_count=len(mol.atoms),
+        )
         metadata = BundleMetadata(
             atom_count=len(mol.atoms),
             topology_hash=builder.content_hash(bundle_file="topology.spgt.h5"),
@@ -43,6 +55,9 @@ def save_sponge_input_bundle(cls, prefix=None, dirname="."):
                 path_prefixes=("/forcefield/", "/manybody/", "/qc/"),
             ),
             protocol_hash=builder.content_hash(bundle_file="protocol.spgp.h5"),
+            cv_count=protocol_summary.cv_count,
+            restraint_count=protocol_summary.restraint_count,
+            enhanced_methods=protocol_summary.enhanced_methods,
             creator_version="xponge-bundled-saver",
         )
         touched = {"topology.spgt.h5", "protocol.spgp.h5", "restart.spgr.h5"}

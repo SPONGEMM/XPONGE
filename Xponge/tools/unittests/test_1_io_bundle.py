@@ -8,9 +8,18 @@ import sys
 import tempfile
 
 import numpy as np
+import pytest
 
-from Xponge.io_bundle import convert_legacy_outputs_to_bundle, convert_legacy_to_bundle
+from Xponge.io_bundle import (
+    LegacyOutputConversionError,
+    convert_legacy_outputs_to_bundle,
+    convert_legacy_to_bundle,
+)
 from Xponge.io_bundle import converter as converter_module
+from Xponge.io_bundle.bundle_builder import (
+    canonical_dataset_hash,
+    restart_state_hash_from_h5,
+)
 from Xponge.io_bundle.legacy_case import parse_mdin_text, render_mdin_without_keys
 from Xponge.io_bundle.output_parsers import parse_legacy_output_file
 from Xponge.io_bundle.state_parsers import parse_protocol_or_restart_file
@@ -301,7 +310,7 @@ def test_typed_topology_parsers():
             eam_setfl["/manybody/eam/pair_potential/value"][0, 1],
             eam_setfl["/manybody/eam/pair_potential/value"][1, 0],
         )
-        assert np.array_equal(eam_atom_type["/manybody/eam/atom_type"], np.asarray([0, 1], dtype=np.int32))
+        assert np.array_equal(eam_atom_type["/manybody/eam/atom_type"], np.asarray([0, 0], dtype=np.int32))
         assert np.array_equal(sw["/manybody/sw/pair/type"], np.asarray([[0, 0]], dtype=np.int32))
         assert np.allclose(sw["/manybody/sw/triple/parameters"], np.asarray([[9.0, 10.0, 11.0]], dtype=np.float32))
         assert np.array_equal(edip["/manybody/edip/atom_type"], np.asarray([0, 0], dtype=np.int32))
@@ -928,6 +937,16 @@ def test_legacy_to_bundle_bundled_mdin_sidecars_and_overrides():
             )
             assert strings[("restart.spgr.h5", "/parameters/sponge/schema/name")] == "sponge.restart.h5"
             assert strings[("restart.spgr.h5", "/parameters/sponge/schema/version")] == "sponge.input.v2"
+            assert strings[("restart.spgr.h5", "/run/topology_hash")] == strings[
+                ("topology.spgt.h5", "/topology/topology_hash")
+            ]
+            assert strings[("restart.spgr.h5", "/run/atom_order_hash")] == strings[
+                ("topology.spgt.h5", "/topology/atom_order_hash")
+            ]
+            assert strings[("restart.spgr.h5", "/run/producer_protocol_hash")] == strings[
+                ("protocol.spgp.h5", "/identity/content_hash")
+            ]
+            assert strings[("restart.spgr.h5", "/run/state_hash")].startswith("sha256:")
             assert strings[("restart.spgr.h5", "/parameters/sponge/output/status")] == "finalized"
             assert datasets[("restart.spgr.h5", "/parameters/sponge/output/frame_count")] == (1,)
             assert datasets[("restart.spgr.h5", "/parameters/sponge/output/last_complete_step")] == (1,)
@@ -1325,7 +1344,7 @@ def test_legacy_to_bundle_writes_typed_topology():
             assert np.array_equal(handle["/manybody/eam/atomic_number"][...], np.asarray([29], dtype=np.int32))
             assert np.allclose(handle["/manybody/eam/embed/value"][...], np.asarray([[23.060548, 46.121096]], dtype=np.float32))
             assert np.allclose(handle["/manybody/eam/electron_density/value"][...], np.asarray([[5.0, 6.0]], dtype=np.float32))
-            assert np.array_equal(handle["/manybody/eam/atom_type"][...], np.asarray([0, 1], dtype=np.int32))
+            assert np.array_equal(handle["/manybody/eam/atom_type"][...], np.asarray([0, 0], dtype=np.int32))
             assert np.array_equal(handle["/manybody/sw/pair/type"][...], np.asarray([[0, 0]], dtype=np.int32))
             assert np.allclose(
                 handle["/manybody/sw/triple/parameters"][...],
@@ -2102,14 +2121,18 @@ def test_legacy_outputs_restart_bundle():
         assert entries["output.legacy_import.rst"]["status"] == "typed_converted"
         assert entries["output.legacy_import.rst"]["bundle_file"] == "custom_restart.spgr.h5"
         assert entries["output.legacy_import.nose_hoover_chain_restart_output"]["status"] == "typed_converted"
-        assert entries["output.h5.restart"]["status"] == "generated"
+        assert entries["output.h5.restart"]["status"] == "compatibility_generated"
         assert restart_path.exists()
         assert not output_path.exists()
 
         with h5py.File(restart_path, "r") as handle:
-            assert _h5_string(handle["/parameters/sponge/schema/name"][()]) == "sponge.restart.h5"
-            assert _h5_string(handle["/parameters/sponge/schema/version"][()]) == "sponge.input.v2"
+            assert _h5_string(handle["/parameters/sponge/schema/name"][()]) == "xponge.legacy_restart.archive"
+            assert _h5_string(handle["/parameters/sponge/schema/version"][()]) == "xponge.compat.v1"
             assert _h5_string(handle["/parameters/sponge/output/status"][()]) == "finalized"
+            assert _h5_string(handle["/parameters/sponge/output/restart_launchable"][()]) == "false"
+            assert _h5_string(handle["/parameters/sponge/output/restart_lineage_status"][()]) == "missing"
+            assert _h5_string(handle["/run/state_hash"][()]).startswith("sha256:")
+            assert "/run/topology_hash" not in handle
             assert np.array_equal(handle["/parameters/sponge/output/frame_count"][...], np.asarray([1], dtype=np.int64))
             assert np.array_equal(
                 handle["/parameters/sponge/output/last_complete_step"][...],
@@ -2144,6 +2167,108 @@ def test_legacy_outputs_restart_bundle():
                 handle["/particles/all/step"].id
             ).addr
             assert _h5_string(handle["/particles/all/position/value"].attrs["unit"]) == "Angstrom"
+
+
+def test_legacy_outputs_restart_bundle_with_verified_input_lineage():
+    try:
+        import h5py
+    except ImportError:
+        return
+
+    topology_hash = "sha256:" + "1" * 64
+    atom_order_hash = "sha256:" + "2" * 64
+    protocol_hash = "sha256:" + "3" * 64
+    with tempfile.TemporaryDirectory() as tmpdir:
+        case_dir = Path(tmpdir) / "case"
+        output_path = Path(tmpdir) / "legacy_outputs.spg.h5md"
+        restart_path = Path(tmpdir) / "restart.spgr.h5"
+        topology_path = Path(tmpdir) / "topology.spgt.h5"
+        protocol_path = Path(tmpdir) / "protocol.spgp.h5"
+        case_dir.mkdir()
+        (case_dir / "mdin.spg.toml").write_text(
+            'rst = "prod.rst7"\n'
+            f'output_h5_restart_path = "{restart_path}"\n',
+            encoding="utf-8",
+        )
+        (case_dir / "prod.rst7").write_text(
+            "restart state\n"
+            "2 0.5\n"
+            "1.0 2.0 3.0 4.0 5.0 6.0\n"
+            "0.1 0.2 0.3 0.4 0.5 0.6\n"
+            "10.0 20.0 30.0 90.0 90.0 90.0\n",
+            encoding="utf-8",
+        )
+        with h5py.File(topology_path, "w") as handle:
+            handle.require_group("/schema")
+            handle.require_group("/topology")
+            handle.create_dataset("/schema/name", data="sponge.topology.h5")
+            handle.create_dataset("/schema/version", data="sponge.input.v2")
+            handle.create_dataset("/topology/topology_hash", data=topology_hash)
+            handle.create_dataset("/topology/atom_order_hash", data=atom_order_hash)
+        with h5py.File(protocol_path, "w") as handle:
+            handle.require_group("/schema")
+            handle.require_group("/identity")
+            handle.require_group("/protocol/topology_compatibility")
+            handle.create_dataset("/schema/name", data="sponge.protocol.h5")
+            handle.create_dataset("/schema/version", data="sponge.input.v2")
+            handle.create_dataset(
+                "/protocol/topology_compatibility/topology_hash",
+                data=topology_hash,
+            )
+            handle.create_dataset("/identity/content_hash", data=protocol_hash)
+
+        manifest = convert_legacy_outputs_to_bundle(
+            case_dir,
+            output_path,
+            input_topology_path=topology_path,
+            input_protocol_path=protocol_path,
+        )
+        entries = {entry["contract_id"]: entry for entry in manifest.to_dict()["entries"]}
+        assert entries["output.h5.restart"]["status"] == "generated"
+        with h5py.File(restart_path, "r") as handle:
+            assert _h5_string(handle["/schema/name"][()]) == "sponge.restart.h5"
+            assert _h5_string(handle["/schema/version"][()]) == "sponge.input.v2"
+            assert _h5_string(handle["/parameters/sponge/output/restart_launchable"][()]) == "true"
+            assert _h5_string(handle["/parameters/sponge/output/restart_lineage_status"][()]) == "verified"
+            assert _h5_string(handle["/run/topology_hash"][()]) == topology_hash
+            assert _h5_string(handle["/run/atom_order_hash"][()]) == atom_order_hash
+            assert _h5_string(handle["/run/producer_protocol_hash"][()]) == protocol_hash
+            state_hash = _h5_string(handle["/run/state_hash"][()])
+            assert len(state_hash) == len("sha256:") + 64
+            state_paths = (
+                "/particles/all/step",
+                "/particles/all/time",
+                "/particles/all/position/value",
+                "/particles/all/velocity/value",
+                "/particles/all/box/edges/value",
+                "/parameters/restart/source/title",
+                "/parameters/restart/source/atom_count",
+            )
+            expected_state_hash = canonical_dataset_hash(
+                "restart.spgr.h5",
+                {path: handle[path][...] for path in state_paths},
+                path_prefixes=("/particles/", "/parameters/restart/"),
+            )
+            assert state_hash == expected_state_hash
+            assert state_hash == restart_state_hash_from_h5(restart_path)
+            assert _h5_string(handle["/run/state_type"][()]) == "restart"
+
+        with h5py.File(protocol_path, "a") as handle:
+            del handle["/protocol/topology_compatibility/topology_hash"]
+            handle.create_dataset(
+                "/protocol/topology_compatibility/topology_hash",
+                data="sha256:" + "4" * 64,
+            )
+        with pytest.raises(
+            LegacyOutputConversionError,
+            match="protocol topology_hash does not match",
+        ):
+            convert_legacy_outputs_to_bundle(
+                case_dir,
+                Path(tmpdir) / "mismatch.spg.h5md",
+                input_topology_path=topology_path,
+                input_protocol_path=protocol_path,
+            )
 
 
 def test_legacy_outputs_diagnostic_bundle():

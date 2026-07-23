@@ -616,22 +616,37 @@ def save_sponge_input_raw(cls, prefix=None, dirname="."):
     return mol
 
 
-def save_sponge_input(cls, prefix=None, dirname=".", format="raw"):  # pylint: disable=redefined-builtin
+def save_sponge_input(  # pylint: disable=redefined-builtin
+    cls,
+    prefix=None,
+    dirname=".",
+    format="raw",
+    *,
+    protocol=None,
+):
     """Save an XPONGE object as raw or bundled SPONGE inputs.
 
     :param cls: the object to save
     :param prefix: the prefix of the output files
     :param dirname: the directory to save the output files
     :param format: ``"raw"`` for legacy text inputs or ``"bundle"`` for HDF5 inputs
+    :param protocol: optional native ``SpongeProtocol`` for bundled output
     :return: the molecule instance built
     """
     if format == "raw":
+        if protocol is not None:
+            raise ValueError("protocol objects require format='bundle'")
         return save_sponge_input_raw(cls, prefix, dirname)
     if format == "bundle":
         # Keep the bundled implementation optional and avoid a build/io_bundle
         # import cycle while this module is being initialized.
         from .io_bundle.saver import save_sponge_input_bundle
-        return save_sponge_input_bundle(cls, prefix, dirname)
+        return save_sponge_input_bundle(
+            cls,
+            prefix,
+            dirname,
+            protocol=protocol,
+        )
     raise ValueError(
         f"SPONGE input format must be 'raw' or 'bundle', not {format!r}"
     )

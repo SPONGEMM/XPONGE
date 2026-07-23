@@ -4,12 +4,15 @@ Legacy SPONGE output files to H5MD bundle writer.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
+import re
 from uuid import uuid4
 from typing import Any
 
 import numpy as np
 
+from .bundle_builder import canonical_dataset_hash, restart_state_hash_from_h5
 from .h5_writer import _import_h5py, ensure_dataset, ensure_group, ensure_hard_link, set_attrs, write_string_array
 from .legacy_case import LegacyCase, scan_legacy_case
 from .manifest import ConversionManifest, ManifestEntry
@@ -18,23 +21,46 @@ from .output_parsers import parse_legacy_output_file
 
 _INPUT_SCHEMA_VERSION = "sponge.input.v2"
 _OUTPUT_SCHEMA_VERSION = "sponge.output.v2"
+_COMPAT_RESTART_SCHEMA_NAME = "xponge.legacy_restart.archive"
+_COMPAT_RESTART_SCHEMA_VERSION = "xponge.compat.v1"
+_SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
 class LegacyOutputConversionError(RuntimeError):
     """Raised when legacy outputs cannot be materialized as an H5MD bundle."""
 
 
+@dataclass(frozen=True)
+class RestartLineage:
+    """Verified input-bundle identity used to make an imported restart launchable."""
+
+    topology_hash: str
+    atom_order_hash: str
+    protocol_hash: str = ""
+
+
 class LegacyOutputBundleWriter:
     """Convert existing legacy SPONGE output files into one H5MD output bundle."""
 
-    def __init__(self, case: LegacyCase, output_path: str | Path, *, atom_count: int | None = None):
+    def __init__(
+        self,
+        case: LegacyCase,
+        output_path: str | Path,
+        *,
+        atom_count: int | None = None,
+        input_topology_path: str | Path | None = None,
+        input_protocol_path: str | Path | None = None,
+    ):
         self.case = case
         self.output_path = Path(output_path).resolve()
         self.atom_count = atom_count
+        self.input_topology_path = input_topology_path
+        self.input_protocol_path = input_protocol_path
         self.manifest = ConversionManifest(case_root=str(self.case.root), mode=self.case.mode)
         self._particle_values_by_bundle: dict[Path, set[str]] = {}
         self._observable_values_by_bundle: dict[Path, set[str]] = {}
         self._restart_particle_values: set[str] = set()
+        self._restart_dataset_payloads: dict[str, Any] = {}
         self._wrote_any_restart_dataset = False
         self._finalized_h5md_bundles: set[Path] = set()
         self._legacy_sources_by_bundle: dict[Path, list[tuple[str, str]]] = {}
@@ -55,7 +81,7 @@ class LegacyOutputBundleWriter:
             for dataset in output_datasets:
                 if key in _RESTART_OUTPUT_KEYS:
                     self._wrote_any_restart_dataset = True
-                    self._track_restart_dataset_path(dataset.path)
+                    self._track_restart_dataset(dataset.path, dataset.data)
                     restart_datasets.append(dataset)
                 else:
                     output_path = self._dataset_output_path(dataset.path)
@@ -193,7 +219,8 @@ class LegacyOutputBundleWriter:
         if dataset_path.startswith("/observables/all/") and dataset_path.endswith("/value"):
             self._observable_values_by_bundle.setdefault(output_path, set()).add(dataset_path)
 
-    def _track_restart_dataset_path(self, dataset_path: str) -> None:
+    def _track_restart_dataset(self, dataset_path: str, data: Any) -> None:
+        self._restart_dataset_payloads[dataset_path] = data
         if dataset_path.startswith("/particles/all/") and dataset_path.endswith("/value"):
             self._restart_particle_values.add(dataset_path)
 
@@ -352,15 +379,63 @@ class LegacyOutputBundleWriter:
 
     def _finalize_restart_layout(self) -> None:
         restart_path = self._restart_output_path()
+        lineage = self._load_restart_lineage()
+        tracked_state_hash = canonical_dataset_hash(
+            "restart.spgr.h5",
+            self._restart_dataset_payloads,
+            path_prefixes=("/particles/", "/parameters/restart/"),
+        )
+        state_hash = restart_state_hash_from_h5(restart_path)
+        if state_hash != tracked_state_hash:
+            raise LegacyOutputConversionError(
+                "materialized restart state hash does not match the tracked canonical payload"
+            )
+        ensure_group(restart_path, "/h5md")
+        ensure_group(restart_path, "/h5md/creator")
         ensure_group(restart_path, "/run")
         ensure_group(restart_path, "/parameters/restart")
         ensure_group(restart_path, "/parameters/sponge")
-        ensure_dataset(restart_path, "/parameters/sponge/schema/name", "sponge.restart.h5")
-        ensure_dataset(restart_path, "/parameters/sponge/schema/version", _INPUT_SCHEMA_VERSION)
-        ensure_dataset(restart_path, "/schema/name", "sponge.restart.h5")
-        ensure_dataset(restart_path, "/schema/version", _INPUT_SCHEMA_VERSION)
+        set_attrs(restart_path, "/h5md", {"version": np.asarray([1, 1], dtype=np.int32)})
+        set_attrs(
+            restart_path,
+            "/h5md/creator",
+            {"name": "XPONGE", "version": "legacy-output-import"},
+        )
+        if lineage is None:
+            schema_name = _COMPAT_RESTART_SCHEMA_NAME
+            schema_version = _COMPAT_RESTART_SCHEMA_VERSION
+            launchable = "false"
+            lineage_status = "missing"
+        else:
+            schema_name = "sponge.restart.h5"
+            schema_version = _INPUT_SCHEMA_VERSION
+            launchable = "true"
+            lineage_status = "verified"
+            ensure_dataset(restart_path, "/run/topology_hash", lineage.topology_hash)
+            ensure_dataset(restart_path, "/run/atom_order_hash", lineage.atom_order_hash)
+            if lineage.protocol_hash:
+                ensure_dataset(
+                    restart_path,
+                    "/run/producer_protocol_hash",
+                    lineage.protocol_hash,
+                )
+        ensure_dataset(restart_path, "/parameters/sponge/schema/name", schema_name)
+        ensure_dataset(restart_path, "/parameters/sponge/schema/version", schema_version)
+        ensure_dataset(restart_path, "/schema/name", schema_name)
+        ensure_dataset(restart_path, "/schema/version", schema_version)
         ensure_dataset(restart_path, "/identity/uuid", self.identity_uuid)
+        ensure_dataset(restart_path, "/run/state_hash", state_hash)
         ensure_dataset(restart_path, "/parameters/sponge/output/status", "finalized")
+        ensure_dataset(
+            restart_path,
+            "/parameters/sponge/output/restart_launchable",
+            launchable,
+        )
+        ensure_dataset(
+            restart_path,
+            "/parameters/sponge/output/restart_lineage_status",
+            lineage_status,
+        )
         self._write_legacy_source_table(restart_path)
         self._write_output_completion(restart_path)
         if _h5_path_exists(restart_path, "/particles/all/time"):
@@ -377,10 +452,23 @@ class LegacyOutputBundleWriter:
                 ensure_hard_link(restart_path, "/particles/all/step", parent + "/step")
             if _h5_path_exists(restart_path, "/particles/all/time"):
                 ensure_hard_link(restart_path, "/particles/all/time", parent + "/time")
+        frame_count, last_step, last_time = _completion_metadata(restart_path)
+        if frame_count:
+            ensure_dataset(
+                restart_path,
+                "/run/current_step",
+                np.asarray([last_step], dtype=np.int64),
+            )
+            ensure_dataset(
+                restart_path,
+                "/run/current_time",
+                np.asarray([last_time], dtype=np.float64),
+            )
+            ensure_dataset(restart_path, "/run/state_type", "restart")
         self.manifest.add(
             ManifestEntry(
                 contract_id="output.h5.restart",
-                status="generated",
+                status="generated" if lineage is not None else "compatibility_generated",
                 bundle_file=restart_path.name,
                 bundle_path="/parameters/restart",
                 direction="output",
@@ -388,9 +476,115 @@ class LegacyOutputBundleWriter:
                 payload_kind="metadata",
                 override_policy="output_h5_restart_path",
                 comparison_rule="h5_restart",
-                message="legacy restart output state was materialized as restart.spgr.h5",
+                message=(
+                    "legacy restart output state was materialized as a launchable sponge.input.v2 restart"
+                    if lineage is not None
+                    else "legacy restart state was archived without input-bundle lineage and is not launchable"
+                ),
             )
         )
+
+    def _load_restart_lineage(self) -> RestartLineage | None:
+        topology_path = self._resolve_input_bundle_path(
+            self.input_topology_path,
+            "input_h5_topology_path",
+        )
+        protocol_path = self._resolve_input_bundle_path(
+            self.input_protocol_path,
+            "input_h5_protocol_path",
+        )
+        if topology_path is None:
+            if protocol_path is not None:
+                raise LegacyOutputConversionError(
+                    "input protocol bundle cannot provide restart lineage without an input topology bundle"
+                )
+            return None
+        if not topology_path.is_file():
+            raise LegacyOutputConversionError(
+                f"input topology bundle does not exist: {topology_path}"
+            )
+
+        h5py = _import_h5py()
+        with h5py.File(topology_path, "r") as handle:
+            self._validate_input_bundle_schema(
+                handle,
+                topology_path,
+                expected_name="sponge.topology.h5",
+            )
+            topology_hash = _required_h5_string(
+                handle,
+                "/topology/topology_hash",
+                topology_path,
+            )
+            atom_order_hash = _required_h5_string(
+                handle,
+                "/topology/atom_order_hash",
+                topology_path,
+            )
+        _validate_sha256(topology_hash, "topology_hash")
+        _validate_sha256(atom_order_hash, "atom_order_hash")
+
+        protocol_hash = ""
+        if protocol_path is not None:
+            if not protocol_path.is_file():
+                raise LegacyOutputConversionError(
+                    f"input protocol bundle does not exist: {protocol_path}"
+                )
+            with h5py.File(protocol_path, "r") as handle:
+                self._validate_input_bundle_schema(
+                    handle,
+                    protocol_path,
+                    expected_name="sponge.protocol.h5",
+                )
+                protocol_topology_hash = _required_h5_string(
+                    handle,
+                    "/protocol/topology_compatibility/topology_hash",
+                    protocol_path,
+                )
+                if protocol_topology_hash != topology_hash:
+                    raise LegacyOutputConversionError(
+                        "input protocol topology_hash does not match the input topology bundle"
+                    )
+                protocol_hash = _required_h5_string(
+                    handle,
+                    "/identity/content_hash",
+                    protocol_path,
+                )
+            _validate_sha256(protocol_hash, "protocol_hash")
+        return RestartLineage(topology_hash, atom_order_hash, protocol_hash)
+
+    def _resolve_input_bundle_path(
+        self,
+        explicit: str | Path | None,
+        command_key: str,
+    ) -> Path | None:
+        value = explicit if explicit is not None else self.case.commands.get(command_key)
+        if value is None or not str(value).strip():
+            return None
+        path = Path(value)
+        if not path.is_absolute():
+            path = self.case.root / path
+        return path.resolve()
+
+    def _validate_input_bundle_schema(
+        self,
+        handle,
+        path: Path,
+        *,
+        expected_name: str,
+    ) -> None:
+        schema_name = _first_h5_string(
+            handle,
+            ("/schema/name", "/parameters/sponge/schema/name"),
+        )
+        schema_version = _first_h5_string(
+            handle,
+            ("/schema/version", "/parameters/sponge/schema/version"),
+        )
+        if schema_name != expected_name or schema_version != _INPUT_SCHEMA_VERSION:
+            raise LegacyOutputConversionError(
+                f"{path} is not a canonical {expected_name} {_INPUT_SCHEMA_VERSION} bundle"
+            )
 
     def _write_legacy_source_table(self, bundle_path: Path) -> None:
         sources = self._legacy_sources_by_bundle.get(bundle_path, [])
@@ -693,12 +887,55 @@ def convert_legacy_outputs_to_bundle(
     *,
     mdin: str | Path = "mdin.spg.toml",
     atom_count: int | None = None,
+    input_topology_path: str | Path | None = None,
+    input_protocol_path: str | Path | None = None,
     dry_run: bool = False,
 ) -> ConversionManifest:
     """Convert existing legacy SPONGE outputs into an H5MD output bundle."""
 
     case = scan_legacy_case(case_root, mdin=mdin)
-    return LegacyOutputBundleWriter(case, output_path, atom_count=atom_count).convert(dry_run=dry_run)
+    return LegacyOutputBundleWriter(
+        case,
+        output_path,
+        atom_count=atom_count,
+        input_topology_path=input_topology_path,
+        input_protocol_path=input_protocol_path,
+    ).convert(dry_run=dry_run)
+
+
+def _decode_h5_string(value: Any) -> str:
+    if isinstance(value, (bytes, np.bytes_)):
+        return value.decode("utf-8")
+    if isinstance(value, np.ndarray) and value.shape == ():
+        return _decode_h5_string(value.item())
+    return str(value)
+
+
+def _first_h5_string(handle, paths: tuple[str, ...]) -> str:
+    for path in paths:
+        if path in handle:
+            return _decode_h5_string(handle[path][()])
+    return ""
+
+
+def _required_h5_string(handle, path: str, source_path: Path) -> str:
+    if path not in handle:
+        raise LegacyOutputConversionError(
+            f"input bundle {source_path} is missing required dataset {path}"
+        )
+    value = _decode_h5_string(handle[path][()])
+    if not value:
+        raise LegacyOutputConversionError(
+            f"input bundle {source_path} has an empty required dataset {path}"
+        )
+    return value
+
+
+def _validate_sha256(value: str, label: str) -> None:
+    if not _SHA256_RE.fullmatch(value):
+        raise LegacyOutputConversionError(
+            f"{label} must use canonical sha256:<64 lowercase hex> encoding"
+        )
 
 
 _LEGACY_OUTPUT_PARSE_KEYS = (
