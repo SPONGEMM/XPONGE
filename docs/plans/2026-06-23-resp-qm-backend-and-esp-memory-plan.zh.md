@@ -11,7 +11,7 @@
 
 - `RESP` 的用户入口保持兼容
 - `PySCF` 与 `Psi4` 的后端选择语义保持统一
-- `MCPB` 的本地 `RESP` 重拟合能自动受益
+- `Metal-assignment` 的本地 `RESP` 重拟合能自动受益
 
 ## 2. 非目标
 
@@ -61,7 +61,7 @@
 - 顶层直接 `import pyscf`
 - 没有统一 `QM` 后端抽象
 - `ESP` 计算沿用全量 `aux_e2` 再 `MemoryError` fallback 的策略
-- 无法让 `RESP`、未来 `MCPB`、未来 `Hessian` 共用同一后端层
+- 无法让 `RESP`、`Metal-assignment`、未来 `Hessian` 共用同一后端层
 
 ### 3.3 已知 OOM 证据
 
@@ -373,7 +373,7 @@ df.incore.aux_e2(..., shls_slice=(ish0, ish1, jsh0, jsh1, aux0, aux1))
 说明：
 
 - `RESP core` 不需要改
-- `MCPB local RESP refit` 会自动受益
+- `Metal-assignment local RESP refit` 会自动受益
 
 ## 7.3 Phase 3：改造 `Psi4` `compute_esp()`
 
@@ -410,7 +410,7 @@ df.incore.aux_e2(..., shls_slice=(ish0, ish1, jsh0, jsh1, aux0, aux1))
 - `tiny budget` 强制走 `grid chunk`
 - `PySCF` shell/grid dual chunk 路径的单测
 - `Psi4` 轻量 `grid chunk` smoke test
-- 现有 `RESP` / `MCPB` 轻量回归
+- 现有 `RESP` / `Metal-assignment` 轻量回归
 
 建议新增：
 
@@ -510,7 +510,7 @@ df.incore.aux_e2(..., shls_slice=(ish0, ish1, jsh0, jsh1, aux0, aux1))
 1. `RESP` 用户入口支持统一后端参数
 2. `PySCF` 默认不再先赌全量 `aux_e2` 再靠 `MemoryError` 救场
 3. 在 `esp_memory_limit="1GB"` 下，`G6141` 级别体系不再尝试分配 `76 GiB` 级中间张量
-4. `MCPB local RESP refit` 自动复用改进后的 `ESP` 计算路径
+4. `Metal-assignment local RESP refit` 自动复用改进后的 `ESP` 计算路径
 5. `Psi4` 路径至少支持统一接口下的 `grid chunk`
 
 ## 11. 建议的提交切分

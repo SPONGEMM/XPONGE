@@ -12,7 +12,7 @@ from ..models import ESPGridRequest, ESPResult, HessianResult, OptimizationResul
 
 
 name = "pyscf"
-ANGSTROM_PER_BOHR = 0.52918
+ANGSTROM_PER_BOHR = 0.529177210903
 _ESP_TENSOR_ITEMSIZE = 8
 
 
@@ -57,11 +57,37 @@ def _build_molecule(molecule: QMMolecule, options: QMRunOptions, gto):
         kwargs["ecp"] = options.ecp
     if options.cart is not None:
         kwargs["cart"] = bool(options.cart)
+    if options.memory_limit_bytes is not None:
+        if options.memory_limit_bytes <= 0:
+            raise ValueError("QM memory limit should be positive")
+        kwargs["max_memory"] = max(1, int(options.memory_limit_bytes) // (1024 * 1024))
     return gto.M(**kwargs)
 
 
 def _build_wavefunction(mol, molecule: QMMolecule, scf):
     return scf.RHF(mol) if molecule.spin == 0 else scf.UHF(mol)
+
+
+def _configure_wavefunction(wavefunction, options: QMRunOptions) -> None:
+    if options.scf_convergence_tolerance is not None:
+        tolerance = float(options.scf_convergence_tolerance)
+        if not math.isfinite(tolerance) or tolerance <= 0:
+            raise ValueError("SCF convergence tolerance should be positive and finite")
+        wavefunction.conv_tol = tolerance
+    if options.scf_max_cycles is not None:
+        if isinstance(options.scf_max_cycles, bool) or int(options.scf_max_cycles) <= 0:
+            raise ValueError("SCF maximum cycle count should be a positive integer")
+        wavefunction.max_cycle = int(options.scf_max_cycles)
+
+
+def _configure_threads(options: QMRunOptions) -> None:
+    if options.threads is None:
+        return
+    if isinstance(options.threads, bool) or int(options.threads) <= 0:
+        raise ValueError("QM thread count should be a positive integer")
+    from pyscf import lib
+
+    lib.num_threads(int(options.threads))
 
 
 def _collapse_density_matrix(dm, np):
@@ -320,6 +346,7 @@ def optimize_geometry(molecule: QMMolecule, options: QMRunOptions, assign=None, 
 
 def compute_hessian(molecule: QMMolecule, options: QMRunOptions, assign=None, return_timings: bool = False) -> HessianResult:
     np, gto, scf = require_numpy_pyscf()
+    _configure_threads(options)
     timings = {}
     total_start = time.perf_counter()
     start = time.perf_counter()
@@ -327,16 +354,30 @@ def compute_hessian(molecule: QMMolecule, options: QMRunOptions, assign=None, re
     timings["build"] = time.perf_counter() - start
     start = time.perf_counter()
     wavefunction = _build_wavefunction(mol, molecule, scf)
+    _configure_wavefunction(wavefunction, options)
     wavefunction.run()
     timings["scf"] = time.perf_counter() - start
+    converged = bool(getattr(wavefunction, "converged", False))
+    if not converged:
+        raise RuntimeError("PySCF SCF did not converge before Hessian evaluation")
     start = time.perf_counter()
     hessian = np.asarray(wavefunction.Hessian().kernel(), dtype=float)
     timings["hessian"] = time.perf_counter() - start
+    atom_count = len(molecule.atom_symbols)
+    if hessian.shape != (atom_count, atom_count, 3, 3):
+        raise RuntimeError(f"PySCF returned an invalid Hessian shape: {hessian.shape!r}")
+    flat_hessian = np.transpose(hessian, (0, 2, 1, 3)).reshape(atom_count * 3, atom_count * 3)
+    if not np.isfinite(flat_hessian).all():
+        raise RuntimeError("PySCF returned a non-finite Cartesian Hessian")
+    if not np.allclose(flat_hessian, flat_hessian.T, atol=1.0e-8, rtol=1.0e-7):
+        raise RuntimeError("PySCF returned an asymmetric Cartesian Hessian")
     if return_timings:
         timings["total"] = time.perf_counter() - total_start
     return HessianResult(
         cartesian_hessian_au=hessian,
         coordinates_angstrom=[tuple(float(x) for x in row) for row in mol.atom_coords() * ANGSTROM_PER_BOHR],
         atom_symbols=list(molecule.atom_symbols),
+        scf_converged=converged,
+        total_energy=float(wavefunction.e_tot) if hasattr(wavefunction, "e_tot") else None,
         timings=timings,
     )

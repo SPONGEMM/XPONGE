@@ -85,7 +85,7 @@ def resp_fit(assign, basis=None, opt=False, charge=None, spin=0, extra_equivalen
     :param basis: the basis for Hartree-Fock calculation
     :param opt: whether do the geometry optimization
     :param charge: total charge of the molecule. If None, it will use the sum of the assign.charge
-    :param spin: total spin of the molecule. ``S`` instead of ``2S+1``.
+    :param spin: number of unpaired electrons, ``2S`` (multiplicity minus one).
     :param extra_equivalence: the extra equivalence to constrain the charge
     :param grid_density: the density for grids to fit, in the unit of amgstrom^-3
     :param grid_cell_layer: the cell layer for grids to fit
@@ -119,6 +119,12 @@ def resp_fit(assign, basis=None, opt=False, charge=None, spin=0, extra_equivalen
         spin=spin,
         optimize_geometry=opt,
     )
+    if not scf_result.converged:
+        raise RuntimeError(f"RESP SCF did not converge with backend {backend_name}")
+    metadata = dict(metadata)
+    metadata["backend"] = backend_name
+    metadata["scf_converged"] = True
+    metadata["total_energy_hartree"] = scf_result.total_energy
     grids = resp_core.get_mk_grid(
         assign,
         scf_result.coordinates_bohr,

@@ -84,6 +84,7 @@ from itertools import product, permutations
 import numpy as np
 
 from . import assign
+from . import metal_assignment
 from .assign import Assign, get_assignment_from_pdb, get_assignment_from_mol2, get_assignment_from_pubchem, \
     get_assignment_from_residuetype, get_assignment_from_xyz, get_assignment_from_smiles, get_assignment_from_cif
 from .helper import GlobalSetting, Type, AbstractMolecule, ResidueType, Entity, Atom, Residue, ResidueLink, Molecule, \
@@ -101,9 +102,6 @@ from .process import impose_bond, impose_angle, impose_dihedral, add_solvent_box
 from .qm import compute_esp_on_grid, compute_hessian, get_backend as get_qm_backend, \
     get_capabilities as get_qm_capabilities, normalize_backend_name as normalize_qm_backend_name, \
     optimize_geometry as optimize_qm_geometry, qmmolecule_from_assign, run_scf
-from .mcpb import MCPB, MCPBIonInfo, MCPBLocalModel, MCPBRequest, MCPBResult, MCPBSelection, \
-    save_pdb_with_connect as MCPB_Save_PDB, write_mcpb_artifacts as MCPB_Write_Artifacts
-
 pi = np.pi
 kb = 0.00198716
 bar = 1.439506089041446e-5

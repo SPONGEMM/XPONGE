@@ -43,6 +43,8 @@ def test_resp_parameters_select_standard_basis_and_mk_radius():
     from Xponge.qm.resp_parameters import get_resp_mk_radius, select_resp_basis_family
 
     assert select_resp_basis_family({"C", "H", "O"}) == "6-31G*"
+    assert select_resp_basis_family({"C", "H", "Fe"}) == "SDD"
+    assert select_resp_basis_family({"C", "H", "Zn"}) == "SDD"
     assert select_resp_basis_family({"C", "H", "I"}) == "CEP-31G"
     assert select_resp_basis_family({"C", "H", "U"}) == "SDD"
     assert get_resp_mk_radius("I") == pytest.approx(1.99)
@@ -72,6 +74,21 @@ def test_resp_basis_resolver_keeps_sdd_separate_from_cep31g():
     assert sdd.ecp == {"I": "stuttgart"}
 
 
+def test_resp_sdd_resolver_uses_631gstar_for_light_elements_and_ecp_for_zinc():
+    from Xponge.qm.resp_basis import resolve_resp_basis
+
+    resolved = resolve_resp_basis("SDD", {"H", "C", "N", "O", "Zn"})
+
+    assert resolved.basis == {
+        "H": "6-31g*",
+        "C": "6-31g*",
+        "N": "6-31g*",
+        "O": "6-31g*",
+        "Zn": "stuttgart_rsc",
+    }
+    assert resolved.ecp == {"Zn": "stuttgart_rsc"}
+
+
 def test_resp_default_setup_passes_resolved_basis_ecp_cart_and_mk_radii(monkeypatch):
     import numpy as np
     import Xponge
@@ -89,6 +106,8 @@ def test_resp_default_setup_passes_resolved_basis_ecp_cart_and_mk_radii(monkeypa
 
     class FakeSCF:
         backend_name = "fake"
+        converged = True
+        total_energy = -1.0
         coordinates_bohr = np.zeros((5, 3))
         nuclear_charges = np.array([6.0, 1.0, 1.0, 1.0, 53.0])
 

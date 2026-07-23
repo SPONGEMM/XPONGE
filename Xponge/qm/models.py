@@ -29,6 +29,9 @@ class QMRunOptions:
     optimize_geometry: bool = False
     threads: int | None = None
     memory: str | None = None
+    memory_limit_bytes: int | None = None
+    scf_convergence_tolerance: float | None = None
+    scf_max_cycles: int | None = None
     properties: tuple[str, ...] = ()
 
 
@@ -81,4 +84,6 @@ class HessianResult:
     cartesian_hessian_au: Any
     coordinates_angstrom: list[tuple[float, float, float]]
     atom_symbols: list[str]
+    scf_converged: bool = False
+    total_energy: float | None = None
     timings: dict[str, float] = field(default_factory=dict)

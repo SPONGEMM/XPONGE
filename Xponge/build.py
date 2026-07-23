@@ -413,8 +413,12 @@ def _reorder_residues_by_linked_components(mol):
     if ordered_indices == list(range(residue_count)):
         return False
 
+    # Reordering changes only serialization indices.  A molecule whose forces
+    # were already materialized remains valid: every force entity and link
+    # still refers to the same atom objects.  Preserve its build state so the
+    # native saver does not discard explicit/site-specific force entities and
+    # attempt to infer them again from global type registries.
     mol.residues = [mol.residues[index] for index in ordered_indices]
-    mol.built = False
     mol.get_atoms()
     return True
 
@@ -588,16 +592,64 @@ def _synchronize_linked_atom_slots(mol):
             atom.linked_atoms.setdefault(distance, set())
 
 
-def _iter_sponge_input_payloads(mol):
+def _iter_sponge_input_payloads(mol, progress_callback=None):
     """Yield non-empty registered SPONGE serializer payloads."""
 
     for key, func in getattr(Molecule, "_save_functions").items():
+        if progress_callback is not None:
+            progress_callback(f"serializer:{key}:start")
         towrite = func(mol)
+        if progress_callback is not None:
+            progress_callback(f"serializer:{key}:done")
         if towrite:
             yield key, towrite
 
 
-def save_sponge_input_raw(cls, prefix=None, dirname="."):
+def _capture_sponge_source_atom_ids(cls, source_atom_ids):
+    """Capture source IDs by Atom identity before save-time residue reordering."""
+
+    if source_atom_ids is None:
+        return None
+    mol = Molecule.cast(cls, deepcopy=False)
+    mol.get_atoms()
+    if isinstance(source_atom_ids, dict):
+        if set(source_atom_ids) != set(mol.atoms):
+            raise ValueError("source_atom_ids mapping must cover every input Atom exactly once")
+        captured = {atom: str(source_atom_ids[atom]) for atom in mol.atoms}
+    else:
+        values = tuple(source_atom_ids)
+        if len(values) != len(mol.atoms):
+            raise ValueError("source_atom_ids must contain one ID for every input Atom")
+        captured = {atom: str(value) for atom, value in zip(mol.atoms, values)}
+    if len(set(captured.values())) != len(captured):
+        raise ValueError("source_atom_ids must be unique")
+    return captured
+
+
+def _sponge_save_result(mol, captured_source_atom_ids, return_mapping):
+    if not return_mapping:
+        return mol
+    if captured_source_atom_ids is None:
+        raise ValueError("return_mapping=True requires source_atom_ids")
+    mapping = tuple(
+        {
+            "simulation_index": index,
+            "source_atom_id": captured_source_atom_ids[atom],
+        }
+        for index, atom in enumerate(mol.atoms)
+    )
+    return mol, mapping
+
+
+def save_sponge_input_raw(
+    cls,
+    prefix=None,
+    dirname=".",
+    progress_callback=None,
+    *,
+    source_atom_ids=None,
+    return_mapping=False,
+):
     """
     This **function** saves the input object as raw SPONGE input files.
 
@@ -606,17 +658,30 @@ def save_sponge_input_raw(cls, prefix=None, dirname="."):
     :param dirname: the directory to save the output files
     :return: the molecule instance built
     """
+    captured_source_atom_ids = _capture_sponge_source_atom_ids(cls, source_atom_ids)
     mol = _prepare_sponge_input_molecule(cls)
     if not prefix:
         prefix = mol.name
-    for key, towrite in _iter_sponge_input_payloads(mol):
+    for key, towrite in _iter_sponge_input_payloads(mol, progress_callback=progress_callback):
         f = Xopen(os.path.join(dirname, prefix + "_" + key + ".txt"), "w")
         f.write(towrite)
         f.close()
-    return mol
+    return _sponge_save_result(mol, captured_source_atom_ids, return_mapping)
 
 
-def save_sponge_input(cls, prefix=None, dirname=".", format="raw"):  # pylint: disable=redefined-builtin
+def save_sponge_input(
+    cls,
+    prefix=None,
+    dirname=".",
+    format="raw",
+    *,
+    source_atom_ids=None,
+    return_mapping=False,
+    simulation_mapping=None,
+    topology_hash=None,
+    atom_order_hash=None,
+    mapping_hash=None,
+):  # pylint: disable=redefined-builtin
     """Save an XPONGE object as raw or bundled SPONGE inputs.
 
     :param cls: the object to save
@@ -626,12 +691,28 @@ def save_sponge_input(cls, prefix=None, dirname=".", format="raw"):  # pylint: d
     :return: the molecule instance built
     """
     if format == "raw":
-        return save_sponge_input_raw(cls, prefix, dirname)
+        return save_sponge_input_raw(
+            cls,
+            prefix,
+            dirname,
+            source_atom_ids=source_atom_ids,
+            return_mapping=return_mapping,
+        )
     if format == "bundle":
         # Keep the bundled implementation optional and avoid a build/io_bundle
         # import cycle while this module is being initialized.
         from .io_bundle.saver import save_sponge_input_bundle
-        return save_sponge_input_bundle(cls, prefix, dirname)
+        return save_sponge_input_bundle(
+            cls,
+            prefix,
+            dirname,
+            source_atom_ids=source_atom_ids,
+            return_mapping=return_mapping,
+            simulation_mapping=simulation_mapping,
+            topology_hash=topology_hash,
+            atom_order_hash=atom_order_hash,
+            mapping_hash=mapping_hash,
+        )
     raise ValueError(
         f"SPONGE input format must be 'raw' or 'bundle', not {format!r}"
     )

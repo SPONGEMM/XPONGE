@@ -160,6 +160,10 @@ def compute_hessian(
     cart=None,
     charge=0,
     spin=0,
+    threads=None,
+    memory_limit_bytes=None,
+    scf_convergence_tolerance=None,
+    scf_max_cycles=None,
     return_timings=False,
 ) -> HessianResult:
     backend_name = normalize_backend_name(backend)
@@ -173,6 +177,10 @@ def compute_hessian(
         method="scf",
         reference=None,
         optimize_geometry=False,
+        threads=threads,
+        memory_limit_bytes=memory_limit_bytes,
+        scf_convergence_tolerance=scf_convergence_tolerance,
+        scf_max_cycles=scf_max_cycles,
     )
     try:
         if not backend_module.capabilities().supports_hessian:

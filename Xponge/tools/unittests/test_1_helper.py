@@ -54,11 +54,13 @@ def test_save_sponge_input_reorders_linked_residue_components():
     mol = ALA | GLY | NME
     first, middle, last = mol.residues
     mol.add_residue_link(first.atoms[0], last.atoms[0])
+    mol.built = True
 
     build_module = importlib.import_module("Xponge.build")
     reordered = build_module._reorder_residues_by_linked_components(mol)
 
     assert reordered
+    assert mol.built
     assert mol.residues == [first, last, middle]
     assert mol.atom_index[first.atoms[0]] < mol.atom_index[last.atoms[-1]] < mol.atom_index[middle.atoms[0]]
 

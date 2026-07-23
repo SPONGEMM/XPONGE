@@ -75,10 +75,8 @@ def _resolve_sdd(elements: set[str]) -> ResolvedRespBasis:
     ecp: dict[str, str] = {}
     for symbol in sorted(elements, key=lambda item: get_resp_parameter(item).atomic_number):
         z = get_resp_parameter(symbol).atomic_number
-        if 1 <= z <= 10 or 13 <= z <= 17:
-            basis[symbol] = "dz"
-        elif z in {11, 12, 18}:
-            basis[symbol] = "6-31g"
+        if 1 <= z <= 18:
+            basis[symbol] = "6-31g*"
         elif 19 <= z <= 30 or 37 <= z <= 48:
             basis[symbol] = "stuttgart_rsc"
             ecp[symbol] = "stuttgart_rsc"
@@ -92,5 +90,9 @@ def _resolve_sdd(elements: set[str]) -> ResolvedRespBasis:
         basis=basis,
         ecp=ecp or None,
         cart=True,
-        references=("DunningHay1977_DZ", "Andrae1990_StuttgartDresden"),
+        references=(
+            "HariharanPople1973_631Gstar",
+            "Francl1982_631Gstar_second_row",
+            "Andrae1990_StuttgartDresden",
+        ),
     )
