@@ -133,6 +133,14 @@ def _model_atom(model_atom_id, external_id, serial, element, coordinates):
 
 
 def _small_model():
+    charge_accounting_payload = {
+        "schema_version": 1,
+        "graph_revision": 1,
+        "selection_id": "water-site",
+        "net_charge": 0,
+        "complete": True,
+        "contributions": [],
+    }
     model = DerivedModel(
         external_id="small:water",
         site_id="water-site",
@@ -151,6 +159,10 @@ def _small_model():
         ),
         links=(),
         cut_edges=(),
+        charge_accounting={
+            **charge_accounting_payload,
+            "proof_hash": _canonical_hash(charge_accounting_payload),
+        },
         mol2_text="@<TRIPOS>MOLECULE\nsmall:water\n",
         model_hash="",
     )
