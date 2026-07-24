@@ -18,7 +18,12 @@ from .contracts import (
     _sha256,
     validate_result,
 )
-from .force_fit import HessianArtifact, empirical_zn_nos_bonded_terms, seminario_bonded_terms
+from .force_fit import (
+    HessianArtifact,
+    empirical_registry_bonded_terms,
+    empirical_zn_nos_bonded_terms,
+    seminario_bonded_terms,
+)
 from .input import MetalAssignmentPackage, validate_package
 from .metal_overlay import build_metal_parameter_overlay
 from .partial_charge import compose_partial_charge_artifacts
@@ -138,6 +143,10 @@ def compose_bonded_fit(
     hessian_artifacts: Sequence[HessianArtifact] = (),
     force_method: str = "seminario",
     scale_factor: float = 1.0,
+    empirical_registry_id: str = "",
+    empirical_geometry: str = "unclassified",
+    empirical_base_force_field: str = "",
+    empirical_water_model: str = "",
 ) -> ParameterizationResult:
     """Compose immutable base, charge, metal and bonded overlays for a bonded request."""
 
@@ -190,10 +199,21 @@ def compose_bonded_fit(
             )
             _merge_terms(bonded_terms, terms)
             bonded_reports.append(report)
-    elif normalized_force_method == "empirical_zn_nos":
+    elif normalized_force_method in {"empirical_registry", "empirical_zn_nos"}:
         if hessian_artifacts:
             raise ValidationError("unexpected_hessian_artifact", "empirical force method does not consume Hessians")
-        terms, report = empirical_zn_nos_bonded_terms(request.topology)
+        if normalized_force_method == "empirical_registry":
+            if not empirical_registry_id:
+                raise ValidationError("missing_empirical_registry_id", normalized_force_method)
+            terms, report = empirical_registry_bonded_terms(
+                request.topology,
+                registry_id=empirical_registry_id,
+                geometry=empirical_geometry,
+                base_force_field=empirical_base_force_field,
+                water_model=empirical_water_model,
+            )
+        else:
+            terms, report = empirical_zn_nos_bonded_terms(request.topology)
         _merge_terms(bonded_terms, terms)
         bonded_reports.append(report)
     else:
@@ -237,6 +257,11 @@ def compose_bonded_fit(
         terms=bonded_terms,
         source="bonded-fit:" + normalized_force_method,
     )
+    empirical_provenance = {}
+    if bonded_reports and normalized_force_method in {"empirical_registry", "empirical_zn_nos"}:
+        empirical_provenance = {
+            "empirical_registry": _canonicalize(bonded_reports[0].get("registry", {})),
+        }
     result = ParameterizationResult(
         schema_version=request.schema_version,
         request_id=request.request_id,
@@ -258,6 +283,7 @@ def compose_bonded_fit(
             "package_hash": package.package_hash,
             "metal_parameter_spec_hash": metal_spec.spec_hash,
             "force_method": normalized_force_method,
+            **empirical_provenance,
         },
         status="overlay_validated",
         complete=False,

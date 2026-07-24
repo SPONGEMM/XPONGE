@@ -15,6 +15,10 @@ from Xponge.metal_assignment import (
     ChargePolicy,
     ChemicalTopologyProof,
     ElectronicState,
+    EMPIRICAL_REGISTRY,
+    EmpiricalApplicability,
+    EmpiricalCitation,
+    EmpiricalRegistryEntry,
     MetalAssignmentInput,
     MetalParameterOverlay,
     MetalAtomParameterSpec,
@@ -41,6 +45,9 @@ from Xponge.metal_assignment import (
     bonded_fit_input_dumps,
     bonded_fit_input_loads,
     compose_partial_charge_artifacts,
+    empirical_registry_descriptor,
+    resolve_empirical_registry,
+    validate_empirical_registry_entry,
     validate_input,
     validate_result,
 )
@@ -606,6 +613,154 @@ class MetalAssignmentContractTests(unittest.TestCase):
         corrupted["scale_factor"] = 2.0
         with self.assertRaisesRegex(ValidationError, "stale_bonded_fit_input_hash"):
             bonded_fit_input_loads(json.dumps(corrupted))
+
+    def test_empirical_registry_is_hash_closed_and_citation_bearing(self):
+        registry_id = "xponge-zn-nos-experimental-v1"
+        entry = EMPIRICAL_REGISTRY[registry_id]
+        validate_empirical_registry_entry(entry)
+        descriptor = empirical_registry_descriptor(registry_id)
+        self.assertEqual(descriptor["registry_id"], registry_id)
+        self.assertEqual(descriptor["citations"][0]["doi"], "10.1021/ct1002626")
+        self.assertEqual(descriptor["redistribution_status"], "internal-test-only")
+        with self.assertRaisesRegex(ValidationError, "stale_empirical_parameter_hash"):
+            validate_empirical_registry_entry(replace(entry, parameter_hash="forged"))
+
+    def test_empirical_registry_exactly_matches_topology_identity(self):
+        topology = _bonded_request().topology
+        atoms = tuple(
+            replace(atom, element="Zn", formal_charge=2, formal_charge_known=True)
+            if atom.external_id == "heme-fe"
+            else atom
+            for atom in topology.atoms
+        )
+        zinc_topology = replace(topology, atoms=atoms, topology_hash="").with_computed_hash()
+        match = resolve_empirical_registry(
+            zinc_topology,
+            registry_id="xponge-zn-nos-experimental-v1",
+        )
+        self.assertEqual(match.centers[0].element, "Zn")
+        self.assertEqual(match.centers[0].oxidation_state, 2)
+        self.assertGreater(match.centers[0].coordination_number, 0)
+        with self.assertRaisesRegex(ValidationError, "empirical_element_mismatch"):
+            resolve_empirical_registry(
+                topology,
+                registry_id="xponge-zn-nos-experimental-v1",
+            )
+        wrong_charge = replace(
+            zinc_topology,
+            atoms=tuple(
+                replace(atom, formal_charge=1)
+                if atom.external_id == "heme-fe"
+                else atom
+                for atom in zinc_topology.atoms
+            ),
+            topology_hash="",
+        ).with_computed_hash()
+        with self.assertRaisesRegex(ValidationError, "empirical_oxidation_state_mismatch"):
+            resolve_empirical_registry(
+                wrong_charge,
+                registry_id="xponge-zn-nos-experimental-v1",
+            )
+        with self.assertRaisesRegex(ValidationError, "empirical_geometry_mismatch"):
+            resolve_empirical_registry(
+                zinc_topology,
+                registry_id="xponge-zn-nos-experimental-v1",
+                geometry="tetrahedral",
+            )
+
+        original = EMPIRICAL_REGISTRY["xponge-zn-nos-experimental-v1"]
+        restricted = replace(
+            original,
+            registry_id="unit-test-zn-oo-v1",
+            applicability=replace(
+                original.applicability,
+                donor_patterns=(("O", "O"),),
+                compatible_base_force_fields=("gaff2",),
+                compatible_water_models=("tip3p",),
+            ),
+            source_hash="",
+            parameter_hash="",
+        ).with_computed_hashes()
+        EMPIRICAL_REGISTRY[restricted.registry_id] = restricted
+        try:
+            with self.assertRaisesRegex(ValidationError, "empirical_base_force_field_mismatch"):
+                resolve_empirical_registry(
+                    zinc_topology,
+                    registry_id=restricted.registry_id,
+                    base_force_field="gaff",
+                    water_model="tip3p",
+                )
+            with self.assertRaisesRegex(ValidationError, "empirical_donor_pattern_mismatch"):
+                resolve_empirical_registry(
+                    zinc_topology,
+                    registry_id=restricted.registry_id,
+                    base_force_field="gaff2",
+                    water_model="tip3p",
+                )
+        finally:
+            del EMPIRICAL_REGISTRY[restricted.registry_id]
+
+    def test_empirical_registry_schema_is_not_zinc_specific(self):
+        entry = EmpiricalRegistryEntry(
+            registry_id="unit-test-cu-v1",
+            version="1",
+            status="experimental",
+            applicability=EmpiricalApplicability(
+                interaction_model="bonded",
+                element="Cu",
+                oxidation_state=2,
+                coordination_numbers=(4,),
+                donor_elements=("N",),
+                donor_patterns=(("N", "N", "N", "N"),),
+                geometries=("square_planar",),
+                compatible_base_force_fields=("gaff2",),
+                compatible_water_models=("tip3p",),
+            ),
+            parameters={
+                "bond_tables": {"N": ((2.0, 100.0),)},
+                "angle_force_constant_default": 50.0,
+                "angle_force_constant_with_sulfur": 70.0,
+            },
+            units={
+                "bond_distance": "angstrom",
+                "bond_force_constant": "kcal/mol/angstrom^2",
+                "angle_force_constant": "kcal/mol/rad^2",
+            },
+            source="unit test",
+            license="test-only",
+            redistribution_status="test-only",
+            citations=(EmpiricalCitation(
+                "Unit-test citation", ("Test Author",), "Test Journal", 2026, "10.0000/test",
+            ),),
+            validation_cases=("synthetic CuN4",),
+        ).with_computed_hashes()
+        validate_empirical_registry_entry(entry)
+        self.assertEqual(entry.applicability.element, "Cu")
+
+    def test_empirical_registry_fit_input_requires_explicit_registry_id(self):
+        request = _bonded_request()
+        spec = BondedMetalParameterSpec(
+            schema_version=1,
+            topology_hash=request.topology.topology_hash,
+            metal_atoms=(MetalAtomParameterSpec(
+                "heme-fe", "Fe", 2, "Fe-site", 1.2, 55.845, 0.01, 1.35,
+            ),),
+            donor_atom_types={"heme-na": "n-site"},
+            parameter_source="unit-test:metal-spec",
+            provenance={"protocol": "fixture"},
+        ).with_computed_hash()
+        fit_input = BondedFitInput(
+            schema_version=1,
+            metal_parameter_spec=spec,
+            charge_artifacts=(),
+            hessian_artifacts=(),
+            force_method="empirical_registry",
+            empirical_registry_id="xponge-zn-nos-experimental-v1",
+        ).with_computed_hash()
+        self.assertEqual(bonded_fit_input_loads(bonded_fit_input_dumps(fit_input)), fit_input)
+        missing = replace(fit_input, empirical_registry_id="", fit_input_hash="").with_computed_hash()
+        with self.assertRaisesRegex(ValidationError, "missing_empirical_registry_id"):
+            bonded_fit_input_dumps(missing)
 
     def test_parameterization_result_round_trip_is_strict_and_hash_closed(self):
         request = _bonded_request()

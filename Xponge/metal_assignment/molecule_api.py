@@ -188,6 +188,10 @@ def parameterize(
         hessian_artifacts=bonded_fit_input.hessian_artifacts,
         force_method=bonded_fit_input.force_method,
         scale_factor=bonded_fit_input.scale_factor,
+        empirical_registry_id=bonded_fit_input.empirical_registry_id,
+        empirical_geometry=bonded_fit_input.empirical_geometry,
+        empirical_base_force_field=bonded_fit_input.empirical_base_force_field,
+        empirical_water_model=bonded_fit_input.empirical_water_model,
     )
 
 

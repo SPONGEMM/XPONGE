@@ -13,6 +13,7 @@ from typing import Any, Mapping, Sequence
 
 from .artifacts import DerivedModel
 from .contracts import PreparedChemicalTopology, ValidationError, _freeze, _strict_object
+from .empirical_registry import resolve_empirical_registry
 
 
 HARTREE_TO_KCAL_MOL = 627.5094740631
@@ -30,23 +31,6 @@ class HessianArtifact:
     cartesian_hessian_au: Any
     provider: str
     provider_version: str
-
-
-_ZN_EMPIRICAL_BOND_TABLES = {
-    ("N", "Zn"): (
-        (1.926, 124.58), (1.947, 113.59), (1.978, 93.97), (1.982, 90.76), (1.984, 90.80),
-        (2.011, 78.18), (2.027, 70.85), (2.028, 70.86), (2.029, 66.61), (2.040, 66.69),
-        (2.041, 66.11), (2.047, 62.61), (2.073, 52.77), (2.089, 50.10), (2.133, 36.30),
-        (2.145, 35.80), (2.176, 29.24),
-    ),
-    ("O", "Zn"): (
-        (1.860, 169.29), (1.986, 76.81), (2.011, 71.26), (2.054, 56.37), (2.109, 41.86),
-        (2.112, 41.32),
-    ),
-    ("S", "Zn"): (
-        (2.262, 88.50), (2.305, 67.39), (2.353, 50.99), (2.355, 51.79), (2.426, 32.69),
-    ),
-}
 
 
 def _finite_coordinates(value: Sequence[Sequence[float]], expected: int) -> None:
@@ -301,22 +285,33 @@ def _interpolate(points: Sequence[tuple[float, float]], distance: float) -> floa
     raise ValidationError("empirical_interpolation_failure", str(distance))
 
 
-def empirical_zn_nos_bonded_terms(
+def empirical_registry_bonded_terms(
     topology: PreparedChemicalTopology,
+    *,
+    registry_id: str,
+    geometry: str = "unclassified",
+    base_force_field: str = "",
+    water_model: str = "",
 ) -> tuple[dict[str, Mapping[str, Any]], Mapping[str, Any]]:
-    """Return the explicitly limited experimental Zn-N/O/S parameter overlay."""
+    """Return an exact-match empirical overlay from Xponge's registry."""
 
+    match = resolve_empirical_registry(
+        topology,
+        registry_id=registry_id,
+        geometry=geometry,
+        base_force_field=base_force_field,
+        water_model=water_model,
+    )
+    parameters = match.entry.parameters
+    bond_tables = parameters["bond_tables"]
     atom_by_id = {atom.external_id: atom for atom in topology.atoms}
-    zinc_ids = {atom.external_id for atom in topology.atoms if atom.is_metal and atom.element == "Zn"}
-    other_metal_ids = {atom.external_id for atom in topology.atoms if atom.is_metal and atom.element != "Zn"}
-    if other_metal_ids:
-        raise ValidationError("unsupported_empirical_metal", ",".join(sorted(other_metal_ids)))
-    neighbors: dict[str, list[str]] = {atom_id: [] for atom_id in zinc_ids}
+    metal_ids = {center.metal_atom_id for center in match.centers}
+    neighbors: dict[str, list[str]] = {atom_id: [] for atom_id in metal_ids}
     terms: dict[str, Mapping[str, Any]] = {}
     for edge in (*topology.bonds, *topology.links):
         if not edge.active:
             continue
-        metals = set(edge.atom_ids) & zinc_ids
+        metals = set(edge.atom_ids) & metal_ids
         if not metals:
             continue
         if len(metals) != 1:
@@ -324,9 +319,13 @@ def empirical_zn_nos_bonded_terms(
         metal_id = next(iter(metals))
         donor_id = edge.atom_ids[1] if edge.atom_ids[0] == metal_id else edge.atom_ids[0]
         donor = atom_by_id[donor_id]
-        table = _ZN_EMPIRICAL_BOND_TABLES.get(tuple(sorted(("Zn", donor.element))))
+        table = bond_tables.get(donor.element)
         if table is None:
-            raise ValidationError("unsupported_empirical_donor", f"Zn-{donor.element}", edge.external_id)
+            raise ValidationError(
+                "unsupported_empirical_donor",
+                f"{atom_by_id[metal_id].element}-{donor.element}",
+                edge.external_id,
+            )
         distance = _distance(atom_by_id[metal_id], donor)
         terms[f"empirical:bond:{edge.external_id}"] = {
             "kind": "bond",
@@ -337,7 +336,7 @@ def empirical_zn_nos_bonded_terms(
                 "k_unit": "kcal/mol/angstrom^2",
                 "equilibrium_unit": "angstrom",
             },
-            "source": "empirical_zn_nos_v1",
+            "source": f"{match.entry.registry_id}:{match.entry.version}",
         }
         neighbors[metal_id].append(donor_id)
 
@@ -346,7 +345,11 @@ def empirical_zn_nos_bonded_terms(
         for index, atom1_id in enumerate(ordered):
             for atom3_id in ordered[index + 1:]:
                 elements = {atom_by_id[atom1_id].element, atom_by_id[atom3_id].element}
-                force_constant = 70.0 if "S" in elements else 50.0
+                force_constant = (
+                    float(parameters["angle_force_constant_with_sulfur"])
+                    if "S" in elements
+                    else float(parameters["angle_force_constant_default"])
+                )
                 term_id = f"empirical:angle:{atom1_id}:{metal_id}:{atom3_id}"
                 terms[term_id] = {
                     "kind": "angle",
@@ -357,20 +360,32 @@ def empirical_zn_nos_bonded_terms(
                         "k_unit": "kcal/mol/rad^2",
                         "equilibrium_unit": "rad",
                     },
-                    "source": "empirical_zn_nos_v1",
+                    "source": f"{match.entry.registry_id}:{match.entry.version}",
                 }
     if not terms:
-        raise ValidationError("missing_empirical_terms", "no active Zn-N/O/S interaction was found")
+        raise ValidationError("missing_empirical_terms", f"no active interaction matched {registry_id}")
     return terms, {
-        "provider": "empirical_zn_nos_v1",
-        "status": "experimental",
-        "metal_count": len(zinc_ids),
+        "provider": "empirical_registry",
+        "registry": match.descriptor(),
+        "status": match.entry.status,
+        "metal_count": len(metal_ids),
         "term_count": len(terms),
     }
 
 
+def empirical_zn_nos_bonded_terms(
+    topology: PreparedChemicalTopology,
+) -> tuple[dict[str, Mapping[str, Any]], Mapping[str, Any]]:
+    """Compatibility adapter for the pre-registry experimental Zn provider."""
+
+    return empirical_registry_bonded_terms(
+        topology,
+        registry_id="xponge-zn-nos-experimental-v1",
+    )
+
+
 __all__ = [
     "ANGLE_FORCE_CONVERSION", "BOHR_TO_ANGSTROM", "BOND_FORCE_CONVERSION", "HARTREE_TO_KCAL_MOL",
-    "HessianArtifact", "empirical_zn_nos_bonded_terms", "hessian_artifact_from_dict",
-    "seminario_bonded_terms", "validate_hessian_artifact",
+    "HessianArtifact", "empirical_registry_bonded_terms", "empirical_zn_nos_bonded_terms",
+    "hessian_artifact_from_dict", "seminario_bonded_terms", "validate_hessian_artifact",
 ]

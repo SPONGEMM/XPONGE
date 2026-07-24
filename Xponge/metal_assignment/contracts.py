@@ -799,6 +799,18 @@ def validate_electronic_state(state: ElectronicState, elements: Sequence[str] | 
         raise ValidationError("spin_charge_parity", "spin multiplicity is incompatible with electron parity")
 
 
+def bookkeeping_electronic_state(elements: Sequence[str], net_charge: int) -> ElectronicState:
+    """Return a parity-compatible full-system state for charge bookkeeping."""
+
+    unsupported = sorted(set(elements) - set(_ATOMIC_NUMBERS))
+    if unsupported:
+        raise ValidationError("unsupported_element", ",".join(unsupported), "topology.atoms")
+    electrons = sum(_ATOMIC_NUMBERS[element] for element in elements) - net_charge
+    state = ElectronicState(net_charge, 1 if electrons % 2 == 0 else 2)
+    validate_electronic_state(state, elements)
+    return state
+
+
 def validate_charge_contract(contract: ChargeAssignmentContract, topology: PreparedChemicalTopology) -> None:
     if not isinstance(contract.policy, ChargePolicy):
         raise ValidationError("invalid_charge_policy", str(contract.policy), "charge_contract.policy")

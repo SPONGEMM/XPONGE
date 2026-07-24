@@ -21,6 +21,10 @@ class BondedFitInput:
     hessian_artifacts: tuple[HessianArtifact, ...]
     force_method: str
     scale_factor: float = 1.0
+    empirical_registry_id: str = ""
+    empirical_geometry: str = "unclassified"
+    empirical_base_force_field: str = ""
+    empirical_water_model: str = ""
     fit_input_hash: str = ""
 
     def canonical_payload(self) -> dict[str, Any]:
@@ -40,10 +44,88 @@ class BondedFitInput:
 def validate_bonded_fit_input(value: BondedFitInput) -> None:
     if value.schema_version != 1:
         raise ValidationError("unsupported_schema_version", str(value.schema_version), "bonded_fit_input")
-    if value.force_method not in {"seminario", "empirical_zn_nos"}:
+    if value.force_method not in {"seminario", "empirical_registry", "empirical_zn_nos"}:
         raise ValidationError("unsupported_bonded_force_method", value.force_method)
+    if value.force_method == "empirical_registry" and not value.empirical_registry_id:
+        raise ValidationError("missing_empirical_registry_id", value.force_method)
+    if value.force_method == "seminario" and value.empirical_registry_id:
+        raise ValidationError("unexpected_empirical_registry_id", value.empirical_registry_id)
+    for name in (
+        "empirical_registry_id", "empirical_geometry",
+        "empirical_base_force_field", "empirical_water_model",
+    ):
+        if not isinstance(getattr(value, name), str):
+            raise ValidationError("invalid_wire_type", "expected string", f"bonded_fit_input.{name}")
     if not value.fit_input_hash or value.fit_input_hash != value.computed_hash():
         raise ValidationError("stale_bonded_fit_input_hash", "fit input hash mismatch")
+
+
+def default_bonded_fit_input(
+    package: Any,
+    *,
+    parameter_source: str = "qm_fit",
+    water_model: str,
+    timeout_seconds: float = 60.0,
+) -> BondedFitInput:
+    """Build the provider-owned metal baseline for a bonded fit.
+
+    Metal mass/LJ identity comes from the same water-model ion registry used by
+    the nonbonded path.  RESP/Hessian artifacts remain explicit later inputs.
+    """
+
+    from .input import validate_package
+    from .metal_overlay import resolve_metal_ion_parameters
+    validate_package(package)
+    metals, parameters, ion_source, ion_provenance = resolve_metal_ion_parameters(
+        package,
+        water_model=water_model,
+        timeout_seconds=timeout_seconds,
+    )
+    if parameter_source == "qm_fit":
+        force_method = "seminario"
+        registry_id = ""
+    elif parameter_source.startswith("empirical:") and parameter_source[10:]:
+        force_method = "empirical_registry"
+        registry_id = parameter_source[10:]
+    else:
+        raise ValidationError("unsupported_parameter_source", parameter_source)
+    metal_spec = BondedMetalParameterSpec(
+        schema_version=package.request.schema_version,
+        topology_hash=package.request.topology.topology_hash,
+        metal_atoms=tuple(
+            MetalAtomParameterSpec(
+                external_id=atom.external_id,
+                element=atom.element,
+                formal_charge=int(atom.formal_charge),
+                atom_type=str(parameters[atom.external_id]["atom_type"]),
+                partial_charge=float(parameters[atom.external_id]["charge"]),
+                mass=float(parameters[atom.external_id]["mass"]),
+                epsilon=float(parameters[atom.external_id]["lj"]["epsilon"]),
+                rmin=float(parameters[atom.external_id]["lj"]["rmin"]),
+            )
+            for atom in metals
+        ),
+        donor_atom_types={},
+        parameter_source=f"{parameter_source};baseline={ion_source}",
+        provenance={
+            "parameter_source": parameter_source,
+            "baseline_ion_registry": ion_provenance,
+        },
+    ).with_computed_hash()
+    result = BondedFitInput(
+        schema_version=package.request.schema_version,
+        metal_parameter_spec=metal_spec,
+        charge_artifacts=(),
+        hessian_artifacts=(),
+        force_method=force_method,
+        scale_factor=1.0,
+        empirical_registry_id=registry_id,
+        empirical_geometry="unclassified",
+        empirical_base_force_field="",
+        empirical_water_model=water_model,
+    ).with_computed_hash()
+    validate_bonded_fit_input(result)
+    return result
 
 
 def _strings(value: Any, path: str) -> tuple[str, ...]:
@@ -106,6 +188,10 @@ def bonded_fit_input_from_dict(value: Any) -> BondedFitInput:
             "schema_version", "metal_parameter_spec", "charge_artifacts", "hessian_artifacts",
             "force_method", "scale_factor", "fit_input_hash",
         },
+        optional={
+            "empirical_registry_id", "empirical_geometry",
+            "empirical_base_force_field", "empirical_water_model",
+        },
         path="bonded_fit_input",
     )
     if not isinstance(data["charge_artifacts"], list) or not isinstance(data["hessian_artifacts"], list):
@@ -121,6 +207,10 @@ def bonded_fit_input_from_dict(value: Any) -> BondedFitInput:
         ),
         force_method=data["force_method"],
         scale_factor=data["scale_factor"],
+        empirical_registry_id=data.get("empirical_registry_id", ""),
+        empirical_geometry=data.get("empirical_geometry", "unclassified"),
+        empirical_base_force_field=data.get("empirical_base_force_field", ""),
+        empirical_water_model=data.get("empirical_water_model", ""),
         fit_input_hash=data["fit_input_hash"],
     )
     validate_bonded_fit_input(result)
@@ -155,5 +245,5 @@ def load_bonded_fit_input(path: str | Path) -> BondedFitInput:
 __all__ = [
     "BondedFitInput", "bonded_fit_input_dumps", "bonded_fit_input_from_dict",
     "bonded_fit_input_loads", "bonded_fit_input_to_dict", "load_bonded_fit_input",
-    "validate_bonded_fit_input",
+    "validate_bonded_fit_input", "default_bonded_fit_input",
 ]

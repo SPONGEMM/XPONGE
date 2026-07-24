@@ -10,9 +10,9 @@ from __future__ import annotations
 from dataclasses import replace
 import hashlib
 import importlib
+import json
 import os
 from pathlib import Path
-import shlex
 import sys
 from tempfile import TemporaryDirectory
 from unittest import mock
@@ -23,12 +23,10 @@ from Xponge.metal_assignment import (
     ChargeAssignmentContract,
     ChargePolicy,
     BondedMetalParameterSpec,
-    ElectronicState,
     HessianArtifact,
     MetalAtomParameterSpec,
     ModelChargeArtifact,
     RespFitInput,
-    ProviderCapabilitySnapshot,
     ValidationError,
     assign_base_force_field,
     assign_nonbonded_metal_ions,
@@ -37,7 +35,6 @@ from Xponge.metal_assignment import (
     compose_bonded_fit,
     fit_resp_charges,
     metal_assignment_package_dumps,
-    metal_assignment_package_from_chemcore_result,
     metal_assignment_package_loads,
     parameterize,
     project_model_charges,
@@ -50,21 +47,6 @@ from Xponge.metal_assignment.assigned_system import (
 )
 
 
-CAPABILITIES = ProviderCapabilitySnapshot(
-    schema_version=1,
-    provider_name="xponge",
-    provider_version="1.7b3-dev",
-    provider_revision="chemcore-contract-test",
-    projection_schema_version=1,
-    embedded_metal=True,
-    standalone_metal=True,
-    multi_metal=False,
-    bonded=True,
-    nonbonded_12_6=True,
-    base_force_field_providers=("gaff", "gaff2", "standard_biomolecular"),
-)
-
-
 class ChemcoreArtifactContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -73,12 +55,15 @@ class ChemcoreArtifactContractTests(unittest.TestCase):
             raise unittest.SkipTest("set MOKDA_CHEMCORE_ROOT to run the live Chemcore contract test")
         cls.mokda_root = Path(configured_root).resolve()
         backend_src = cls.mokda_root / "backend" / "src"
+        workflow_src = cls.mokda_root / "backend" / "external" / "metal-assignment" / "src"
         test_src = cls.mokda_root / "backend" / "native" / "chemcore" / "tests"
-        if not backend_src.is_dir() or not test_src.is_dir():
+        if not backend_src.is_dir() or not workflow_src.is_dir() or not test_src.is_dir():
             raise unittest.SkipTest(f"invalid MOKDA_CHEMCORE_ROOT: {cls.mokda_root}")
-        sys.path[:0] = [str(backend_src), str(test_src)]
+        sys.path[:0] = [str(backend_src), str(workflow_src), str(test_src)]
         cls.chemcore = importlib.import_module("spongui._chemcore")
-        fixtures = importlib.import_module("test_v2_metal_assignment_topology")
+        cls.workflow_api = importlib.import_module("metal_assignment")
+        cls.workflow_xponge = cls.workflow_api.InProcessXpongeProvider()
+        fixtures = importlib.import_module("test_v2_topology_projection")
         cls.structure = fixtures.embedded_fe_mmcif()
 
     def prepare(self, interaction_model: str):
@@ -91,60 +76,122 @@ class ChemcoreArtifactContractTests(unittest.TestCase):
             "structure_text": self.structure,
             "session_mode": "full",
         })
-        metal_atom_ids = [
-            int(fields[1])
-            for line in self.structure.splitlines()
-            if line.startswith(("ATOM ", "HETATM "))
-            and len(fields := shlex.split(line)) >= 3
-            and fields[2].upper() in {"FE", "ZN"}
-        ]
-        return engine.v2_prepare_metal_assignment_models({
-            "session_id": session_id,
-            "graph_revision": state["revision"],
-            "input_hash": hashlib.sha256(self.structure.encode()).hexdigest(),
-            "interaction_model": interaction_model,
-            "base_force_field_provider": "gaff2",
-            "target_metal_atom_ids": [],
-            "capability_snapshot": {
-                "schema_version": 1,
-                "provider_name": "xponge",
-                "provider_version": "1.7b3-dev",
-                "provider_revision": "chemcore-contract-test",
-                "projection_schema_version": 1,
-                "embedded_metal": True,
-                "standalone_metal": True,
-                "multi_metal": False,
-                "bonded": True,
-                "nonbonded_12_6": True,
-                "base_force_field_providers": ["gaff", "gaff2", "standard_biomolecular"],
-            },
-            "model_protocol": {},
-            "model_electronic_states": (
-                [
-                    {
-                        "selection_id": f"fixture-metal-{atom_id}",
-                        "metal_atom_ids": [atom_id],
-                        "purpose": purpose,
-                        "net_charge": 2,
-                        "spin_multiplicity": 1,
-                        "source": "contract-test-explicit-state",
-                    }
-                    for atom_id in metal_atom_ids
-                    for purpose in ("small", "large")
-                ]
+        try:
+            detected = engine.v2_detect_metal_sites({
+                "session_id": session_id,
+                "max_distance": 3.0,
+                "include_distance_candidates": False,
+                "donor_elements": ["N", "O", "S", "P"],
+            })
+            candidates = list(detected.get("candidates") or [])
+            metal_atom_ids = [
+                int((candidate.get("metalAtom") or {}).get("atomId") or 0)
+                for candidate in candidates
+            ]
+            coordination_edge_ids = [
+                str(coordination.get("edgeId") or "")
+                for candidate in candidates
+                for coordination in candidate.get("confirmedCoordination") or []
+                if str(coordination.get("edgeId") or "")
+            ]
+            model_requests = [
+                {
+                    "selection_id": str(candidate.get("siteId") or ""),
+                    "purpose": purpose,
+                    "seed_atom_ids": [
+                        int((candidate.get("metalAtom") or {}).get("atomId") or 0),
+                    ],
+                    "selection_strategy": "seed_connected_complete_residues",
+                    "cap_strategy": "none" if purpose == "site" else "hydrogen_link",
+                    "hydrogen_cap_bond_length_angstrom": 1.09,
+                    "spin_multiplicity": 1,
+                    "spin_source": "contract-test-explicit-state",
+                }
+                for candidate in candidates
+                for purpose in ("site", "small", "large")
+            ] if interaction_model == "bonded" else []
+            prepared = engine.v2_prepare_structure_models({
+                "session_id": session_id,
+                "graph_revision": state["revision"],
+                "input_hash": hashlib.sha256(self.structure.encode()).hexdigest(),
+                "base_force_field_provider": "gaff2",
+                "atomic_center_provider": "metal",
+                "component_class_providers": {},
+                "focus_atom_ids": metal_atom_ids,
+                "assignment_atomic_center_atom_ids": metal_atom_ids,
+                "included_interaction_edge_ids": (
+                    coordination_edge_ids if interaction_model == "bonded" else []
+                ),
+                "removed_interaction_edge_ids": (
+                    coordination_edge_ids if interaction_model == "nonbonded_12_6" else []
+                ),
+                "scopes_by_atom_id": {},
+                "default_scopes": ["baseForceField", "simulation"],
+                "focus_atom_scopes": ["qm", "metalOverlay", "simulation"],
+                "connected_residue_scopes": [
+                    "baseForceField", "qm", "metalOverlay", "simulation",
+                ],
+                "capability_snapshot": {
+                    "schema_version": 1,
+                    "provider_name": "xponge",
+                    "provider_version": "1.7b3-dev",
+                    "provider_revision": "chemcore-contract-test",
+                    "projection_schema_version": 1,
+                    "embedded_metal": True,
+                    "standalone_metal": True,
+                    "multi_metal": False,
+                    "bonded": True,
+                    "nonbonded_12_6": True,
+                    "base_force_field_providers": ["gaff", "gaff2", "standard_biomolecular"],
+                },
+                "model_requests": model_requests,
+            })
+        finally:
+            engine.v2_close_session({"session_id": session_id})
+        request = self.workflow_api.WorkflowRequest(
+            schema_version=1,
+            request_id=f"contract-{interaction_model}",
+            workdir=str(self.mokda_root),
+            session_id=session_id,
+            graph_revision=state["revision"],
+            input_hash=hashlib.sha256(self.structure.encode()).hexdigest(),
+            interaction_model=(
+                self.workflow_api.InteractionModel.BONDED
                 if interaction_model == "bonded"
-                else []
+                else self.workflow_api.InteractionModel.NONBONDED_12_6
             ),
-        })
+            base_force_field_provider="gaff2",
+            water_model="tip3p",
+            electronic_state=self.workflow_api.ElectronicState(2, 1),
+            capability_snapshot=self.workflow_xponge.capability_snapshot(),
+            target_metal_atom_ids=tuple(metal_atom_ids),
+            coordination_edge_ids=tuple(coordination_edge_ids),
+            parameter_source="qm_fit" if interaction_model == "bonded" else "ion_12_6",
+            site_electronic_states=(
+                tuple(
+                    self.workflow_api.SiteElectronicState(
+                        str(candidate.get("siteId") or ""),
+                        (int((candidate.get("metalAtom") or {}).get("atomId") or 0),),
+                        1,
+                        "contract-test-explicit-state",
+                    )
+                    for candidate in candidates
+                )
+                if interaction_model == "bonded"
+                else ()
+            ),
+        ).with_computed_hash()
+        package_payload = self.workflow_xponge.prepare_package(
+            prepared,
+            request,
+            self.mokda_root,
+        )
+        return metal_assignment_package_loads(
+            json.dumps(package_payload, sort_keys=True, separators=(",", ":"))
+        )
 
     def adapt(self, interaction_model: str):
-        return metal_assignment_package_from_chemcore_result(
-            self.prepare(interaction_model),
-            request_id=f"contract-{interaction_model}",
-            # The explicit-H Fe(+2) fixture has 42 electrons.
-            electronic_state=ElectronicState(net_charge=2, spin_multiplicity=1),
-            capability_snapshot=CAPABILITIES,
-        )
+        return self.prepare(interaction_model)
 
     @staticmethod
     def rehash_package(package, *, artifacts=None, models=None):
@@ -194,7 +241,7 @@ class ChemcoreArtifactContractTests(unittest.TestCase):
         metal_canonical_id = next(
             atom.canonical_atom_id for atom in package.request.topology.atoms if atom.is_metal
         )
-        expected_selection_id = f"fixture-metal-{metal_canonical_id}"
+        expected_selection_id = f"metal:Fe:{metal_canonical_id}"
         self.assertEqual(
             (small.electronic_state.selection_id, large.electronic_state.selection_id),
             (expected_selection_id, expected_selection_id),

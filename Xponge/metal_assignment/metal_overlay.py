@@ -190,18 +190,16 @@ def _invoke_ion_worker(payload: Mapping[str, Any], *, timeout_seconds: float) ->
     return response
 
 
-def assign_nonbonded_metal_ions(
+def resolve_metal_ion_parameters(
     package: MetalAssignmentPackage,
     *,
     water_model: str,
     timeout_seconds: float = 60.0,
-) -> MetalOverlayBuildOutput:
-    """Resolve water-model-specific 12-6 ion parameters in an isolated process."""
+) -> tuple[tuple[Any, ...], Mapping[str, Any], str, Mapping[str, Any]]:
+    """Resolve water-model-specific ion identity, mass and LJ parameters."""
 
     validate_package(package)
     request = package.request
-    if request.interaction_model != "nonbonded_12_6":
-        raise ValidationError("ion_provider_interaction_model_mismatch", request.interaction_model)
     normalized_water_model = water_model.lower()
     if normalized_water_model not in SUPPORTED_ION_WATER_MODELS:
         raise ValidationError("unsupported_ion_water_model", water_model)
@@ -249,6 +247,36 @@ def assign_nonbonded_metal_ions(
         raise ValidationError("ion_assignment_worker_coverage_mismatch", "metal coverage mismatch")
     source = f"xponge:ion-12-6:{normalized_water_model}:{response['provider_version']}"
     parameters = response["parameters"]
+    provenance = {
+        "provider_kind": "ion_12_6",
+        "water_model": normalized_water_model,
+        "provider_version": response["provider_version"],
+        "worker_response_hash": response["response_hash"],
+        "template_names": {
+            atom_id: parameters[atom_id]["template_name"] for atom_id in metal_ids
+        },
+    }
+    return metal_atoms, parameters, source, provenance
+
+
+def assign_nonbonded_metal_ions(
+    package: MetalAssignmentPackage,
+    *,
+    water_model: str,
+    timeout_seconds: float = 60.0,
+) -> MetalOverlayBuildOutput:
+    """Resolve water-model-specific 12-6 ion parameters in an isolated process."""
+
+    validate_package(package)
+    request = package.request
+    if request.interaction_model != "nonbonded_12_6":
+        raise ValidationError("ion_provider_interaction_model_mismatch", request.interaction_model)
+    metal_atoms, parameters, source, provenance = resolve_metal_ion_parameters(
+        package,
+        water_model=water_model,
+        timeout_seconds=timeout_seconds,
+    )
+    metal_ids = tuple(atom.external_id for atom in metal_atoms)
     return build_metal_parameter_overlay(
         request,
         covered_atom_ids=metal_ids,
@@ -260,19 +288,12 @@ def assign_nonbonded_metal_ions(
         parameter_source=source,
         precedence=100,
         require_metal_charges=True,
-        provenance={
-            "provider_kind": "ion_12_6",
-            "water_model": normalized_water_model,
-            "provider_version": response["provider_version"],
-            "worker_response_hash": response["response_hash"],
-            "template_names": {
-                atom_id: parameters[atom_id]["template_name"] for atom_id in metal_ids
-            },
-        },
+        provenance=provenance,
     )
 
 
 __all__ = [
     "MetalOverlayBuildOutput", "MetalOverlayBuildReport", "SUPPORTED_ION_WATER_MODELS",
     "assign_nonbonded_metal_ions", "build_metal_parameter_overlay",
+    "resolve_metal_ion_parameters",
 ]

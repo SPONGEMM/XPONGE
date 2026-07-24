@@ -165,6 +165,7 @@ class DerivedModel:
     bonds: tuple[ModelBond, ...]
     links: tuple[ModelLink, ...]
     cut_edges: tuple[ModelCutEdge, ...]
+    charge_accounting: Mapping[str, Any]
     mol2_text: str
     model_hash: str
 
@@ -180,6 +181,7 @@ class DerivedModel:
             "bonds": _canonicalize(self.bonds),
             "links": _canonicalize(self.links),
             "cut_edges": _canonicalize(self.cut_edges),
+            "charge_accounting": _canonicalize(self.charge_accounting),
             "mol2_text": self.mol2_text,
         }
 
@@ -513,6 +515,8 @@ def _validate_derived_sites(request: MetalAssignmentInput, bundle: DerivedModelB
         raise ValidationError("active_metal_interaction_edge_mismatch", "active metal edges differ from topology")
     if set(bundle.removed_interaction_edge_ids) != removed_edge_ids:
         raise ValidationError("removed_interaction_edge_mismatch", "removed edges differ from partition proofs")
+    if request.interaction_model == "nonbonded_12_6" and not bundle.sites:
+        return
 
     site_ids: set[str] = set()
     owned_metals: set[str] = set()
@@ -698,6 +702,33 @@ def validate_derived_models(request: MetalAssignmentInput, bundle: DerivedModelB
                 ElectronicState(state.net_charge, state.spin_multiplicity),
                 [atom.element for atom in model.atoms],
             )
+        proof = model.charge_accounting
+        if not isinstance(proof, Mapping):
+            raise ValidationError("invalid_model_charge_accounting", model.external_id)
+        required_proof_fields = {
+            "schema_version", "graph_revision", "selection_id", "net_charge",
+            "complete", "contributions", "proof_hash",
+        }
+        if set(proof) != required_proof_fields:
+            raise ValidationError("invalid_model_charge_accounting_fields", model.external_id)
+        proof_payload = dict(proof)
+        proof_hash = proof_payload.pop("proof_hash")
+        _validate_hash(
+            proof_hash,
+            _sha256(proof_payload),
+            "model_charge_accounting_hash",
+            model.external_id,
+        )
+        if (
+            proof["selection_id"] != model.site_id
+            or proof["complete"] is not True
+            or not isinstance(proof["net_charge"], int)
+            or isinstance(proof["net_charge"], bool)
+            or not isinstance(proof["contributions"], list)
+        ):
+            raise ValidationError("invalid_model_charge_accounting", model.external_id)
+        if model.electronic_state is not None and proof["net_charge"] != model.electronic_state.net_charge:
+            raise ValidationError("model_charge_accounting_state_mismatch", model.external_id)
         _validate_hash(model.model_hash, model.computed_hash(), "model_hash", model.external_id)
         _validate_mol2(
             model.mol2_text,
@@ -876,7 +907,7 @@ def _parse_derived_model(value: Any, path: str) -> DerivedModel:
         value,
         required={
             "external_id", "site_id", "purpose", "coordinate_unit", "atomic_charge_role", "atoms", "bonds",
-            "links", "cut_edges", "electronic_state", "mol2_text", "model_hash",
+            "links", "cut_edges", "electronic_state", "charge_accounting", "mol2_text", "model_hash",
         },
         path=path,
     )
@@ -892,6 +923,12 @@ def _parse_derived_model(value: Any, path: str) -> DerivedModel:
             path=f"{path}.electronic_state",
         )
         state = ModelElectronicState(**state_data)
+    if not isinstance(data["charge_accounting"], Mapping):
+        raise ValidationError(
+            "invalid_wire_type",
+            "expected object",
+            f"{path}.charge_accounting",
+        )
     return DerivedModel(
         data["external_id"], data["site_id"], data["purpose"], data["coordinate_unit"],
         data["atomic_charge_role"], state,
@@ -899,7 +936,7 @@ def _parse_derived_model(value: Any, path: str) -> DerivedModel:
         tuple(_parse_model_bond(item, f"{path}.bonds[{index}]") for index, item in enumerate(data["bonds"])),
         tuple(_parse_model_link(item, f"{path}.links[{index}]") for index, item in enumerate(data["links"])),
         tuple(_parse_model_cut(item, f"{path}.cut_edges[{index}]") for index, item in enumerate(data["cut_edges"])),
-        data["mol2_text"], data["model_hash"],
+        data["charge_accounting"], data["mol2_text"], data["model_hash"],
     )
 
 
