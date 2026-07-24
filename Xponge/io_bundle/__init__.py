@@ -20,6 +20,18 @@ from .errors import (
     UnverifiedBundlePairError,
 )
 from .output_writer import LegacyOutputBundleWriter, LegacyOutputConversionError, convert_legacy_outputs_to_bundle
+from .protocol import (
+    ProtocolCVRestraint,
+    ProtocolCollectiveVariable,
+    ProtocolDistanceConstraints,
+    ProtocolHardWall,
+    ProtocolMetadynamics,
+    ProtocolPositionalRestraint,
+    ProtocolSITS,
+    ProtocolSoftWall,
+    ProtocolSteering,
+    SpongeProtocol,
+)
 from .reverse_converter import BundleToLegacyConverter, convert_bundle_to_legacy
 from .saver import save_sponge_input_bundle
 
@@ -47,4 +59,14 @@ __all__ = [
     "convert_bundle_to_legacy",
     "convert_legacy_outputs_to_bundle",
     "save_sponge_input_bundle",
+    "SpongeProtocol",
+    "ProtocolCollectiveVariable",
+    "ProtocolDistanceConstraints",
+    "ProtocolHardWall",
+    "ProtocolPositionalRestraint",
+    "ProtocolCVRestraint",
+    "ProtocolMetadynamics",
+    "ProtocolSITS",
+    "ProtocolSoftWall",
+    "ProtocolSteering",
 ]

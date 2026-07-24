@@ -13,6 +13,116 @@ import numpy as np
 from . import h5_writer
 
 
+_RESTART_PARTICLE_STATE_PATHS = (
+    "/particles/all/step",
+    "/particles/all/time",
+    "/particles/all/position/value",
+    "/particles/all/velocity/value",
+    "/particles/all/box/edges/value",
+    "/particles/all/force/value",
+)
+_CANONICAL_NUMERIC_DTYPES = {
+    "float32",
+    "float64",
+    "int8",
+    "uint8",
+    "int32",
+    "uint32",
+    "int64",
+    "uint64",
+}
+
+
+def canonical_dataset_hash(
+    bundle_file: str,
+    datasets: dict[str, Any],
+    *,
+    path_prefixes: tuple[str, ...] = (),
+) -> str:
+    """Hash logical HDF5 datasets using the SPONGE v2 canonical encoding."""
+
+    digest = hashlib.sha256()
+    digest.update(bundle_file.encode("utf-8"))
+    for dataset_path, value in sorted(datasets.items()):
+        if path_prefixes and not dataset_path.startswith(path_prefixes):
+            continue
+        array = np.asarray(value)
+        string_dataset = array.dtype.kind in {"O", "U", "S"}
+        digest.update(b"\0")
+        digest.update(dataset_path.encode("utf-8"))
+        digest.update(b"\0")
+        # HDF5 variable-length UTF-8 strings are exposed as object arrays by
+        # h5py and as std::string by SPONGE. Hash the logical type rather than
+        # NumPy's source-width spelling, which is not preserved on disk.
+        dtype_name = "object" if string_dataset else array.dtype.name
+        # HDF5 boolean datasets are represented as an enum on disk. SPONGE's
+        # canonical hash operates on native arithmetic buffers, so normalize
+        # logical booleans to uint8 (0/1) instead of depending on an HDF5 enum
+        # encoding or NumPy's private bool byte spelling.
+        if dtype_name == "bool":
+            array = array.astype(np.uint8, copy=False)
+            dtype_name = "uint8"
+        if not string_dataset and dtype_name not in _CANONICAL_NUMERIC_DTYPES:
+            raise TypeError(
+                f"unsupported canonical dataset dtype {array.dtype} at {dataset_path}"
+            )
+        digest.update(dtype_name.encode("ascii"))
+        digest.update(b"\0")
+        digest.update(repr(array.shape).encode("ascii"))
+        digest.update(b"\0")
+        if string_dataset:
+            values = (
+                item.decode("utf-8")
+                if isinstance(item, (bytes, np.bytes_))
+                else str(item)
+                for item in array.reshape(-1)
+            )
+            digest.update("\0".join(values).encode("utf-8"))
+        else:
+            # SPONGE reads into native arithmetic types before hashing. Do the
+            # same so file endianness does not change a logical state hash.
+            native_dtype = np.dtype(dtype_name)
+            digest.update(np.ascontiguousarray(array, dtype=native_dtype).tobytes())
+    return "sha256:" + digest.hexdigest()
+
+
+def restart_state_hash_from_h5(file_path: str | Path) -> str:
+    """Recompute the canonical state digest from a materialized restart."""
+
+    try:
+        import h5py  # type: ignore
+    except ImportError as exc:  # pragma: no cover - project dependency
+        raise RuntimeError("h5py is required to hash restart bundles") from exc
+
+    datasets: dict[str, Any] = {}
+    with h5py.File(file_path, "r") as handle:
+        for dataset_path in _RESTART_PARTICLE_STATE_PATHS:
+            if dataset_path in handle:
+                datasets[dataset_path] = _read_h5_dataset(handle[dataset_path], h5py)
+        restart_root = "/parameters/restart"
+        if restart_root in handle:
+            _collect_h5_datasets(
+                handle[restart_root], restart_root, datasets, h5py
+            )
+    return canonical_dataset_hash("restart.spgr.h5", datasets)
+
+
+def _collect_h5_datasets(group, group_path: str, datasets: dict[str, Any], h5py) -> None:
+    for name in sorted(group.keys()):
+        child = group[name]
+        child_path = f"{group_path}/{name}"
+        if isinstance(child, h5py.Dataset):
+            datasets[child_path] = _read_h5_dataset(child, h5py)
+        elif isinstance(child, h5py.Group):
+            _collect_h5_datasets(child, child_path, datasets, h5py)
+
+
+def _read_h5_dataset(dataset, h5py):
+    if h5py.check_string_dtype(dataset.dtype) is not None:
+        return np.asarray(dataset.asstr()[...])
+    return np.asarray(dataset[...])
+
+
 @dataclass(frozen=True)
 class BundlePaths:
     """Physical paths for the canonical bundled input artifact roles."""
@@ -93,8 +203,19 @@ class BundleBuilder:
         self.io.ensure_dataset(path, dataset_path, data)
         self._track_dataset(bundle_file, dataset_path, data)
 
+    def add_string(self, bundle_file: str, dataset_path: str, value: str) -> None:
+        """Write a UTF-8 dataset and include it in canonical content hashes."""
+
+        path = self.paths.for_bundle_file(bundle_file)
+        self.io.write_string(path, dataset_path, value)
+        self._track_dataset(bundle_file, dataset_path, value)
+
     def _track_dataset(self, bundle_file: str, dataset_path: str, data: Any) -> None:
-        if self.track_dataset_hashes:
+        track_restart_state = bundle_file == "restart.spgr.h5" and (
+            dataset_path.startswith("/particles/")
+            or dataset_path.startswith("/parameters/restart/")
+        )
+        if self.track_dataset_hashes or track_restart_state:
             self._dataset_hashes[f"{bundle_file}:{dataset_path}"] = np.asarray(data)
 
     def write_legacy_sidecars(
@@ -117,27 +238,17 @@ class BundleBuilder:
             )
 
     def content_hash(self, *, bundle_file: str, path_prefixes: tuple[str, ...] = ()) -> str:
-        digest = hashlib.sha256()
-        digest.update(bundle_file.encode("utf-8"))
-        for key, value in sorted(self._dataset_hashes.items()):
+        datasets = {}
+        for key, value in self._dataset_hashes.items():
             current_bundle, dataset_path = key.split(":", 1)
             if current_bundle != bundle_file:
                 continue
-            if path_prefixes and not dataset_path.startswith(path_prefixes):
-                continue
-            array = np.asarray(value)
-            digest.update(b"\0")
-            digest.update(dataset_path.encode("utf-8"))
-            digest.update(b"\0")
-            digest.update(str(array.dtype).encode("ascii"))
-            digest.update(b"\0")
-            digest.update(repr(array.shape).encode("ascii"))
-            digest.update(b"\0")
-            if array.dtype.kind in {"O", "U", "S"}:
-                digest.update("\0".join(map(str, array.reshape(-1))).encode("utf-8"))
-            else:
-                digest.update(np.ascontiguousarray(array).tobytes())
-        return "sha256:" + digest.hexdigest()
+            datasets[dataset_path] = value
+        return canonical_dataset_hash(
+            bundle_file,
+            datasets,
+            path_prefixes=path_prefixes,
+        )
 
     def finalize(self, touched: set[str], metadata: BundleMetadata) -> None:
         input_schema_version = "sponge.input.v2"
@@ -194,12 +305,23 @@ class BundleBuilder:
 
         if "restart.spgr.h5" in touched:
             restart = self.paths.restart
+            restart_state_hash = self.content_hash(
+                bundle_file="restart.spgr.h5",
+                path_prefixes=("/particles/", "/parameters/restart/"),
+            )
             self.io.write_string(restart, "/parameters/sponge/schema/name", "sponge.restart.h5")
             self.io.write_string(restart, "/parameters/sponge/schema/version", input_schema_version)
             self.io.write_string(restart, "/schema/name", "sponge.restart.h5")
             self.io.write_string(restart, "/schema/version", input_schema_version)
             self.io.write_string(restart, "/identity/uuid", self.identity_uuid)
-            self._finalize_restart(restart, metadata.creator_version)
+            self._finalize_restart(
+                restart,
+                metadata.creator_version,
+                topology_hash=metadata.topology_hash,
+                atom_order_hash=metadata.atom_order_hash,
+                protocol_hash=metadata.protocol_hash,
+                state_hash=restart_state_hash,
+            )
 
         if "trajectory.spg.h5md" in touched:
             trajectory = self.paths.trajectory
@@ -291,7 +413,16 @@ class BundleBuilder:
         )
         self.io.write_string_array(path, "/parameters/sponge/output/particle_streams", ["all"])
 
-    def _finalize_restart(self, path: Path, creator_version: str) -> None:
+    def _finalize_restart(
+        self,
+        path: Path,
+        creator_version: str,
+        *,
+        topology_hash: str,
+        atom_order_hash: str,
+        protocol_hash: str,
+        state_hash: str,
+    ) -> None:
         for group in (
             "/h5md",
             "/h5md/creator",
@@ -310,6 +441,10 @@ class BundleBuilder:
             self.io.ensure_group(path, group)
         self.io.set_attrs(path, "/h5md", {"version": np.asarray([1, 1], dtype=np.int32)})
         self.io.set_attrs(path, "/h5md/creator", {"name": "XPONGE", "version": creator_version})
+        self.io.write_string(path, "/run/topology_hash", topology_hash)
+        self.io.write_string(path, "/run/atom_order_hash", atom_order_hash)
+        self.io.write_string(path, "/run/producer_protocol_hash", protocol_hash)
+        self.io.write_string(path, "/run/state_hash", state_hash)
         self._link_particle_axes(path)
         try:
             self.io.set_attrs(path, "/particles/all/time", {"unit": "ps"})

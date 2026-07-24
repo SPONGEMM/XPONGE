@@ -28,6 +28,16 @@ def add_legacy_to_bundle_parser(subparsers) -> None:
     output_parser.add_argument("-m", "--mdin", default="mdin.spg.toml", help="legacy mdin path relative to case root")
     output_parser.add_argument("-o", "--output", required=True, help="output H5MD bundle path")
     output_parser.add_argument("--atom-count", type=int, default=None, help="atom count for vector trajectory outputs")
+    output_parser.add_argument(
+        "--input-topology",
+        default=None,
+        help="sponge.input.v2 topology bundle used to make imported restart output launchable",
+    )
+    output_parser.add_argument(
+        "--input-protocol",
+        default=None,
+        help="optional matching sponge.input.v2 protocol bundle for restart lineage",
+    )
     output_parser.add_argument("--dry-run", action="store_true", help="scan and build manifest without writing H5 files")
     output_parser.set_defaults(func=output_main)
 
@@ -79,6 +89,8 @@ def output_main(args) -> None:
         args.output,
         mdin=args.mdin,
         atom_count=args.atom_count,
+        input_topology_path=args.input_topology,
+        input_protocol_path=args.input_protocol,
         dry_run=args.dry_run,
     )
     typed_converted = sum(1 for entry in manifest.entries if entry.status == "typed_converted")

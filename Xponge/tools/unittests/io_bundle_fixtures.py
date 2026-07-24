@@ -142,7 +142,7 @@ def write_basic_case(case_dir: Path) -> None:
         "5.0 6.0\n",
         encoding="utf-8",
     )
-    (case_dir / "eam_atom_type.txt").write_text("0\n1\n", encoding="utf-8")
+    (case_dir / "eam_atom_type.txt").write_text("0\n0\n", encoding="utf-8")
     (case_dir / "sw.txt").write_text(
         "2 1\n"
         "# pair\n"
@@ -356,4 +356,3 @@ def write_basic_case(case_dir: Path) -> None:
         'type_in_file = "reaxff_type.txt"\n',
         encoding="utf-8",
     )
-

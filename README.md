@@ -172,6 +172,84 @@ Bind them in the SPONGE mdin with `input_h5_topology_path`,
 `input_h5_protocol_path`, and `input_h5_restart_path`. The saver does not add
 run policy such as mode, step limit, thermostat, or output paths.
 
+Reusable simulation protocol objects can be attached without compiling legacy
+`cv.toml` or other text inputs. Object references use stable names and are
+validated before any artifact is published:
+
+```python
+protocol = Xponge.SpongeProtocol(
+    collective_variables=(
+        Xponge.ProtocolCollectiveVariable(
+            name="distance",
+            type="distance",
+            atom_indices=(0, 1),
+            sigma=(0.5,),
+        ),
+    ),
+    cv_restraints=(
+        Xponge.ProtocolCVRestraint(
+            name="umbrella",
+            cv_refs=("distance",),
+            weight=(1.0,),
+            reference=(1.5,),
+        ),
+    ),
+    metadynamics=(
+        Xponge.ProtocolMetadynamics(
+            name="bias",
+            cv_refs=("distance",),
+            grid_min=(0.0,),
+            grid_max=(10.0,),
+            grid_count=(64,),
+        ),
+    ),
+    steering=Xponge.ProtocolSteering(
+        cv_refs=("distance",),
+        weight=(0.25,),
+    ),
+    hard_wall=Xponge.ProtocolHardWall(
+        bounds_low=(0.0, None, None),
+        bounds_high=(40.0, None, None),
+    ),
+)
+
+Xponge.save_sponge_input(
+    peptide,
+    prefix="ala5",
+    dirname="inputs",
+    format="bundle",
+    protocol=protocol,
+)
+```
+
+The native object API currently covers scalar CVs, extra distance constraints,
+positional restraints, CV harmonic restraints, one enabled metadynamics
+object, one static steering definition, and one typed SITS protocol. SITS
+method and atom-selection fields are written to `protocol.spgp.h5`; its
+versioned launch state (`nk`, optional `log_norm`, and optional `log_nk`) is
+written to `restart.spgr.h5`. Named `ProtocolSoftWall` objects are stored as
+typed columnar definitions and are compiled directly by SPONGE without an
+intermediate configuration file. `ProtocolHardWall` uses `None` for an
+unbounded axis, requires at least one finite bound, and defaults to rejecting
+NPT unless `allow_npt=True` explicitly opts in. Positional and RMSD-style CV
+reference coordinates are written into the structural restart artifact rather
+than the reusable protocol artifact. A positional-restraint reference contains
+one XYZ row for every system atom; `atom_indices` selects which rows are
+restrained.
+
+SITS is represented independently rather than compiled from a legacy section:
+
+```python
+sits_protocol = Xponge.SpongeProtocol(
+    sits=Xponge.ProtocolSITS(
+        mode="production",
+        atom_indices=(0, 1),
+        temperature_ladder=(280.0, 320.0),
+        initial_nk=(1.0, 4.0),
+    )
+)
+```
+
 The default remains the legacy raw-text format. It can be selected explicitly
 with ``format="raw"``; the raw implementation is also available directly as
 ``Xponge.save_sponge_input_raw``. ``Xponge.save_sponge_input_bundle`` remains

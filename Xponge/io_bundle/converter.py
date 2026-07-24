@@ -354,10 +354,9 @@ class LegacyToBundleConverter:
                 continue
             if not source_path.exists():
                 raise ConversionError(f"{key} does not exist: {source_path}")
-            restart_path = self.bundle_dir / "restart.spgr.h5"
             if not dry_run:
-                write_string(
-                    restart_path,
+                self._builder.add_string(
+                    "restart.spgr.h5",
                     f"/parameters/restart/protocol_sidecars/{key}",
                     source_path.read_text(encoding="utf-8"),
                 )
