@@ -604,7 +604,24 @@ def _validate_model_topology(
             )
         elif any(selected):
             expected_cuts.add(edge.external_id)
-    if {edge.external_id for edge in model.bonds} != expected_internal_bonds:
+    for edge in model.bonds:
+        if (
+            len(edge.model_atom_ids) != 2
+            or len(set(edge.model_atom_ids)) != 2
+            or any(atom_id not in model_atom_by_id for atom_id in edge.model_atom_ids)
+        ):
+            raise ValidationError("invalid_model_edge", edge.external_id, model.external_id)
+    source_model_bonds = tuple(
+        edge
+        for edge in model.bonds
+        if all(model_atom_by_id[atom_id].role != "cap" for atom_id in edge.model_atom_ids)
+    )
+    synthetic_cap_bonds = tuple(
+        edge
+        for edge in model.bonds
+        if any(model_atom_by_id[atom_id].role == "cap" for atom_id in edge.model_atom_ids)
+    )
+    if {edge.external_id for edge in source_model_bonds} != expected_internal_bonds:
         raise ValidationError("model_bond_set_mismatch", model.external_id)
     if {edge.external_id for edge in model.links} != expected_internal_links:
         raise ValidationError("model_link_set_mismatch", model.external_id)
@@ -614,7 +631,7 @@ def _validate_model_topology(
     for edge, source_edge, semantic in (
         *(
             (edge, topology_bond_by_id.get(edge.external_id), edge.semantic)
-            for edge in model.bonds
+            for edge in source_model_bonds
         ),
         *(
             (edge, topology_link_by_id.get(edge.external_id), edge.kind)
@@ -634,6 +651,51 @@ def _validate_model_topology(
             raise ValidationError("model_bond_order_mismatch", edge.external_id, model.external_id)
 
     cut_by_id = {edge.external_id: edge for edge in model.cut_edges}
+    cap_edge_count_by_atom: dict[str, int] = {}
+    synthetic_adjacency_by_cut: dict[str, dict[str, set[str]]] = {}
+    for edge in synthetic_cap_bonds:
+        if (
+            edge.external_id in topology_bond_by_id
+            or edge.external_id in topology_link_by_id
+            or len(edge.model_atom_ids) != 2
+            or len(set(edge.model_atom_ids)) != 2
+            or any(atom_id not in model_atom_by_id for atom_id in edge.model_atom_ids)
+        ):
+            raise ValidationError("invalid_synthetic_cap_bond", edge.external_id, model.external_id)
+        cap_atoms = [
+            model_atom_by_id[atom_id]
+            for atom_id in edge.model_atom_ids
+            if model_atom_by_id[atom_id].role == "cap"
+        ]
+        if not cap_atoms or len({atom.cut_edge_id for atom in cap_atoms}) != 1:
+            raise ValidationError("invalid_synthetic_cap_bond", edge.external_id, model.external_id)
+        cut = cut_by_id.get(cap_atoms[0].cut_edge_id)
+        if cut is None:
+            raise ValidationError("synthetic_cap_bond_unknown_cut", edge.external_id, model.external_id)
+        real_atoms = [
+            model_atom_by_id[atom_id]
+            for atom_id in edge.model_atom_ids
+            if model_atom_by_id[atom_id].role != "cap"
+        ]
+        if (
+            len(real_atoms) > 1
+            or (
+                real_atoms
+                and real_atoms[0].external_id != cut.retained_external_id
+            )
+        ):
+            raise ValidationError("synthetic_cap_bond_wrong_parent", edge.external_id, model.external_id)
+        cut_adjacency = synthetic_adjacency_by_cut.setdefault(
+            cap_atoms[0].cut_edge_id,
+            {},
+        )
+        first_id, second_id = edge.model_atom_ids
+        cut_adjacency.setdefault(first_id, set()).add(second_id)
+        cut_adjacency.setdefault(second_id, set()).add(first_id)
+        for atom in cap_atoms:
+            cap_edge_count_by_atom[atom.model_atom_id] = (
+                cap_edge_count_by_atom.get(atom.model_atom_id, 0) + 1
+            )
     for cut in model.cut_edges:
         source_edge = topology_bond_by_id.get(cut.external_id) or topology_link_by_id.get(cut.external_id)
         if source_edge is None or {cut.retained_external_id, cut.excluded_external_id} != set(source_edge.atom_ids):
@@ -651,8 +713,34 @@ def _validate_model_topology(
         raise ValidationError("incomplete_model_caps", model.external_id)
     for cap in caps:
         cut = cut_by_id.get(cap.cut_edge_id)
-        if cut is None or cap.cap_parent_external_id != cut.retained_external_id:
+        if (
+            cut is None
+            or cap.cap_parent_external_id != cut.retained_external_id
+            or cap_edge_count_by_atom.get(cap.model_atom_id, 0) == 0
+        ):
             raise ValidationError("cap_cut_edge_mismatch", cap.model_atom_id, model.external_id)
+    for cut in model.cut_edges:
+        cap_ids = {
+            cap.model_atom_id for cap in caps if cap.cut_edge_id == cut.external_id
+        }
+        retained_model_atom = selected_by_external.get(cut.retained_external_id)
+        if not cap_ids or retained_model_atom is None:
+            continue
+        adjacency = synthetic_adjacency_by_cut.get(cut.external_id, {})
+        reachable = {retained_model_atom.model_atom_id}
+        pending = [retained_model_atom.model_atom_id]
+        while pending:
+            current = pending.pop()
+            for neighbor in adjacency.get(current, ()):
+                if neighbor not in reachable:
+                    reachable.add(neighbor)
+                    pending.append(neighbor)
+        if not cap_ids <= reachable:
+            raise ValidationError(
+                "disconnected_synthetic_cap_fragment",
+                cut.external_id,
+                model.external_id,
+            )
 
 
 def validate_derived_models(request: MetalAssignmentInput, bundle: DerivedModelBundle) -> None:
@@ -865,7 +953,7 @@ def validate_derived_models(request: MetalAssignmentInput, bundle: DerivedModelB
         _validate_mol2(
             model.mol2_text,
             len(model.atoms),
-            len(model.bonds) + len(model.links) + sum(atom.role == "cap" for atom in model.atoms),
+            len(model.bonds) + len(model.links),
             model.atomic_charge_role,
             model.external_id,
         )

@@ -46,6 +46,28 @@ from Xponge.metal_assignment.assigned_system import (
     ForceRealizationProtocol,
     apply_parameterization,
 )
+from Xponge.metal_assignment.artifacts import _validate_mol2
+
+
+class ModelMol2ContractTests(unittest.TestCase):
+    def test_explicit_model_edges_define_mol2_bond_count(self) -> None:
+        mol2 = """@<TRIPOS>MOLECULE
+multi-atom-cap
+3 2 2 0 0
+SMALL
+NO_CHARGES
+@<TRIPOS>ATOM
+1 C1 0.0 0.0 0.0 C 1 MODEL 0.0
+2 C2 1.0 0.0 0.0 C 2 CAP 0.0
+3 H2 2.0 0.0 0.0 H 2 CAP 0.0
+@<TRIPOS>BOND
+1 1 2 1
+2 2 3 1
+@<TRIPOS>SUBSTRUCTURE
+1 MODEL 1 RESIDUE 1 A MODEL 1
+2 CAP 2 RESIDUE 1 A CAP 1
+"""
+        _validate_mol2(mol2, 3, 2, "absent", "multi-atom-cap")
 
 
 class ChemcoreArtifactContractTests(unittest.TestCase):
@@ -103,7 +125,7 @@ class ChemcoreArtifactContractTests(unittest.TestCase):
                         int((candidate.get("metalAtom") or {}).get("atomId") or 0),
                     ],
                     "selection_strategy": "seed_connected_complete_residues",
-                    "cap_strategy": "none" if purpose == "site" else "hydrogen_link",
+                    "cap_strategy": "none" if purpose == "site" else "residue_template",
                     "hydrogen_cap_bond_length_angstrom": 1.09,
                     "spin_multiplicity": 1,
                     "spin_source": "contract-test-explicit-state",
@@ -833,12 +855,13 @@ class ChemcoreArtifactContractTests(unittest.TestCase):
         package = replace(package, request=request, package_hash="")
         package = replace(package, package_hash=package.computed_hash())
         fit_input = RespFitInput(
-            schema_version=3,
+            schema_version=4,
             backend="pyscf",
             basis_family="SDD",
             metal_basis_policy="require_ecp",
             basis_source="xponge:sdd-stuttgart-dz-v1",
             optimize_geometry=False,
+            scf_strategy="direct",
             grid_density=1.0,
             grid_cell_layer=1,
             radius_overrides={},

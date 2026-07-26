@@ -32,6 +32,7 @@ class QMRunOptions:
     memory_limit_bytes: int | None = None
     scf_convergence_tolerance: float | None = None
     scf_max_cycles: int | None = None
+    scf_strategy: str = "direct"
     properties: tuple[str, ...] = ()
 
 

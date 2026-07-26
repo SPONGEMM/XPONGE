@@ -12,10 +12,16 @@ from typing import Any, Mapping
 from .contracts import ValidationError, _canonicalize, _freeze_field, _sha256, _strict_object
 
 
-RESP_FIT_INPUT_SCHEMA_VERSION = 3
+RESP_FIT_INPUT_SCHEMA_VERSION = 4
 SUPPORTED_RESP_BACKENDS = frozenset({"pyscf", "psi4"})
 SUPPORTED_ESP_CHUNK_POLICIES = frozenset({"auto", "full", "grid", "dual", "pointwise"})
 SUPPORTED_METAL_BASIS_POLICIES = frozenset({"require_ecp"})
+SUPPORTED_SCF_STRATEGIES = frozenset({
+    "direct",
+    "density_fit",
+    "newton",
+    "density_fit_newton",
+})
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +56,7 @@ class RespFitInput:
     metal_basis_policy: str
     basis_source: str
     optimize_geometry: bool
+    scf_strategy: str
     grid_density: float
     grid_cell_layer: int
     radius_overrides: Mapping[str, float]
@@ -106,6 +113,18 @@ def validate_resp_fit_input(value: RespFitInput) -> None:
             "resp_geometry_must_remain_locked",
             "derived-model coordinates cannot be optimized inside the charge provider",
             "resp_fit_input.optimize_geometry",
+        )
+    if value.scf_strategy not in SUPPORTED_SCF_STRATEGIES:
+        raise ValidationError(
+            "unsupported_resp_scf_strategy",
+            str(value.scf_strategy),
+            "resp_fit_input.scf_strategy",
+        )
+    if value.backend != "pyscf" and value.scf_strategy != "direct":
+        raise ValidationError(
+            "unsupported_resp_scf_strategy",
+            f"{value.backend}:{value.scf_strategy}",
+            "resp_fit_input.scf_strategy",
         )
     if value.only_esp is not False or value.two_stage is not True:
         raise ValidationError(
@@ -226,7 +245,7 @@ def resp_fit_input_from_dict(value: Any) -> RespFitInput:
         value,
         required={
             "schema_version", "backend", "basis_family", "metal_basis_policy", "basis_source",
-            "optimize_geometry", "grid_density",
+            "optimize_geometry", "scf_strategy", "grid_density",
             "grid_cell_layer", "radius_overrides", "restraint_a1", "restraint_a2", "two_stage",
             "only_esp", "esp_memory_limit_bytes", "esp_chunk_policy", "esp_safety_factor",
             "equivalence_groups", "linear_constraints", "source", "fit_input_hash",
@@ -279,6 +298,7 @@ def resp_fit_input_from_dict(value: Any) -> RespFitInput:
         metal_basis_policy=data["metal_basis_policy"],
         basis_source=data["basis_source"],
         optimize_geometry=data["optimize_geometry"],
+        scf_strategy=data["scf_strategy"],
         grid_density=data["grid_density"],
         grid_cell_layer=data["grid_cell_layer"],
         radius_overrides=data["radius_overrides"],
@@ -325,6 +345,7 @@ def load_resp_fit_input(path: str | Path) -> RespFitInput:
 
 __all__ = [
     "RESP_FIT_INPUT_SCHEMA_VERSION", "SUPPORTED_ESP_CHUNK_POLICIES", "SUPPORTED_METAL_BASIS_POLICIES",
+    "SUPPORTED_SCF_STRATEGIES",
     "SUPPORTED_RESP_BACKENDS",
     "RespEquivalenceGroup", "RespLinearConstraint", "RespFitInput", "load_resp_fit_input", "resp_fit_input_dumps",
     "resp_fit_input_from_dict", "resp_fit_input_loads", "resp_fit_input_to_dict", "validate_resp_fit_input",

@@ -60,7 +60,7 @@ def run_worker_subprocess(
     process = subprocess.Popen(list(command), **kwargs)
     try:
         stdout, stderr = process.communicate(input=input_text, timeout=timeout_seconds)
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
         if os.name == "posix":
             try:
                 os.killpg(process.pid, signal.SIGKILL)
@@ -70,8 +70,13 @@ def run_worker_subprocess(
                 process.kill()
         else:
             process.kill()
-        process.communicate()
-        raise
+        stdout, stderr = process.communicate()
+        raise subprocess.TimeoutExpired(
+            exc.cmd,
+            exc.timeout,
+            output=stdout,
+            stderr=stderr,
+        ) from exc
     return subprocess.CompletedProcess(list(command), process.returncode, stdout, stderr)
 
 

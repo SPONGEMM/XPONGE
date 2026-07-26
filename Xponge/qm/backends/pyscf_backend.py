@@ -64,8 +64,17 @@ def _build_molecule(molecule: QMMolecule, options: QMRunOptions, gto):
     return gto.M(**kwargs)
 
 
-def _build_wavefunction(mol, molecule: QMMolecule, scf):
-    return scf.RHF(mol) if molecule.spin == 0 else scf.UHF(mol)
+def _build_wavefunction(mol, molecule: QMMolecule, scf, options: QMRunOptions):
+    wavefunction = scf.RHF(mol) if molecule.spin == 0 else scf.UHF(mol)
+    if options.scf_strategy == "direct":
+        return wavefunction
+    if options.scf_strategy == "density_fit":
+        return wavefunction.density_fit()
+    if options.scf_strategy == "newton":
+        return wavefunction.newton()
+    if options.scf_strategy == "density_fit_newton":
+        return wavefunction.density_fit().newton()
+    raise ValueError(f"Unsupported PySCF strategy: {options.scf_strategy}")
 
 
 def _configure_wavefunction(wavefunction, options: QMRunOptions) -> None:
@@ -154,18 +163,21 @@ def _update_assign_coordinates(assign, coordinates_angstrom):
 
 def run_scf(molecule: QMMolecule, options: QMRunOptions, assign=None, return_timings: bool = False) -> SCFResult:
     np, gto, scf = require_numpy_pyscf()
+    _configure_threads(options)
     timings = {}
     total_start = time.perf_counter()
     start = time.perf_counter()
     mol = _build_molecule(molecule, options, gto)
     timings["build"] = time.perf_counter() - start
     start = time.perf_counter()
-    wavefunction = _build_wavefunction(mol, molecule, scf)
+    wavefunction = _build_wavefunction(mol, molecule, scf, options)
+    _configure_wavefunction(wavefunction, options)
     if options.optimize_geometry:
         from pyscf.geomopt.geometric_solver import optimize as geometric_opt
 
         mol = geometric_opt(wavefunction)
-        wavefunction = _build_wavefunction(mol, molecule, scf)
+        wavefunction = _build_wavefunction(mol, molecule, scf, options)
+        _configure_wavefunction(wavefunction, options)
         _update_assign_coordinates(assign, mol.atom_coords() * ANGSTROM_PER_BOHR)
     wavefunction.run()
     timings["scf"] = time.perf_counter() - start
@@ -330,6 +342,10 @@ def optimize_geometry(molecule: QMMolecule, options: QMRunOptions, assign=None, 
             optimize_geometry=True,
             threads=options.threads,
             memory=options.memory,
+            memory_limit_bytes=options.memory_limit_bytes,
+            scf_convergence_tolerance=options.scf_convergence_tolerance,
+            scf_max_cycles=options.scf_max_cycles,
+            scf_strategy=options.scf_strategy,
             properties=options.properties,
         ),
         assign=assign,
@@ -353,7 +369,7 @@ def compute_hessian(molecule: QMMolecule, options: QMRunOptions, assign=None, re
     mol = _build_molecule(molecule, options, gto)
     timings["build"] = time.perf_counter() - start
     start = time.perf_counter()
-    wavefunction = _build_wavefunction(mol, molecule, scf)
+    wavefunction = _build_wavefunction(mol, molecule, scf, options)
     _configure_wavefunction(wavefunction, options)
     wavefunction.run()
     timings["scf"] = time.perf_counter() - start

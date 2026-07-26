@@ -29,6 +29,7 @@ from Xponge.metal_assignment._hessian_worker import _execute
 from Xponge.metal_assignment._ion_worker import _canonical_hash
 from Xponge.metal_assignment._worker_runtime import run_worker_subprocess
 from Xponge.metal_assignment.hessian_provider import _invoke_hessian_worker
+from Xponge.qm import scheduler as qm_scheduler
 from Xponge.qm.models import HessianResult, QMMolecule, QMRunOptions
 
 
@@ -346,21 +347,75 @@ class WorkerRuntimeTests(unittest.TestCase):
         process.pid = 4242
         process.communicate.side_effect = [
             subprocess.TimeoutExpired(["python"], 1.0),
-            ("", ""),
+            ("", "phase-progress"),
         ]
         with mock.patch("subprocess.Popen", return_value=process) as popen, mock.patch(
             "os.killpg"
         ) as killpg:
-            with self.assertRaises(subprocess.TimeoutExpired):
+            with self.assertRaises(subprocess.TimeoutExpired) as captured:
                 run_worker_subprocess(
                     ["python", "-c", "pass"], input_text="{}", timeout_seconds=1.0
                 )
         self.assertTrue(popen.call_args.kwargs["start_new_session"])
         killpg.assert_called_once_with(4242, signal.SIGKILL)
         self.assertEqual(process.communicate.call_count, 2)
+        self.assertEqual(captured.exception.stderr, "phase-progress")
 
 
 class PySCFBackendGateTests(unittest.TestCase):
+    def test_scheduler_rejects_backend_incompatible_scf_strategy(self):
+        with self.assertRaisesRegex(ValueError, "requires the PySCF backend"):
+            qm_scheduler.run_scf(
+                SimpleNamespace(),
+                backend="psi4",
+                scf_strategy="density_fit",
+            )
+        with self.assertRaisesRegex(ValueError, "SCF strategy should be one of"):
+            qm_scheduler.run_scf(
+                SimpleNamespace(),
+                backend="pyscf",
+                scf_strategy="implicit",
+            )
+
+    def test_wavefunction_strategy_dispatch_is_explicit_and_ordered(self):
+        from Xponge.qm.backends import pyscf_backend
+
+        calls = []
+
+        class FakeWavefunction:
+            def density_fit(self):
+                calls.append("density_fit")
+                return self
+
+            def newton(self):
+                calls.append("newton")
+                return self
+
+        wavefunction = FakeWavefunction()
+
+        class FakeSCF:
+            @staticmethod
+            def RHF(_mol):
+                calls.append("rhf")
+                return wavefunction
+
+        molecule = QMMolecule(["He"], [(0.0, 0.0, 0.0)], 0, 0)
+        for strategy, expected in (
+            ("direct", ["rhf"]),
+            ("density_fit", ["rhf", "density_fit"]),
+            ("newton", ["rhf", "newton"]),
+            ("density_fit_newton", ["rhf", "density_fit", "newton"]),
+        ):
+            calls.clear()
+            result = pyscf_backend._build_wavefunction(
+                object(),
+                molecule,
+                FakeSCF,
+                QMRunOptions(backend="pyscf", scf_strategy=strategy),
+            )
+            self.assertIs(result, wavefunction)
+            self.assertEqual(calls, expected)
+
     def test_backend_rejects_unconverged_scf_before_hessian(self):
         from Xponge.qm.backends import pyscf_backend
 

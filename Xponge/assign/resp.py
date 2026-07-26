@@ -5,6 +5,8 @@ The **module** is not available on Windows unless a supported backend is install
 
 from __future__ import annotations
 
+import time
+
 from ..helper import Xprint, set_global_alternative_names
 from ..qm import scheduler as qm_scheduler
 from ..qm.resp_basis import resolve_default_resp_basis, resolve_resp_basis
@@ -78,7 +80,8 @@ def resp_fit(assign, basis=None, opt=False, charge=None, spin=0, extra_equivalen
              two_stage=True, only_esp=False, backend=None, core=None,
              esp_memory_limit=None, esp_chunk_policy="auto", esp_safety_factor=0.8,
              constraint_matrix=None, constraint_targets=None,
-             return_metadata=False, return_diagnostics=False):
+             return_metadata=False, return_diagnostics=False, progress_callback=None,
+             scf_strategy="direct"):
     """
     This **function** fits the RESP partial charge for an Assign instance.
 
@@ -112,7 +115,14 @@ def resp_fit(assign, basis=None, opt=False, charge=None, spin=0, extra_equivalen
     resolved_basis = _resolve_basis_for_resp(assign, basis)
     resolved_radius = _merge_resp_radii(assign, radius)
     metadata = _build_resp_metadata(assign, resolved_basis, resolved_radius)
+    timings = {}
+    total_started = time.perf_counter()
 
+    def report_progress(phase, **details):
+        if progress_callback is not None:
+            progress_callback(phase, details)
+
+    report_progress("scf_started")
     scf_result = qm_scheduler.run_scf(
         assign,
         backend=backend_name,
@@ -122,19 +132,36 @@ def resp_fit(assign, basis=None, opt=False, charge=None, spin=0, extra_equivalen
         charge=charge,
         spin=spin,
         optimize_geometry=opt,
+        return_timings=True,
+        scf_strategy=scf_strategy,
+    )
+    timings.update({f"scf_{key}": float(value) for key, value in scf_result.timings.items()})
+    report_progress(
+        "scf_completed",
+        converged=bool(scf_result.converged),
+        elapsed_seconds=float(scf_result.timings.get("total", 0.0)),
     )
     if not scf_result.converged:
         raise RuntimeError(f"RESP SCF did not converge with backend {backend_name}")
     metadata = dict(metadata)
     metadata["backend"] = backend_name
+    metadata["scf_strategy"] = scf_strategy
     metadata["scf_converged"] = True
     metadata["total_energy_hartree"] = scf_result.total_energy
+    grid_started = time.perf_counter()
     grids = resp_core.get_mk_grid(
         assign,
         scf_result.coordinates_bohr,
         area_density=grid_density,
         layer=grid_cell_layer,
         radius=resolved_radius,
+    )
+    timings["grid"] = time.perf_counter() - grid_started
+    metadata["grid_point_count"] = int(len(grids))
+    report_progress(
+        "grid_completed",
+        elapsed_seconds=timings["grid"],
+        grid_point_count=metadata["grid_point_count"],
     )
     esp_result = qm_scheduler.compute_esp_on_grid(
         scf_result,
@@ -143,6 +170,15 @@ def resp_fit(assign, basis=None, opt=False, charge=None, spin=0, extra_equivalen
         chunk_policy=esp_chunk_policy,
         safety_factor=esp_safety_factor,
     )
+    timings.update({f"esp_{key}": float(value) for key, value in esp_result.timings.items()})
+    metadata["esp_diagnostics"] = dict(esp_result.diagnostics)
+    report_progress(
+        "esp_completed",
+        elapsed_seconds=float(esp_result.timings.get("esp", 0.0)),
+        mode=str(esp_result.diagnostics.get("mode", "")),
+        grid_chunk_count=int(esp_result.diagnostics.get("grid_chunk_count", 0)),
+    )
+    fit_started = time.perf_counter()
     charges = resp_core.fit_resp_from_esp(
         assign,
         atom_coordinates_bohr=scf_result.coordinates_bohr,
@@ -158,6 +194,14 @@ def resp_fit(assign, basis=None, opt=False, charge=None, spin=0, extra_equivalen
         constraint_matrix=constraint_matrix,
         constraint_targets=constraint_targets,
         return_diagnostics=return_diagnostics,
+    )
+    timings["fit"] = time.perf_counter() - fit_started
+    timings["total"] = time.perf_counter() - total_started
+    metadata["timings_seconds"] = timings
+    report_progress(
+        "fit_completed",
+        elapsed_seconds=timings["fit"],
+        total_elapsed_seconds=timings["total"],
     )
     diagnostics = None
     if return_diagnostics:

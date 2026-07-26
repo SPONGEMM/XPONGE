@@ -110,11 +110,26 @@ def test_resp_default_setup_passes_resolved_basis_ecp_cart_and_mk_radii(monkeypa
         total_energy = -1.0
         coordinates_bohr = np.zeros((5, 3))
         nuclear_charges = np.array([6.0, 1.0, 1.0, 1.0, 53.0])
+        timings = {"total": 0.0}
 
     class FakeESP:
         electronic_esp_au = np.zeros(2)
+        timings = {"esp": 0.0}
+        diagnostics = {"mode": "full", "grid_chunk_count": 1}
 
-    def fake_run_scf(assign, *, backend=None, basis=None, ecp=None, cart=None, charge=0, spin=0, optimize_geometry=False):
+    def fake_run_scf(
+        assign,
+        *,
+        backend=None,
+        basis=None,
+        ecp=None,
+        cart=None,
+        charge=0,
+        spin=0,
+        optimize_geometry=False,
+        return_timings=False,
+        scf_strategy="direct",
+    ):
         calls["scf"] = (basis, ecp, cart, charge, spin, optimize_geometry)
         return FakeSCF()
 

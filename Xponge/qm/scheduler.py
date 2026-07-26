@@ -16,6 +16,13 @@ _BACKENDS = {
     "psi4": psi4_backend,
 }
 
+_SCF_STRATEGIES = frozenset({
+    "direct",
+    "density_fit",
+    "newton",
+    "density_fit_newton",
+})
+
 
 def default_backend_name():
     if sys.platform.startswith("win"):
@@ -44,6 +51,19 @@ def backend_import_or_hint(backend_name, exc):
 
 def get_backend(backend=None):
     return _BACKENDS[normalize_backend_name(backend)]
+
+
+def normalize_scf_strategy(backend, strategy):
+    backend_name = normalize_backend_name(backend)
+    strategy_name = str(strategy).strip().lower()
+    if strategy_name not in _SCF_STRATEGIES:
+        supported = ", ".join(sorted(_SCF_STRATEGIES))
+        raise ValueError(f"SCF strategy should be one of: {supported}")
+    if backend_name != "pyscf" and strategy_name != "direct":
+        raise ValueError(
+            f"SCF strategy {strategy_name!r} requires the PySCF backend"
+        )
+    return strategy_name
 
 
 def get_capabilities(backend=None) -> QMCapabilitySet:
@@ -81,8 +101,10 @@ def run_scf(
     spin=0,
     optimize_geometry=False,
     return_timings=False,
+    scf_strategy="direct",
 ):
     backend_name = normalize_backend_name(backend)
+    scf_strategy = normalize_scf_strategy(backend_name, scf_strategy)
     backend_module = get_backend(backend_name)
     molecule = qmmolecule_from_assign(assign, charge, spin)
     options = QMRunOptions(
@@ -93,6 +115,7 @@ def run_scf(
         method="scf",
         reference=None,
         optimize_geometry=optimize_geometry,
+        scf_strategy=scf_strategy,
     )
     try:
         if not backend_module.capabilities().supports_scf:

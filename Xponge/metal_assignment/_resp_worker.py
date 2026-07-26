@@ -44,7 +44,7 @@ def _validate_fit_protocol(
         value,
         {
             "fit_input_hash", "backend", "basis_family", "metal_basis_policy", "basis_source",
-            "optimize_geometry", "grid_density",
+            "optimize_geometry", "scf_strategy", "grid_density",
             "grid_cell_layer", "radius_overrides", "restraint_a1", "restraint_a2", "two_stage",
             "only_esp", "esp_memory_limit_bytes", "esp_chunk_policy", "esp_safety_factor",
             "equivalence_groups", "source",
@@ -63,6 +63,17 @@ def _validate_fit_protocol(
         raise WorkerInputError("fit_protocol.basis_source: expected non-empty string")
     if protocol["optimize_geometry"] is not False:
         raise WorkerInputError("fit_protocol.optimize_geometry: locked derived-model coordinates are required")
+    if protocol["scf_strategy"] not in {
+        "direct",
+        "density_fit",
+        "newton",
+        "density_fit_newton",
+    }:
+        raise WorkerInputError("fit_protocol.scf_strategy: unsupported value")
+    if protocol["backend"] != "pyscf" and protocol["scf_strategy"] != "direct":
+        raise WorkerInputError(
+            "fit_protocol.scf_strategy: non-direct strategies require PySCF"
+        )
     if protocol["two_stage"] is not True or protocol["only_esp"] is not False:
         raise WorkerInputError("fit_protocol: restrained two-stage RESP is required")
     _finite_number(protocol["grid_density"], "fit_protocol.grid_density")
@@ -309,6 +320,24 @@ def _execute(value: Any) -> dict[str, Any]:
         constraint_matrix.append(row)
         constraint_targets.append(constraint["target_charge"])
     state = model["electronic_state"]
+
+    def report_progress(phase: str, details: Mapping[str, Any]) -> None:
+        print(
+            json.dumps(
+                {
+                    "event": "resp_phase",
+                    "model_id": model["external_id"],
+                    "phase": phase,
+                    "details": dict(details),
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            ),
+            file=sys.stderr,
+            flush=True,
+        )
+
     result = resp_fit(
         assign,
         basis=protocol["basis_family"],
@@ -332,6 +361,8 @@ def _execute(value: Any) -> dict[str, Any]:
         constraint_targets=constraint_targets,
         return_metadata=True,
         return_diagnostics=True,
+        progress_callback=report_progress,
+        scf_strategy=protocol["scf_strategy"],
     )
     if not isinstance(result, Mapping) or set(result) != {"charges", "metadata", "diagnostics"}:
         raise RuntimeError("RESP backend returned an invalid result object")
@@ -364,6 +395,7 @@ def _execute(value: Any) -> dict[str, Any]:
         "basis_family": protocol["basis_family"],
         "metal_basis_policy": protocol["metal_basis_policy"],
         "basis_source": protocol["basis_source"],
+        "scf_strategy": protocol["scf_strategy"],
         "metal_elements": list(metal_elements),
         "net_charge": state["net_charge"],
         "spin_multiplicity": state["spin_multiplicity"],
