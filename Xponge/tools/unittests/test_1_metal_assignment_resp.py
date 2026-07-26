@@ -76,6 +76,14 @@ def _worker_request(fit_input=None):
                 {"model_atom_ids": ["O1", "H2"], "order": 1.0},
             ],
             "links": [],
+            "linear_constraints": [{
+                "constraint_id": "core:water",
+                "role": "core",
+                "atom_ids": ["O1", "H1", "H2"],
+                "coefficients": [1.0, 1.0, 1.0],
+                "target_charge": 0.0,
+                "source": "unit-test-charge-ledger",
+            }],
         },
         "fit_protocol": {
             "fit_input_hash": fit_input.fit_input_hash,
@@ -113,6 +121,10 @@ def _fake_resp_result(assign, **kwargs):
             "scf_converged": True,
             "total_energy_hartree": -75.0,
         },
+        "diagnostics": {
+            "constraint_rank": 1,
+            "max_constraint_residual": 0.0,
+        },
     }
 
 
@@ -141,6 +153,14 @@ def _metal_worker_request(*, basis_family="SDD", backend="pyscf"):
     ]
     request["model"]["bonds"] = []
     request["model"]["links"] = []
+    request["model"]["linear_constraints"] = [{
+        "constraint_id": "core:zinc",
+        "role": "core",
+        "atom_ids": ["Zn1"],
+        "coefficients": [1.0],
+        "target_charge": 2.0,
+        "source": "unit-test-charge-ledger",
+    }]
     return request
 
 
@@ -182,6 +202,14 @@ def _zinc_water_worker_request():
         {"model_atom_ids": ["O1", "H2"], "order": 1.0},
     ]
     request["model"]["links"] = [{"model_atom_ids": ["Zn1", "O1"]}]
+    request["model"]["linear_constraints"] = [{
+        "constraint_id": "core:zinc-water",
+        "role": "core",
+        "atom_ids": ["Zn1", "O1", "H1", "H2"],
+        "coefficients": [1.0, 1.0, 1.0, 1.0],
+        "target_charge": 2.0,
+        "source": "unit-test-charge-ledger",
+    }]
     return request
 
 
@@ -253,6 +281,8 @@ class RespWorkerTests(unittest.TestCase):
         self.assertFalse(kwargs["opt"])
         self.assertEqual(kwargs["charge"], 0)
         self.assertEqual(kwargs["spin"], 0)
+        self.assertEqual(kwargs["constraint_matrix"], [[1.0, 1.0, 1.0]])
+        self.assertEqual(kwargs["constraint_targets"], [0.0])
 
     def test_worker_converts_multiplicity_to_twice_spin(self):
         request = _worker_request()
@@ -260,12 +290,24 @@ class RespWorkerTests(unittest.TestCase):
             {"model_atom_id": "H1", "element": "H", "coordinates": [0.0, 0.0, 0.0], "initial_charge": None, "is_metal": False}
         ]
         request["model"]["bonds"] = []
+        request["model"]["linear_constraints"] = [{
+            "constraint_id": "core:hydrogen",
+            "role": "core",
+            "atom_ids": ["H1"],
+            "coefficients": [1.0],
+            "target_charge": 0.0,
+            "source": "unit-test-charge-ledger",
+        }]
         request["model"]["electronic_state"]["spin_multiplicity"] = 2
         with mock.patch(
             "Xponge.assign.resp.resp_fit",
             return_value={
                 "charges": [0.0],
                 "metadata": {"method": "RESP", "scf_converged": True},
+                "diagnostics": {
+                    "constraint_rank": 1,
+                    "max_constraint_residual": 0.0,
+                },
             },
         ) as fit:
             response = _execute(request)
@@ -294,6 +336,10 @@ class RespWorkerTests(unittest.TestCase):
                     "ecp": {"Zn": "stuttgart_rsc"},
                     "cart": True,
                     "scf_converged": True,
+                },
+                "diagnostics": {
+                    "constraint_rank": 1,
+                    "max_constraint_residual": 0.0,
                 },
             },
         ) as fit:

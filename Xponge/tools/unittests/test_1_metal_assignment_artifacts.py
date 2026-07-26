@@ -752,11 +752,17 @@ class ChemcoreArtifactContractTests(unittest.TestCase):
             component_formal_charges=component_targets,
             site_target=2.0,
         )
+        model_charges = {
+            atom.model_atom_id: 0.0
+            for atom in large.atoms
+        }
+        for group in large.charge_accounting["constraint_groups"]:
+            model_charges[group["model_atom_ids"][0]] = float(group["target_charge"])
         artifact = ModelChargeArtifact(
             model_id=large.external_id,
             model_hash=large.model_hash,
             atom_order=tuple(atom.model_atom_id for atom in large.atoms),
-            charges=tuple(0.0 for _ in large.atoms),
+            charges=tuple(model_charges[atom.model_atom_id] for atom in large.atoms),
             atomic_charge_role="fitted",
             provider="deterministic-test",
             provider_version="1",
@@ -765,6 +771,10 @@ class ChemcoreArtifactContractTests(unittest.TestCase):
         self.assertAlmostEqual(sum(overlay.charges.values()), 2.0, places=8)
         self.assertEqual(set(overlay.charges), set(fit_atom_ids))
         self.assertEqual(report["cap_atom_count"], 0)
+        self.assertTrue(report["constrained_model_charges"])
+        self.assertAlmostEqual(report["cap_charge_projected"], 0.0, places=8)
+        self.assertAlmostEqual(report["cap_charge_discarded"], 0.0, places=8)
+        self.assertLessEqual(report["max_model_constraint_residual"], 1.0e-8)
         self.assertEqual(overlay.overlay_hash, overlay.computed_hash())
         self.assertEqual(tuple(overlay.artifact_hashes), (report["projected_artifact_hash"],))
 
@@ -818,6 +828,11 @@ class ChemcoreArtifactContractTests(unittest.TestCase):
 
         def fake_resp(assign, **kwargs):
             from Xponge.assign.resp import get_resp_setup_metadata
+            from Xponge.assign.resp_core import (
+                _prepare_linear_constraints,
+                _solve_constrained_quadratic,
+            )
+            import numpy as np
 
             charge = float(kwargs["charge"])
             metadata = get_resp_setup_metadata(assign, kwargs["basis"])
@@ -826,9 +841,26 @@ class ChemcoreArtifactContractTests(unittest.TestCase):
                 "scf_converged": True,
                 "total_energy_hartree": -1.0,
             })
+            constraints, targets, constraint_report = _prepare_linear_constraints(
+                assign.atom_numbers,
+                charge,
+                extra_equivalence=kwargs["extra_equivalence"],
+                constraint_matrix=kwargs["constraint_matrix"],
+                constraint_targets=kwargs["constraint_targets"],
+            )
+            charges, solve_report = _solve_constrained_quadratic(
+                np.eye(assign.atom_numbers),
+                np.zeros(assign.atom_numbers),
+                constraints,
+                targets,
+            )
             return {
-                "charges": [charge / assign.atom_numbers] * assign.atom_numbers,
+                "charges": charges,
                 "metadata": metadata,
+                "diagnostics": {
+                    **constraint_report,
+                    **solve_report,
+                },
             }
 
         def invoke(payload, **_kwargs):

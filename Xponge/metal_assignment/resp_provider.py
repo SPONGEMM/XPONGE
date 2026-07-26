@@ -50,6 +50,46 @@ def _model_payload(model: DerivedModel, metal_atom_ids: frozenset[str]) -> dict[
     state = model.electronic_state
     if state is None:
         raise ValidationError("missing_model_electronic_state", model.external_id)
+    atom_order = tuple(atom.model_atom_id for atom in model.atoms)
+    known_atom_ids = set(atom_order)
+    proof = model.charge_accounting
+    constraint_groups = proof.get("constraint_groups")
+    manifest = model.capped_model_manifest
+    if (
+        manifest is None
+        or not isinstance(constraint_groups, list)
+        or proof.get("complete") is not True
+        or proof.get("model_target_charge") != state.net_charge
+    ):
+        raise ValidationError("missing_constrained_charge_ledger", model.external_id)
+    linear_constraints = []
+    for index, group in enumerate(constraint_groups):
+        if not isinstance(group, Mapping):
+            raise ValidationError("invalid_charge_constraint_group", str(index), model.external_id)
+        atom_ids = group.get("model_atom_ids")
+        if (
+            not isinstance(atom_ids, list)
+            or not atom_ids
+            or len(atom_ids) != len(set(atom_ids))
+            or not set(atom_ids) <= known_atom_ids
+            or not isinstance(group.get("target_charge"), int)
+            or isinstance(group.get("target_charge"), bool)
+            or not isinstance(group.get("group_id"), str)
+            or not group["group_id"]
+            or group.get("role") not in {"core", "cap"}
+            or not isinstance(group.get("source"), str)
+            or not group["source"]
+            or group.get("complete") is not True
+        ):
+            raise ValidationError("invalid_charge_constraint_group", str(index), model.external_id)
+        linear_constraints.append({
+            "constraint_id": group.get("group_id"),
+            "role": group.get("role"),
+            "atom_ids": atom_ids,
+            "coefficients": [1.0] * len(atom_ids),
+            "target_charge": float(group["target_charge"]),
+            "source": group.get("source"),
+        })
     return {
         "external_id": model.external_id,
         "model_hash": model.model_hash,
@@ -75,6 +115,7 @@ def _model_payload(model: DerivedModel, metal_atom_ids: frozenset[str]) -> dict[
             {"model_atom_ids": list(link.model_atom_ids)}
             for link in model.links
         ],
+        "linear_constraints": linear_constraints,
     }
 
 
@@ -232,6 +273,39 @@ def _validate_worker_response(
         raise ValidationError("invalid_resp_charge_residual", model.external_id)
     if abs(residual) > 1.0e-6:
         raise ValidationError("resp_charge_not_conserved", repr(residual), model.external_id)
+    constraint_diagnostics = report.get("constraint_diagnostics")
+    if not isinstance(constraint_diagnostics, Mapping):
+        raise ValidationError("missing_resp_constraint_diagnostics", model.external_id)
+    expected_constraint_count = len(model.charge_accounting["constraint_groups"])
+    expected_input_constraint_count = (
+        1
+        + expected_constraint_count
+        + sum(
+            len(group.atom_ids) - 1
+            for group in fit_input.equivalence_groups
+            if group.model_id == model.external_id
+        )
+    )
+    constraint_count = report.get("constraint_count")
+    if (
+        isinstance(constraint_count, bool)
+        or not isinstance(constraint_count, int)
+        or constraint_count != expected_constraint_count
+        or constraint_diagnostics.get("input_constraint_count") != expected_input_constraint_count
+    ):
+        raise ValidationError("resp_constraint_count_mismatch", model.external_id)
+    constraint_residual = constraint_diagnostics.get("max_constraint_residual")
+    if (
+        isinstance(constraint_residual, bool)
+        or not isinstance(constraint_residual, (int, float))
+        or not math.isfinite(constraint_residual)
+        or abs(constraint_residual) > 1.0e-8
+    ):
+        raise ValidationError(
+            "resp_constraints_not_satisfied",
+            repr(constraint_residual),
+            model.external_id,
+        )
     metadata = report.get("setup_metadata")
     if not isinstance(metadata, Mapping) or metadata.get("method") != "RESP" or metadata.get("scf_converged") is not True:
         raise ValidationError("incomplete_resp_provenance", model.external_id)

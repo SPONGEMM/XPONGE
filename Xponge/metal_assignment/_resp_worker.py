@@ -143,7 +143,7 @@ def _validate_model(
         value,
         {
             "external_id", "model_hash", "purpose", "coordinate_unit", "atomic_charge_role",
-            "electronic_state", "atoms", "bonds", "links",
+            "electronic_state", "atoms", "bonds", "links", "linear_constraints",
         },
         "model",
     )
@@ -220,6 +220,41 @@ def _validate_model(
             endpoint_keys.add(key)
             if collection_name == "bonds" and _finite_number(edge["order"], f"model.bonds[{index}].order") <= 0:
                 raise WorkerInputError(f"model.bonds[{index}].order: expected positive value")
+    if not isinstance(model["linear_constraints"], list) or not model["linear_constraints"]:
+        raise WorkerInputError("model.linear_constraints: expected non-empty array")
+    constraint_ids: set[str] = set()
+    for index, raw_constraint in enumerate(model["linear_constraints"]):
+        path = f"model.linear_constraints[{index}]"
+        constraint = _strict_object(
+            raw_constraint,
+            {
+                "constraint_id", "role", "atom_ids", "coefficients",
+                "target_charge", "source",
+            },
+            path,
+        )
+        atom_scope = constraint["atom_ids"]
+        coefficients = constraint["coefficients"]
+        if (
+            not isinstance(constraint["constraint_id"], str)
+            or not constraint["constraint_id"]
+            or constraint["constraint_id"] in constraint_ids
+            or not isinstance(constraint["role"], str)
+            or not constraint["role"]
+            or not isinstance(constraint["source"], str)
+            or not constraint["source"]
+            or not isinstance(atom_scope, list)
+            or not atom_scope
+            or len(atom_scope) != len(set(atom_scope))
+            or not set(atom_scope) <= atom_id_set
+            or not isinstance(coefficients, list)
+            or len(coefficients) != len(atom_scope)
+        ):
+            raise WorkerInputError(f"{path}: invalid metadata or atom scope")
+        for coefficient_index, coefficient in enumerate(coefficients):
+            _finite_number(coefficient, f"{path}.coefficients[{coefficient_index}]")
+        _finite_number(constraint["target_charge"], f"{path}.target_charge")
+        constraint_ids.add(constraint["constraint_id"])
     from .contracts import ElectronicState, validate_electronic_state
 
     validate_electronic_state(ElectronicState(state["net_charge"], state["spin_multiplicity"]), elements)
@@ -258,6 +293,16 @@ def _execute(value: Any) -> dict[str, Any]:
         [atom_index[atom_id] for atom_id in group["atom_ids"]]
         for group in protocol["equivalence_groups"]
     ]
+    constraint_matrix = []
+    constraint_targets = []
+    for constraint in model["linear_constraints"]:
+        row = [0.0] * len(atom_ids)
+        for atom_id, coefficient in zip(
+            constraint["atom_ids"], constraint["coefficients"]
+        ):
+            row[atom_index[atom_id]] = coefficient
+        constraint_matrix.append(row)
+        constraint_targets.append(constraint["target_charge"])
     state = model["electronic_state"]
     result = resp_fit(
         assign,
@@ -278,9 +323,12 @@ def _execute(value: Any) -> dict[str, Any]:
         esp_memory_limit=protocol["esp_memory_limit_bytes"],
         esp_chunk_policy=protocol["esp_chunk_policy"],
         esp_safety_factor=protocol["esp_safety_factor"],
+        constraint_matrix=constraint_matrix,
+        constraint_targets=constraint_targets,
         return_metadata=True,
+        return_diagnostics=True,
     )
-    if not isinstance(result, Mapping) or set(result) != {"charges", "metadata"}:
+    if not isinstance(result, Mapping) or set(result) != {"charges", "metadata", "diagnostics"}:
         raise RuntimeError("RESP backend returned an invalid result object")
     raw_charges = list(result["charges"])
     if len(raw_charges) != len(atom_ids):
@@ -322,6 +370,8 @@ def _execute(value: Any) -> dict[str, Any]:
         "fitted_charge_sum": float(sum(charges)),
         "target_charge": float(state["net_charge"]),
         "charge_residual": float(sum(charges) - state["net_charge"]),
+        "constraint_count": len(constraint_matrix),
+        "constraint_diagnostics": result["diagnostics"],
         "setup_metadata": result["metadata"],
         "source": protocol["source"],
     }

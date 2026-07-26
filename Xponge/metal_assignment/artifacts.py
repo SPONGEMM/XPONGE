@@ -168,9 +168,10 @@ class DerivedModel:
     charge_accounting: Mapping[str, Any]
     mol2_text: str
     model_hash: str
+    capped_model_manifest: Mapping[str, Any] | None = None
 
     def canonical_payload(self) -> dict[str, Any]:
-        return {
+        payload = {
             "external_id": self.external_id,
             "site_id": self.site_id,
             "purpose": self.purpose,
@@ -184,6 +185,9 @@ class DerivedModel:
             "charge_accounting": _canonicalize(self.charge_accounting),
             "mol2_text": self.mol2_text,
         }
+        if self.capped_model_manifest is not None:
+            payload["capped_model_manifest"] = _canonicalize(self.capped_model_manifest)
+        return payload
 
     def computed_hash(self) -> str:
         return _sha256(self.canonical_payload())
@@ -705,11 +709,18 @@ def validate_derived_models(request: MetalAssignmentInput, bundle: DerivedModelB
         proof = model.charge_accounting
         if not isinstance(proof, Mapping):
             raise ValidationError("invalid_model_charge_accounting", model.external_id)
-        required_proof_fields = {
+        legacy_proof_fields = {
             "schema_version", "graph_revision", "selection_id", "net_charge",
             "complete", "contributions", "proof_hash",
         }
-        if set(proof) != required_proof_fields:
+        constrained_proof_fields = legacy_proof_fields | {
+            "core_target_charge", "cap_target_charge", "model_target_charge",
+            "constraint_groups",
+        }
+        if frozenset(proof) not in {
+            frozenset(legacy_proof_fields),
+            frozenset(constrained_proof_fields),
+        }:
             raise ValidationError("invalid_model_charge_accounting_fields", model.external_id)
         proof_payload = dict(proof)
         proof_hash = proof_payload.pop("proof_hash")
@@ -729,6 +740,120 @@ def validate_derived_models(request: MetalAssignmentInput, bundle: DerivedModelB
             raise ValidationError("invalid_model_charge_accounting", model.external_id)
         if model.electronic_state is not None and proof["net_charge"] != model.electronic_state.net_charge:
             raise ValidationError("model_charge_accounting_state_mismatch", model.external_id)
+        if set(proof) == constrained_proof_fields:
+            groups = proof["constraint_groups"]
+            if (
+                any(
+                    isinstance(proof[name], bool) or not isinstance(proof[name], int)
+                    for name in ("core_target_charge", "cap_target_charge", "model_target_charge")
+                )
+                or proof["core_target_charge"] + proof["cap_target_charge"]
+                != proof["model_target_charge"]
+                or proof["model_target_charge"] != proof["net_charge"]
+                or not isinstance(groups, list)
+                or not groups
+            ):
+                raise ValidationError("invalid_constrained_charge_accounting", model.external_id)
+            constrained_atom_ids: list[str] = []
+            constrained_targets = {"core": 0, "cap": 0}
+            for index, group in enumerate(groups):
+                if not isinstance(group, Mapping):
+                    raise ValidationError("invalid_charge_constraint_group", str(index), model.external_id)
+                required_group_fields = {
+                    "group_id", "role", "model_atom_ids", "target_charge", "source", "complete",
+                }
+                atom_ids = group.get("model_atom_ids")
+                if (
+                    set(group) != required_group_fields
+                    or not isinstance(group.get("group_id"), str)
+                    or not group["group_id"]
+                    or group.get("role") not in {"core", "cap"}
+                    or not isinstance(atom_ids, list)
+                    or not atom_ids
+                    or any(not isinstance(atom_id, str) or not atom_id for atom_id in atom_ids)
+                    or len(atom_ids) != len(set(atom_ids))
+                    or isinstance(group.get("target_charge"), bool)
+                    or not isinstance(group.get("target_charge"), int)
+                    or not isinstance(group.get("source"), str)
+                    or not group["source"]
+                    or group.get("complete") is not True
+                ):
+                    raise ValidationError("invalid_charge_constraint_group", str(index), model.external_id)
+                constrained_atom_ids.extend(atom_ids)
+                constrained_targets[group["role"]] += group["target_charge"]
+            if len(constrained_atom_ids) != len(set(constrained_atom_ids)):
+                raise ValidationError("overlapping_charge_constraint_groups", model.external_id)
+            if (
+                constrained_targets["core"] != proof["core_target_charge"]
+                or constrained_targets["cap"] != proof["cap_target_charge"]
+            ):
+                raise ValidationError("charge_constraint_target_mismatch", model.external_id)
+        manifest = model.capped_model_manifest
+        if manifest is not None:
+            required_manifest_fields = {
+                "schema_version", "model_id", "core_model_atom_ids",
+                "environment_model_atom_ids", "cap_model_atom_ids",
+                "cut_edge_ids", "complete", "manifest_hash",
+            }
+            if set(manifest) != required_manifest_fields:
+                raise ValidationError("invalid_capped_model_manifest_fields", model.external_id)
+            manifest_payload = dict(manifest)
+            manifest_hash = manifest_payload.pop("manifest_hash")
+            _validate_hash(
+                manifest_hash,
+                _sha256(manifest_payload),
+                "capped_model_manifest_hash",
+                model.external_id,
+            )
+            manifest_atom_fields = (
+                "core_model_atom_ids",
+                "environment_model_atom_ids",
+                "cap_model_atom_ids",
+            )
+            if any(
+                not isinstance(manifest[name], list)
+                or any(not isinstance(atom_id, str) or not atom_id for atom_id in manifest[name])
+                or len(manifest[name]) != len(set(manifest[name]))
+                for name in manifest_atom_fields
+            ):
+                raise ValidationError("invalid_capped_model_manifest", model.external_id)
+            manifest_atom_ids = [
+                atom_id
+                for name in manifest_atom_fields
+                for atom_id in manifest[name]
+            ]
+            if (
+                manifest["model_id"] != model.external_id
+                or manifest["complete"] is not True
+                or len(manifest_atom_ids) != len(set(manifest_atom_ids))
+                or set(manifest_atom_ids) != {atom.model_atom_id for atom in model.atoms}
+                or manifest["core_model_atom_ids"] != [
+                    atom.model_atom_id for atom in model.atoms if atom.role == "core"
+                ]
+                or manifest["environment_model_atom_ids"]
+                or manifest["cap_model_atom_ids"] != [
+                    atom.model_atom_id for atom in model.atoms if atom.role == "cap"
+                ]
+                or manifest["cut_edge_ids"] != [
+                    cut.external_id for cut in model.cut_edges
+                ]
+            ):
+                raise ValidationError("invalid_capped_model_manifest", model.external_id)
+            if set(proof) == constrained_proof_fields:
+                group_atom_ids_by_role = {
+                    role: {
+                        atom_id
+                        for group in proof["constraint_groups"]
+                        if group["role"] == role
+                        for atom_id in group["model_atom_ids"]
+                    }
+                    for role in ("core", "cap")
+                }
+                if (
+                    group_atom_ids_by_role["core"] != set(manifest["core_model_atom_ids"])
+                    or group_atom_ids_by_role["cap"] != set(manifest["cap_model_atom_ids"])
+                ):
+                    raise ValidationError("charge_constraint_atom_coverage_mismatch", model.external_id)
         _validate_hash(model.model_hash, model.computed_hash(), "model_hash", model.external_id)
         _validate_mol2(
             model.mol2_text,
@@ -909,6 +1034,7 @@ def _parse_derived_model(value: Any, path: str) -> DerivedModel:
             "external_id", "site_id", "purpose", "coordinate_unit", "atomic_charge_role", "atoms", "bonds",
             "links", "cut_edges", "electronic_state", "charge_accounting", "mol2_text", "model_hash",
         },
+        optional={"capped_model_manifest"},
         path=path,
     )
     for name in ("atoms", "bonds", "links", "cut_edges"):
@@ -937,6 +1063,7 @@ def _parse_derived_model(value: Any, path: str) -> DerivedModel:
         tuple(_parse_model_link(item, f"{path}.links[{index}]") for index, item in enumerate(data["links"])),
         tuple(_parse_model_cut(item, f"{path}.cut_edges[{index}]") for index, item in enumerate(data["cut_edges"])),
         data["charge_accounting"], data["mol2_text"], data["model_hash"],
+        data.get("capped_model_manifest"),
     )
 
 
