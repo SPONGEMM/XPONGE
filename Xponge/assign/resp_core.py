@@ -24,6 +24,214 @@ class _RespMol:
         self.natm = atom_numbers
 
 
+def _prepare_linear_constraints(
+        atom_count, charge, extra_equivalence=None,
+        constraint_matrix=None, constraint_targets=None):
+    """Build a deterministic independent ``C q = d`` constraint system."""
+    if extra_equivalence is None:
+        extra_equivalence = []
+    rows = [np.ones(atom_count, dtype=float)]
+    targets = [float(charge)]
+    if constraint_matrix is not None:
+        matrix = np.asarray(constraint_matrix, dtype=float)
+        if matrix.ndim == 1:
+            matrix = matrix.reshape(1, -1)
+        values = np.asarray(constraint_targets, dtype=float).reshape(-1)
+        if matrix.ndim != 2 or matrix.shape[1] != atom_count or matrix.shape[0] != values.size:
+            raise ValueError("RESP linear constraints have incompatible dimensions")
+        if not np.all(np.isfinite(matrix)) or not np.all(np.isfinite(values)):
+            raise ValueError("RESP linear constraints should be finite")
+        rows.extend(matrix)
+        targets.extend(values)
+    elif constraint_targets is not None:
+        raise ValueError("RESP constraint targets require a constraint matrix")
+    for group_index, group in enumerate(extra_equivalence):
+        indices = [int(index) for index in group]
+        if len(indices) < 2 or len(indices) != len(set(indices)):
+            raise ValueError(f"RESP equivalence group {group_index} should contain unique atom indices")
+        if min(indices) < 0 or max(indices) >= atom_count:
+            raise ValueError(f"RESP equivalence group {group_index} contains an out-of-range atom index")
+        reference = indices[0]
+        for index in indices[1:]:
+            row = np.zeros(atom_count, dtype=float)
+            row[index] = 1.0
+            row[reference] = -1.0
+            rows.append(row)
+            targets.append(0.0)
+
+    matrix = np.asarray(rows, dtype=float)
+    values = np.asarray(targets, dtype=float)
+    matrix_rank = np.linalg.matrix_rank(matrix)
+    augmented_rank = np.linalg.matrix_rank(np.column_stack((matrix, values)))
+    if augmented_rank != matrix_rank:
+        raise ValueError("RESP linear constraints are inconsistent")
+
+    independent_rows = []
+    independent_targets = []
+    current = np.empty((0, atom_count), dtype=float)
+    current_rank = 0
+    for row, target in zip(matrix, values):
+        candidate = np.vstack((current, row))
+        candidate_rank = np.linalg.matrix_rank(candidate)
+        if candidate_rank == current_rank:
+            continue
+        independent_rows.append(row)
+        independent_targets.append(target)
+        current = candidate
+        current_rank = candidate_rank
+    return (
+        np.asarray(independent_rows, dtype=float),
+        np.asarray(independent_targets, dtype=float),
+        {
+            "input_constraint_count": int(matrix.shape[0]),
+            "constraint_rank": int(matrix_rank),
+            "dropped_dependent_constraint_count": int(matrix.shape[0] - matrix_rank),
+        },
+    )
+
+
+def _solve_constrained_quadratic(matrix_a, matrix_b, constraints, targets):
+    """Solve a quadratic system with equality constraints without inversion."""
+    matrix_a = np.asarray(matrix_a, dtype=float)
+    matrix_b = np.asarray(matrix_b, dtype=float).reshape(-1)
+    constraints = np.asarray(constraints, dtype=float)
+    targets = np.asarray(targets, dtype=float).reshape(-1)
+    atom_count = matrix_b.size
+    if matrix_a.shape != (atom_count, atom_count):
+        raise ValueError("RESP quadratic matrix has incompatible dimensions")
+    if constraints.ndim != 2 or constraints.shape[1] != atom_count:
+        raise ValueError("RESP constraint matrix has incompatible dimensions")
+    if constraints.shape[0] != targets.size:
+        raise ValueError("RESP constraint targets have incompatible dimensions")
+    if not all(np.all(np.isfinite(value)) for value in (matrix_a, matrix_b, constraints, targets)):
+        raise ValueError("RESP quadratic system should be finite")
+
+    constraint_count = constraints.shape[0]
+    kkt = np.block([
+        [matrix_a, constraints.T],
+        [constraints, np.zeros((constraint_count, constraint_count), dtype=float)],
+    ])
+    rhs = np.concatenate((matrix_b, targets))
+    solution, _, rank, singular_values = np.linalg.lstsq(kkt, rhs, rcond=None)
+    residual = kkt @ solution - rhs
+    scale = max(1.0, float(np.max(np.abs(rhs))))
+    if rank < kkt.shape[0] or float(np.max(np.abs(residual))) > 1.0e-10 * scale:
+        raise ValueError("RESP constrained quadratic system is singular or inconsistent")
+    charges = solution[:atom_count]
+    constraint_residual = constraints @ charges - targets
+    condition_number = (
+        float(singular_values[0] / singular_values[-1])
+        if singular_values.size and singular_values[-1] > 0
+        else float("inf")
+    )
+    if not np.isfinite(condition_number):
+        condition_number = None
+    return charges, {
+        "kkt_rank": int(rank),
+        "kkt_size": int(kkt.shape[0]),
+        "condition_number": condition_number,
+        "max_constraint_residual": (
+            float(np.max(np.abs(constraint_residual))) if constraint_residual.size else 0.0
+        ),
+    }
+
+
+def _fit_constrained_resp_stage(
+        assign, matrix_a0, matrix_b, constraints, targets, initial_charges,
+        restraint, restrained_atom_indices, convergence=1.0e-8, max_iterations=1000):
+    charges = np.asarray(initial_charges, dtype=float).reshape(-1)
+    restrained_atom_indices = frozenset(restrained_atom_indices)
+    for iteration in range(1, max_iterations + 1):
+        restrained_matrix = np.array(matrix_a0, dtype=float, copy=True)
+        for index in restrained_atom_indices:
+            if assign.atoms[index] != "H":
+                restrained_matrix[index, index] += (
+                    restraint / np.sqrt(charges[index] * charges[index] + 0.01)
+                )
+        updated, diagnostics = _solve_constrained_quadratic(
+            restrained_matrix, matrix_b, constraints, targets
+        )
+        if float(np.max(np.abs(updated - charges))) <= convergence:
+            diagnostics = dict(diagnostics)
+            diagnostics["iterations"] = iteration
+            return updated, diagnostics
+        charges = updated
+    raise RuntimeError("RESP constrained iteration did not converge")
+
+
+def _fit_resp_with_linear_constraints(
+        assign, matrix_a0, matrix_b, charge, extra_equivalence,
+        constraint_matrix, constraint_targets, a1, a2, two_stage, only_esp):
+    atom_count = len(assign.atoms)
+    constraints, targets, constraint_diagnostics = _prepare_linear_constraints(
+        atom_count,
+        charge,
+        extra_equivalence=extra_equivalence,
+        constraint_matrix=constraint_matrix,
+        constraint_targets=constraint_targets,
+    )
+    charges, initial_diagnostics = _solve_constrained_quadratic(
+        matrix_a0, matrix_b, constraints, targets
+    )
+    diagnostics = {
+        **constraint_diagnostics,
+        "initial": initial_diagnostics,
+        "stage1": None,
+        "stage2": None,
+    }
+    if only_esp:
+        diagnostics["max_constraint_residual"] = initial_diagnostics["max_constraint_residual"]
+        return charges, diagnostics
+
+    charges, stage1_diagnostics = _fit_constrained_resp_stage(
+        assign, matrix_a0, matrix_b, constraints, targets, charges,
+        a1, range(atom_count),
+    )
+    diagnostics["stage1"] = stage1_diagnostics
+    if not two_stage:
+        diagnostics["max_constraint_residual"] = stage1_diagnostics["max_constraint_residual"]
+        return charges, diagnostics
+
+    stage2_groups, _, _ = _find_tofit_second(_RespMol(atom_count), assign)
+    if not stage2_groups:
+        diagnostics["max_constraint_residual"] = stage1_diagnostics["max_constraint_residual"]
+        return charges, diagnostics
+    stage2_rows = list(constraints)
+    stage2_targets = list(targets)
+    active_atoms = set()
+    for group in stage2_groups:
+        active_atoms.update(group)
+        reference = group[0]
+        for index in group[1:]:
+            row = np.zeros(atom_count, dtype=float)
+            row[index] = 1.0
+            row[reference] = -1.0
+            stage2_rows.append(row)
+            stage2_targets.append(0.0)
+    for index in range(atom_count):
+        if index in active_atoms:
+            continue
+        row = np.zeros(atom_count, dtype=float)
+        row[index] = 1.0
+        stage2_rows.append(row)
+        stage2_targets.append(charges[index])
+    stage2_constraints, stage2_values, stage2_constraint_diagnostics = _prepare_linear_constraints(
+        atom_count,
+        charge,
+        constraint_matrix=np.asarray(stage2_rows, dtype=float),
+        constraint_targets=np.asarray(stage2_targets, dtype=float),
+    )
+    charges, stage2_diagnostics = _fit_constrained_resp_stage(
+        assign, matrix_a0, matrix_b, stage2_constraints, stage2_values, charges,
+        a2, active_atoms,
+    )
+    stage2_diagnostics = dict(stage2_diagnostics)
+    stage2_diagnostics.update(stage2_constraint_diagnostics)
+    diagnostics["stage2"] = stage2_diagnostics
+    diagnostics["max_constraint_residual"] = stage2_diagnostics["max_constraint_residual"]
+    return charges, diagnostics
+
+
 # Pay Attention To !!!UNIT!!!
 def _get_mk_grid(assign, crd, area_density=1.0, layer=4, radius=None):
     """
@@ -254,7 +462,8 @@ def _get_a20_and_b20(total_length, tofit_second, fit_group, sublength, mol, matr
 
 
 def fit_resp_from_esp(assign, atom_coordinates_bohr, nuclear_charges, grid_points_bohr, esp_values_au, charge,
-                      extra_equivalence=None, a1=0.0005, a2=0.001, two_stage=True, only_esp=False):
+                      extra_equivalence=None, a1=0.0005, a2=0.001, two_stage=True, only_esp=False,
+                      constraint_matrix=None, constraint_targets=None, return_diagnostics=False):
     """
     Fit RESP charges from backend-neutral ESP inputs.
 
@@ -269,6 +478,9 @@ def fit_resp_from_esp(assign, atom_coordinates_bohr, nuclear_charges, grid_point
     :param a2:
     :param two_stage:
     :param only_esp:
+    :param constraint_matrix: optional coefficient matrix for ``C q = d``
+    :param constraint_targets: target vector ``d`` for ``constraint_matrix``
+    :param return_diagnostics: return charges and numerical diagnostics
     :return:
     """
     if extra_equivalence is None:
@@ -292,6 +504,31 @@ def fit_resp_from_esp(assign, atom_coordinates_bohr, nuclear_charges, grid_point
 
         vnuc += z / np.einsum("xi,xi->x", rp, rp) ** .5
 
+    mep = vnuc - electronic_esp
+    matrix_b_atoms = np.zeros(mol.natm)
+    for i in range(mol.natm):
+        r = atom_coordinates_bohr[i]
+        rp = np.linalg.norm(r - grid_points_bohr, axis=1)
+        matrix_b_atoms[i] = np.sum(mep / rp)
+
+    if constraint_matrix is not None or return_diagnostics:
+        charges, diagnostics = _fit_resp_with_linear_constraints(
+            assign,
+            matrix_a0,
+            matrix_b_atoms,
+            charge,
+            extra_equivalence,
+            constraint_matrix,
+            constraint_targets,
+            a1,
+            a2,
+            two_stage,
+            only_esp,
+        )
+        if return_diagnostics:
+            return {"charges": charges, "diagnostics": diagnostics}
+        return charges
+
     matrix_a0 = np.hstack((matrix_a0, np.ones(mol.natm).reshape(-1, 1)))
     temp = np.ones(mol.natm + 1)
     temp[-1] = 0
@@ -300,13 +537,8 @@ def fit_resp_from_esp(assign, atom_coordinates_bohr, nuclear_charges, grid_point
     matrix_a[:] = matrix_a0
     ainv = np.linalg.inv(matrix_a)
 
-    mep = vnuc - electronic_esp
-
     matrix_b = np.zeros(mol.natm + 1)
-    for i in range(mol.natm):
-        r = atom_coordinates_bohr[i]
-        rp = np.linalg.norm(r - grid_points_bohr, axis=1)
-        matrix_b[i] = np.sum(mep / rp)
+    matrix_b[:mol.natm] = matrix_b_atoms
     matrix_b[-1] = charge
 
     q = np.dot(ainv, matrix_b.reshape(-1, 1))[:-1]

@@ -77,7 +77,8 @@ def resp_fit(assign, basis=None, opt=False, charge=None, spin=0, extra_equivalen
              grid_density=6, grid_cell_layer=4, radius=None, a1=0.0005, a2=0.001,
              two_stage=True, only_esp=False, backend=None, core=None,
              esp_memory_limit=None, esp_chunk_policy="auto", esp_safety_factor=0.8,
-             return_metadata=False):
+             constraint_matrix=None, constraint_targets=None,
+             return_metadata=False, return_diagnostics=False):
     """
     This **function** fits the RESP partial charge for an Assign instance.
 
@@ -96,6 +97,9 @@ def resp_fit(assign, basis=None, opt=False, charge=None, spin=0, extra_equivalen
     :param only_esp: whether do the first stage fitting. If set to True, no restrained fitting will be done
     :param backend: the QM backend to use. Default is ``pyscf``.
     :param core: the RESP numerical core to use. Only ``python`` is currently supported in Xponge-origin.
+    :param constraint_matrix: optional coefficient matrix for linear charge constraints
+    :param constraint_targets: target vector for ``constraint_matrix``
+    :param return_diagnostics: include rank, conditioning, iteration and residual diagnostics
     :return: a list of charges
     """
     if extra_equivalence is None:
@@ -151,9 +155,21 @@ def resp_fit(assign, basis=None, opt=False, charge=None, spin=0, extra_equivalen
         a2=a2,
         two_stage=two_stage,
         only_esp=only_esp,
+        constraint_matrix=constraint_matrix,
+        constraint_targets=constraint_targets,
+        return_diagnostics=return_diagnostics,
     )
+    diagnostics = None
+    if return_diagnostics:
+        diagnostics = charges["diagnostics"]
+        charges = charges["charges"]
     if return_metadata:
-        return {"charges": charges, "metadata": metadata}
+        result = {"charges": charges, "metadata": metadata}
+        if return_diagnostics:
+            result["diagnostics"] = diagnostics
+        return result
+    if return_diagnostics:
+        return {"charges": charges, "diagnostics": diagnostics}
     return charges
 
 
