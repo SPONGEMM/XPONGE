@@ -12,21 +12,25 @@ from unittest import mock
 import unittest
 
 from Xponge.metal_assignment import (
+    DerivedModel,
+    ModelAtom,
+    ModelElectronicState,
     RespEquivalenceGroup,
     RespFitInput,
+    RespLinearConstraint,
     ValidationError,
     resp_fit_input_dumps,
     resp_fit_input_loads,
     validate_resp_fit_input,
 )
 from Xponge.metal_assignment._resp_worker import _execute
-from Xponge.metal_assignment.resp_provider import _model_basis_context
+from Xponge.metal_assignment.resp_provider import _model_basis_context, _model_payload
 from Xponge.metal_assignment._worker_runtime import worker_command
 
 
 def _fit_input(**updates):
     values = {
-        "schema_version": 2,
+        "schema_version": 3,
         "backend": "pyscf",
         "basis_family": "sto-3g",
         "metal_basis_policy": "require_ecp",
@@ -43,6 +47,7 @@ def _fit_input(**updates):
         "esp_chunk_policy": "pointwise",
         "esp_safety_factor": 0.8,
         "equivalence_groups": (),
+        "linear_constraints": (),
         "source": "unit-test-explicit-resp-protocol",
     }
     values.update(updates)
@@ -227,6 +232,41 @@ class RespFitInputTests(unittest.TestCase):
         self.assertEqual(resp_fit_input_loads(resp_fit_input_dumps(value)), value)
         self.assertEqual(resp_fit_input_dumps(resp_fit_input_loads(resp_fit_input_dumps(value))), resp_fit_input_dumps(value))
 
+    def test_hash_closed_round_trip_with_linear_constraints(self):
+        value = _fit_input(
+            linear_constraints=(
+                RespLinearConstraint(
+                    "large:water",
+                    "fixed:O1",
+                    "reference",
+                    ("O1",),
+                    (1.0,),
+                    -0.8,
+                    "unit-test-reference-charge",
+                ),
+            )
+        )
+        validate_resp_fit_input(value)
+        self.assertEqual(resp_fit_input_loads(resp_fit_input_dumps(value)), value)
+
+    def test_invalid_linear_constraints_are_rejected(self):
+        with self.assertRaisesRegex(ValidationError, "invalid_resp_linear_constraint"):
+            validate_resp_fit_input(
+                _fit_input(
+                    linear_constraints=(
+                        RespLinearConstraint(
+                            "large:water",
+                            "zero-row",
+                            "reference",
+                            ("O1",),
+                            (0.0,),
+                            -0.8,
+                            "unit-test-reference-charge",
+                        ),
+                    )
+                )
+            )
+
     def test_geometry_optimization_and_stale_hash_are_rejected(self):
         with self.assertRaisesRegex(ValidationError, "resp_geometry_must_remain_locked"):
             validate_resp_fit_input(_fit_input(optimize_geometry=True))
@@ -269,6 +309,72 @@ class RespFitInputTests(unittest.TestCase):
         )
         self.assertEqual(metal_elements, ("Zn",))
         self.assertEqual(resolved.ecp, {"Zn": "stuttgart_rsc"})
+
+    def test_parent_provider_merges_model_and_fit_input_constraints(self):
+        atom = ModelAtom(
+            model_atom_id="O1",
+            external_id="oxygen:1",
+            canonical_atom_id=1,
+            mol2_serial=1,
+            element="O",
+            coordinates=(0.0, 0.0, 0.0),
+            role="core",
+            canonical_residue_id="water:1",
+            chemical_component_id="HOH",
+            partial_charge=None,
+            cap_parent_external_id="",
+            cut_edge_id="",
+            geometry_provenance="source",
+            charge_projection_group="core:water",
+        )
+        model = DerivedModel(
+            external_id="large:water",
+            site_id="water-site",
+            purpose="large",
+            coordinate_unit="angstrom",
+            atomic_charge_role="initial",
+            electronic_state=ModelElectronicState(
+                "water-site", 0, 1, "unit-test-state"
+            ),
+            atoms=(atom,),
+            bonds=(),
+            links=(),
+            cut_edges=(),
+            charge_accounting={
+                "complete": True,
+                "model_target_charge": 0,
+                "constraint_groups": [{
+                    "group_id": "core:water",
+                    "role": "core",
+                    "model_atom_ids": ["O1"],
+                    "target_charge": 0,
+                    "source": "unit-test-ledger",
+                    "complete": True,
+                }],
+            },
+            mol2_text="",
+            model_hash="1" * 64,
+            capped_model_manifest={"schema_version": 1},
+        )
+        fit_input = _fit_input(
+            linear_constraints=(
+                RespLinearConstraint(
+                    "large:water",
+                    "fixed:O1",
+                    "reference",
+                    ("O1",),
+                    (1.0,),
+                    -0.8,
+                    "unit-test-reference-charge",
+                ),
+            )
+        )
+        payload = _model_payload(model, fit_input, frozenset())
+        self.assertEqual(
+            [item["constraint_id"] for item in payload["linear_constraints"]],
+            ["core:water", "fixed:O1"],
+        )
+        self.assertEqual(payload["linear_constraints"][1]["target_charge"], -0.8)
 
 
 class RespWorkerTests(unittest.TestCase):

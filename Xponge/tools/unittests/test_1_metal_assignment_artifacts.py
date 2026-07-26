@@ -27,6 +27,7 @@ from Xponge.metal_assignment import (
     MetalAtomParameterSpec,
     ModelChargeArtifact,
     RespFitInput,
+    RespLinearConstraint,
     ValidationError,
     assign_base_force_field,
     assign_nonbonded_metal_ions,
@@ -806,7 +807,7 @@ class ChemcoreArtifactContractTests(unittest.TestCase):
         package = replace(package, request=request, package_hash="")
         package = replace(package, package_hash=package.computed_hash())
         fit_input = RespFitInput(
-            schema_version=2,
+            schema_version=3,
             backend="pyscf",
             basis_family="SDD",
             metal_basis_policy="require_ecp",
@@ -823,6 +824,22 @@ class ChemcoreArtifactContractTests(unittest.TestCase):
             esp_chunk_policy="pointwise",
             esp_safety_factor=0.8,
             equivalence_groups=(),
+            linear_constraints=tuple(
+                RespLinearConstraint(
+                    model.external_id,
+                    f"reference:{model.external_id}",
+                    "reference",
+                    (next(
+                        atom.model_atom_id
+                        for atom in model.atoms
+                        if atom.role != "cap"
+                    ),),
+                    (1.0,),
+                    0.0,
+                    "live-chemcore-reference-charge",
+                )
+                for model in large_models
+            ),
             source="live-chemcore-deterministic-resp",
         ).with_computed_hash()
 
@@ -877,6 +894,7 @@ class ChemcoreArtifactContractTests(unittest.TestCase):
         with mock.patch("Xponge.metal_assignment.resp_provider._invoke_resp_worker", side_effect=invoke):
             output = fit_resp_charges(package, fit_input)
         self.assertEqual(len(output.model_artifacts), len(large_models))
+        self.assertTrue(all(report["constraint_count"] >= 2 for report in output.fit_reports))
         self.assertTrue(output.output_hash)
 
 

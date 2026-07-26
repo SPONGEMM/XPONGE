@@ -12,7 +12,7 @@ from typing import Any, Mapping
 from .contracts import ValidationError, _canonicalize, _freeze_field, _sha256, _strict_object
 
 
-RESP_FIT_INPUT_SCHEMA_VERSION = 2
+RESP_FIT_INPUT_SCHEMA_VERSION = 3
 SUPPORTED_RESP_BACKENDS = frozenset({"pyscf", "psi4"})
 SUPPORTED_ESP_CHUNK_POLICIES = frozenset({"auto", "full", "grid", "dual", "pointwise"})
 SUPPORTED_METAL_BASIS_POLICIES = frozenset({"require_ecp"})
@@ -24,6 +24,19 @@ class RespEquivalenceGroup:
 
     model_id: str
     atom_ids: tuple[str, ...]
+    source: str
+
+
+@dataclass(frozen=True, slots=True)
+class RespLinearConstraint:
+    """Model-local linear constraint expressed only in atom IDs and numbers."""
+
+    model_id: str
+    constraint_id: str
+    role: str
+    atom_ids: tuple[str, ...]
+    coefficients: tuple[float, ...]
+    target_charge: float
     source: str
 
 
@@ -48,6 +61,7 @@ class RespFitInput:
     esp_chunk_policy: str
     esp_safety_factor: float
     equivalence_groups: tuple[RespEquivalenceGroup, ...]
+    linear_constraints: tuple[RespLinearConstraint, ...]
     source: str
     fit_input_hash: str = ""
 
@@ -165,6 +179,42 @@ def validate_resp_fit_input(value: RespFitInput) -> None:
         if overlap:
             raise ValidationError("overlapping_resp_equivalence_groups", ",".join(sorted(overlap)), path)
         seen.update(group.atom_ids)
+    constraint_keys: set[tuple[str, str]] = set()
+    for index, constraint in enumerate(value.linear_constraints):
+        path = f"resp_fit_input.linear_constraints[{index}]"
+        if not isinstance(constraint, RespLinearConstraint):
+            raise ValidationError(
+                "invalid_resp_linear_constraint", type(constraint).__name__, path
+            )
+        if (
+            not constraint.model_id
+            or not constraint.constraint_id
+            or not constraint.role
+            or not constraint.source
+            or not constraint.atom_ids
+            or len(constraint.atom_ids) != len(constraint.coefficients)
+            or len(constraint.atom_ids) != len(set(constraint.atom_ids))
+            or any(not atom_id for atom_id in constraint.atom_ids)
+            or any(
+                isinstance(coefficient, bool)
+                or not isinstance(coefficient, (int, float))
+                or not math.isfinite(coefficient)
+                for coefficient in constraint.coefficients
+            )
+            or not any(abs(float(coefficient)) > 0.0 for coefficient in constraint.coefficients)
+            or isinstance(constraint.target_charge, bool)
+            or not isinstance(constraint.target_charge, (int, float))
+            or not math.isfinite(constraint.target_charge)
+        ):
+            raise ValidationError(
+                "invalid_resp_linear_constraint", constraint.constraint_id, path
+            )
+        key = (constraint.model_id, constraint.constraint_id)
+        if key in constraint_keys:
+            raise ValidationError(
+                "duplicate_resp_linear_constraint", constraint.constraint_id, path
+            )
+        constraint_keys.add(key)
     if not isinstance(value.source, str) or not value.source:
         raise ValidationError("missing_resp_protocol_source", "source is required", "resp_fit_input.source")
     if not value.fit_input_hash or value.fit_input_hash != value.computed_hash():
@@ -179,7 +229,7 @@ def resp_fit_input_from_dict(value: Any) -> RespFitInput:
             "optimize_geometry", "grid_density",
             "grid_cell_layer", "radius_overrides", "restraint_a1", "restraint_a2", "two_stage",
             "only_esp", "esp_memory_limit_bytes", "esp_chunk_policy", "esp_safety_factor",
-            "equivalence_groups", "source", "fit_input_hash",
+            "equivalence_groups", "linear_constraints", "source", "fit_input_hash",
         },
         path="resp_fit_input",
     )
@@ -187,6 +237,8 @@ def resp_fit_input_from_dict(value: Any) -> RespFitInput:
         raise ValidationError("invalid_wire_type", "expected object", "resp_fit_input.radius_overrides")
     if not isinstance(data["equivalence_groups"], list):
         raise ValidationError("invalid_wire_type", "expected array", "resp_fit_input.equivalence_groups")
+    if not isinstance(data["linear_constraints"], list):
+        raise ValidationError("invalid_wire_type", "expected array", "resp_fit_input.linear_constraints")
     groups = []
     for index, item in enumerate(data["equivalence_groups"]):
         path = f"resp_fit_input.equivalence_groups[{index}]"
@@ -194,6 +246,32 @@ def resp_fit_input_from_dict(value: Any) -> RespFitInput:
         if not isinstance(group["atom_ids"], list) or not all(isinstance(atom_id, str) for atom_id in group["atom_ids"]):
             raise ValidationError("invalid_wire_type", "expected string array", f"{path}.atom_ids")
         groups.append(RespEquivalenceGroup(group["model_id"], tuple(group["atom_ids"]), group["source"]))
+    constraints = []
+    for index, item in enumerate(data["linear_constraints"]):
+        path = f"resp_fit_input.linear_constraints[{index}]"
+        constraint = _strict_object(
+            item,
+            required={
+                "model_id", "constraint_id", "role", "atom_ids",
+                "coefficients", "target_charge", "source",
+            },
+            path=path,
+        )
+        if (
+            not isinstance(constraint["atom_ids"], list)
+            or not all(isinstance(atom_id, str) for atom_id in constraint["atom_ids"])
+            or not isinstance(constraint["coefficients"], list)
+        ):
+            raise ValidationError("invalid_wire_type", "invalid linear constraint arrays", path)
+        constraints.append(RespLinearConstraint(
+            constraint["model_id"],
+            constraint["constraint_id"],
+            constraint["role"],
+            tuple(constraint["atom_ids"]),
+            tuple(constraint["coefficients"]),
+            constraint["target_charge"],
+            constraint["source"],
+        ))
     result = RespFitInput(
         schema_version=data["schema_version"],
         backend=data["backend"],
@@ -212,6 +290,7 @@ def resp_fit_input_from_dict(value: Any) -> RespFitInput:
         esp_chunk_policy=data["esp_chunk_policy"],
         esp_safety_factor=data["esp_safety_factor"],
         equivalence_groups=tuple(groups),
+        linear_constraints=tuple(constraints),
         source=data["source"],
         fit_input_hash=data["fit_input_hash"],
     )
@@ -247,6 +326,6 @@ def load_resp_fit_input(path: str | Path) -> RespFitInput:
 __all__ = [
     "RESP_FIT_INPUT_SCHEMA_VERSION", "SUPPORTED_ESP_CHUNK_POLICIES", "SUPPORTED_METAL_BASIS_POLICIES",
     "SUPPORTED_RESP_BACKENDS",
-    "RespEquivalenceGroup", "RespFitInput", "load_resp_fit_input", "resp_fit_input_dumps",
+    "RespEquivalenceGroup", "RespLinearConstraint", "RespFitInput", "load_resp_fit_input", "resp_fit_input_dumps",
     "resp_fit_input_from_dict", "resp_fit_input_loads", "resp_fit_input_to_dict", "validate_resp_fit_input",
 ]

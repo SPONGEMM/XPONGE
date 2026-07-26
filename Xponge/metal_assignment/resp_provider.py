@@ -46,7 +46,11 @@ class RespFitOutput:
         return replace(self, output_hash=self.computed_hash())
 
 
-def _model_payload(model: DerivedModel, metal_atom_ids: frozenset[str]) -> dict[str, Any]:
+def _model_payload(
+    model: DerivedModel,
+    fit_input: RespFitInput,
+    metal_atom_ids: frozenset[str],
+) -> dict[str, Any]:
     state = model.electronic_state
     if state is None:
         raise ValidationError("missing_model_electronic_state", model.external_id)
@@ -63,6 +67,7 @@ def _model_payload(model: DerivedModel, metal_atom_ids: frozenset[str]) -> dict[
     ):
         raise ValidationError("missing_constrained_charge_ledger", model.external_id)
     linear_constraints = []
+    constraint_ids: set[str] = set()
     for index, group in enumerate(constraint_groups):
         if not isinstance(group, Mapping):
             raise ValidationError("invalid_charge_constraint_group", str(index), model.external_id)
@@ -82,13 +87,39 @@ def _model_payload(model: DerivedModel, metal_atom_ids: frozenset[str]) -> dict[
             or group.get("complete") is not True
         ):
             raise ValidationError("invalid_charge_constraint_group", str(index), model.external_id)
+        constraint_id = group["group_id"]
+        constraint_ids.add(constraint_id)
         linear_constraints.append({
-            "constraint_id": group.get("group_id"),
+            "constraint_id": constraint_id,
             "role": group.get("role"),
             "atom_ids": atom_ids,
             "coefficients": [1.0] * len(atom_ids),
             "target_charge": float(group["target_charge"]),
             "source": group.get("source"),
+        })
+    for constraint in fit_input.linear_constraints:
+        if constraint.model_id != model.external_id:
+            continue
+        if constraint.constraint_id in constraint_ids:
+            raise ValidationError(
+                "duplicate_resp_constraint_id",
+                constraint.constraint_id,
+                model.external_id,
+            )
+        if not set(constraint.atom_ids) <= known_atom_ids:
+            raise ValidationError(
+                "resp_constraint_atom_mismatch",
+                constraint.constraint_id,
+                model.external_id,
+            )
+        constraint_ids.add(constraint.constraint_id)
+        linear_constraints.append({
+            "constraint_id": constraint.constraint_id,
+            "role": constraint.role,
+            "atom_ids": list(constraint.atom_ids),
+            "coefficients": [float(value) for value in constraint.coefficients],
+            "target_charge": float(constraint.target_charge),
+            "source": constraint.source,
         })
     return {
         "external_id": model.external_id,
@@ -276,7 +307,14 @@ def _validate_worker_response(
     constraint_diagnostics = report.get("constraint_diagnostics")
     if not isinstance(constraint_diagnostics, Mapping):
         raise ValidationError("missing_resp_constraint_diagnostics", model.external_id)
-    expected_constraint_count = len(model.charge_accounting["constraint_groups"])
+    expected_constraint_count = (
+        len(model.charge_accounting["constraint_groups"])
+        + sum(
+            1
+            for constraint in fit_input.linear_constraints
+            if constraint.model_id == model.external_id
+        )
+    )
     expected_input_constraint_count = (
         1
         + expected_constraint_count
@@ -370,6 +408,17 @@ def fit_resp_charges(
         model_atom_ids = {atom.model_atom_id for atom in model.atoms}
         if not set(group.atom_ids) <= model_atom_ids:
             raise ValidationError("resp_equivalence_atom_mismatch", group.model_id)
+    for constraint in fit_input.linear_constraints:
+        model = large_by_id.get(constraint.model_id)
+        if model is None:
+            raise ValidationError("resp_constraint_model_mismatch", constraint.model_id)
+        model_atom_ids = {atom.model_atom_id for atom in model.atoms}
+        if not set(constraint.atom_ids) <= model_atom_ids:
+            raise ValidationError(
+                "resp_constraint_atom_mismatch",
+                constraint.constraint_id,
+                constraint.model_id,
+            )
     artifacts: list[ModelChargeArtifact] = []
     reports: list[Mapping[str, Any]] = []
     response_hashes: list[str] = []
@@ -378,7 +427,7 @@ def fit_resp_charges(
         resolved_basis, metal_elements = _model_basis_context(model, fit_input, metal_atom_ids)
         payload = {
             "protocol_version": RESP_WORKER_PROTOCOL_VERSION,
-            "model": _model_payload(model, metal_atom_ids),
+            "model": _model_payload(model, fit_input, metal_atom_ids),
             "fit_protocol": _fit_protocol_payload(fit_input, model.external_id),
         }
         response = _invoke_resp_worker(
