@@ -773,11 +773,37 @@ class ChemcoreArtifactContractTests(unittest.TestCase):
         self.assertEqual(set(overlay.charges), set(fit_atom_ids))
         self.assertEqual(report["cap_atom_count"], 0)
         self.assertTrue(report["constrained_model_charges"])
-        self.assertAlmostEqual(report["cap_charge_projected"], 0.0, places=8)
+        self.assertNotIn("cap_charge_projected", report)
         self.assertAlmostEqual(report["cap_charge_discarded"], 0.0, places=8)
         self.assertLessEqual(report["max_model_constraint_residual"], 1.0e-8)
         self.assertEqual(overlay.overlay_hash, overlay.computed_hash())
         self.assertEqual(tuple(overlay.artifact_hashes), (report["projected_artifact_hash"],))
+
+        unconstrained = replace(
+            large,
+            capped_model_manifest=None,
+            charge_accounting={},
+            model_hash="",
+        )
+        unconstrained = replace(
+            unconstrained,
+            model_hash=unconstrained.computed_hash(),
+        )
+        unconstrained_artifact = replace(
+            artifact,
+            model_hash=unconstrained.model_hash,
+            artifact_hash="",
+        ).with_computed_hash()
+        with self.assertRaisesRegex(
+            ValidationError,
+            "missing_model_charge_constraints",
+        ):
+            project_model_charges(
+                topology,
+                unconstrained,
+                unconstrained_artifact,
+                contract,
+            )
 
     def test_isolated_resp_provider_consumes_each_large_model_and_executor_closes_output(self):
         package = self.adapt("bonded")

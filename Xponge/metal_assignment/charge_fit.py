@@ -138,36 +138,13 @@ def _constraint_rows(
     return rows, targets, labels
 
 
-def _constrained_projection(
-    raw_charges: Mapping[str, float],
-    rows: list[list[float]],
-    targets: list[float],
-) -> dict[str, float]:
-    atom_ids = tuple(raw_charges)
-    initial = np.asarray([raw_charges[atom_id] for atom_id in atom_ids], dtype=float)
-    matrix = np.asarray(rows, dtype=float)
-    target = np.asarray(targets, dtype=float)
-    if matrix.shape[1] != len(atom_ids):
-        raise ValidationError("invalid_charge_constraint_matrix", repr(matrix.shape))
-    gram = matrix @ matrix.T
-    residual = target - matrix @ initial
-    try:
-        correction = matrix.T @ np.linalg.solve(gram, residual)
-    except np.linalg.LinAlgError as exc:
-        raise ValidationError("unsatisfiable_charge_constraints", "constraint matrix is singular") from exc
-    fitted = initial + correction
-    if not np.isfinite(fitted).all() or not np.allclose(matrix @ fitted, target, atol=1.0e-8, rtol=0.0):
-        raise ValidationError("unsatisfiable_charge_constraints", "charge targets were not satisfied")
-    return {atom_id: float(fitted[index]) for index, atom_id in enumerate(atom_ids)}
-
-
 def project_model_charges(
     topology: PreparedChemicalTopology,
     model: DerivedModel,
     artifact: ModelChargeArtifact,
     contract: ChargeAssignmentContract,
 ) -> tuple[ChargeOverlay, Mapping[str, Any]]:
-    """Remove caps, project their charge to declared parents, and enforce targets."""
+    """Discard model-only atoms and validate constrained core charges."""
 
     return project_model_charge_artifacts(topology, ((model, artifact),), contract)
 
@@ -177,60 +154,54 @@ def project_model_charge_artifact(
     model_artifacts: Sequence[tuple[DerivedModel, ModelChargeArtifact]],
     contract: ChargeAssignmentContract,
 ) -> tuple[PartialChargeArtifact, Mapping[str, Any]]:
-    """Project one or more disjoint large-model charge artifacts as one fit scope."""
+    """Extract one or more disjoint constrained large-model charge artifacts."""
 
     validate_charge_contract(contract, topology)
     if not model_artifacts:
         raise ValidationError("missing_charge_artifact", "at least one large-model charge artifact is required")
+    for model, _ in model_artifacts:
+        constraint_groups = model.charge_accounting.get("constraint_groups")
+        if (
+            model.capped_model_manifest is None
+            or model.charge_accounting.get("complete") is not True
+            or not isinstance(constraint_groups, list)
+            or not constraint_groups
+        ):
+            raise ValidationError(
+                "missing_model_charge_constraints",
+                "large-model charges must come from a complete constrained fit",
+                model.external_id,
+            )
     raw_parent_charges: dict[str, float] = {}
-    cap_projection: dict[str, float] = {}
     discarded_cap_charge = 0.0
     discarded_environment_charge = 0.0
     max_model_constraint_residual = 0.0
-    constrained_models = all(
-        model.capped_model_manifest is not None
-        and isinstance(model.charge_accounting.get("constraint_groups"), list)
-        for model, _ in model_artifacts
-    )
     model_reports: list[dict[str, Any]] = []
     for model, artifact in model_artifacts:
         validate_model_charge_artifact(model, artifact)
         charge_by_model_atom = dict(zip(artifact.atom_order, artifact.charges))
-        if constrained_models:
-            for group in model.charge_accounting["constraint_groups"]:
-                fitted_group_charge = sum(
-                    charge_by_model_atom[atom_id]
-                    for atom_id in group["model_atom_ids"]
+        for group in model.charge_accounting["constraint_groups"]:
+            fitted_group_charge = sum(
+                charge_by_model_atom[atom_id]
+                for atom_id in group["model_atom_ids"]
+            )
+            residual = fitted_group_charge - float(group["target_charge"])
+            max_model_constraint_residual = max(
+                max_model_constraint_residual,
+                abs(residual),
+            )
+            if abs(residual) > 1.0e-8:
+                raise ValidationError(
+                    "model_charge_constraint_not_satisfied",
+                    f"{group['group_id']} residual={residual!r}",
+                    model.external_id,
                 )
-                residual = fitted_group_charge - float(group["target_charge"])
-                max_model_constraint_residual = max(
-                    max_model_constraint_residual,
-                    abs(residual),
-                )
-                if abs(residual) > 1.0e-8:
-                    raise ValidationError(
-                        "model_charge_constraint_not_satisfied",
-                        f"{group['group_id']} residual={residual!r}",
-                        model.external_id,
-                    )
         for atom in model.atoms:
             charge = float(charge_by_model_atom[atom.model_atom_id])
             if atom.role == "cap":
-                if constrained_models:
-                    discarded_cap_charge += charge
-                    continue
-                if not atom.cap_parent_external_id or not atom.charge_projection_group:
-                    raise ValidationError("missing_cap_charge_projection", atom.model_atom_id)
-                if atom.cap_parent_external_id not in contract.fit_atom_ids:
-                    raise ValidationError("cap_parent_outside_fit_scope", atom.cap_parent_external_id)
-                cap_projection[atom.cap_parent_external_id] = cap_projection.get(atom.cap_parent_external_id, 0.0) + charge
+                discarded_cap_charge += charge
                 continue
             if atom.role == "environment":
-                if not constrained_models:
-                    raise ValidationError(
-                        "legacy_environment_charge_projection_unsupported",
-                        atom.model_atom_id,
-                    )
                 discarded_environment_charge += charge
                 continue
             if atom.external_id is None:
@@ -251,28 +222,25 @@ def project_model_charge_artifact(
     if missing_fit_atoms:
         raise ValidationError("incomplete_charge_fit_mapping", ",".join(sorted(missing_fit_atoms)))
     scoped_charges = {
-        atom_id: raw_parent_charges[atom_id] + cap_projection.get(atom_id, 0.0)
+        atom_id: raw_parent_charges[atom_id]
         for atom_id in contract.fit_atom_ids
     }
     rows, targets, labels = _constraint_rows(topology, contract, contract.fit_atom_ids)
-    if constrained_models:
-        fitted = dict(scoped_charges)
-        charge_vector = np.asarray(
-            [fitted[atom_id] for atom_id in contract.fit_atom_ids],
-            dtype=float,
+    fitted = dict(scoped_charges)
+    charge_vector = np.asarray(
+        [fitted[atom_id] for atom_id in contract.fit_atom_ids],
+        dtype=float,
+    )
+    if not np.allclose(
+        np.asarray(rows, dtype=float) @ charge_vector,
+        np.asarray(targets, dtype=float),
+        atol=1.0e-8,
+        rtol=0.0,
+    ):
+        raise ValidationError(
+            "projected_charge_contract_not_satisfied",
+            "constrained RESP core charges do not satisfy the parent contract",
         )
-        if not np.allclose(
-            np.asarray(rows, dtype=float) @ charge_vector,
-            np.asarray(targets, dtype=float),
-            atol=1.0e-8,
-            rtol=0.0,
-        ):
-            raise ValidationError(
-                "projected_charge_contract_not_satisfied",
-                "constrained RESP core charges do not satisfy the parent contract",
-            )
-    else:
-        fitted = _constrained_projection(scoped_charges, rows, targets)
     stable_order = {atom.external_id: atom.stable_order for atom in topology.atoms}
     atom_ids = tuple(sorted(fitted, key=lambda atom_id: (stable_order[atom_id], atom_id)))
     provider = "+".join(sorted({artifact.provider for _, artifact in model_artifacts}))
@@ -296,11 +264,7 @@ def project_model_charge_artifact(
         precedence=contract.fit_precedence,
         provider=provider,
         provider_version=provider_version,
-        method=(
-            f"charge-fit-constrained:{contract.policy.value}"
-            if constrained_models
-            else f"charge-fit-projection:{contract.policy.value}"
-        ),
+        method=f"charge-fit-constrained:{contract.policy.value}",
         charge_unit=contract.charge_unit,
         source=contract.source,
     ).with_computed_hash()
@@ -310,10 +274,9 @@ def project_model_charge_artifact(
         "constraint_labels": tuple(labels),
         "raw_fit_scope_charge": sum(scoped_charges.values()),
         "final_fit_scope_charge": sum(fitted.values()),
-        "cap_charge_projected": sum(cap_projection.values()),
         "cap_charge_discarded": discarded_cap_charge,
         "environment_charge_discarded": discarded_environment_charge,
-        "constrained_model_charges": constrained_models,
+        "constrained_model_charges": True,
         "max_model_constraint_residual": max_model_constraint_residual,
         "cap_atom_count": sum(item["cap_atom_count"] for item in model_reports),
         "environment_atom_count": sum(
