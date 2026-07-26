@@ -175,3 +175,74 @@ def test_two_stage_fit_preserves_fixed_group_and_equivalence_constraints():
     assert result["diagnostics"]["esp_relative_rmse"] <= 1.0e-8
     assert result["diagnostics"]["esp_mae_au"] <= 1.0e-8
     assert result["diagnostics"]["esp_max_abs_error_au"] <= 1.0e-8
+
+
+def test_constrained_fit_is_repeatable_and_atom_order_invariant():
+    coordinates = np.asarray([
+        [0.0, 0.0, 0.0],
+        [1.8, 0.0, 0.0],
+        [-1.8, 0.0, 0.0],
+    ])
+    grid = np.asarray([
+        [0.0, 3.0, 0.0],
+        [0.0, -3.0, 0.0],
+        [0.0, 0.0, 3.0],
+        [2.5, 2.5, 0.0],
+        [-2.5, 2.5, 0.0],
+        [0.0, -2.5, 2.0],
+    ])
+    target = np.asarray([-0.2, 0.1, 0.1])
+    nuclear_charges = np.asarray([6.0, 1.0, 1.0])
+    inverse_distance = np.asarray([
+        1.0 / np.linalg.norm(grid - coordinate, axis=1)
+        for coordinate in coordinates
+    ])
+    electronic_esp = nuclear_charges @ inverse_distance - target @ inverse_distance
+
+    def fit(assign, atom_coordinates, atom_nuclear_charges, carbon_index, hydrogen_indices):
+        fixed_carbon = np.zeros(3)
+        fixed_carbon[carbon_index] = 1.0
+        hydrogen_group = np.zeros(3)
+        hydrogen_group[list(hydrogen_indices)] = 1.0
+        return np.asarray(fit_resp_from_esp(
+            assign,
+            atom_coordinates,
+            atom_nuclear_charges,
+            grid,
+            electronic_esp,
+            charge=0,
+            extra_equivalence=[list(hydrogen_indices)],
+            constraint_matrix=[fixed_carbon, hydrogen_group],
+            constraint_targets=[-0.2, 0.2],
+            two_stage=True,
+        ))
+
+    first = fit(_ThreeAtomAssign(), coordinates, nuclear_charges, 0, (1, 2))
+    repeated = fit(_ThreeAtomAssign(), coordinates, nuclear_charges, 0, (1, 2))
+    assert repeated == pytest.approx(first, abs=1.0e-12)
+
+    permutation = np.asarray([2, 0, 1])
+    inverse_permutation = np.argsort(permutation)
+
+    class _PermutedAssign:
+        atoms = [_ThreeAtomAssign.atoms[index] for index in permutation]
+        bonds = []
+        for old_index in permutation:
+            bonds.append({
+                int(inverse_permutation[old_neighbor]): order
+                for old_neighbor, order in _ThreeAtomAssign.bonds[old_index].items()
+            })
+
+        @staticmethod
+        def Atom_Judge(index, atom_type):
+            return _PermutedAssign.atoms[index] == "C" and atom_type == "C4"
+
+    permuted = fit(
+        _PermutedAssign(),
+        coordinates[permutation],
+        nuclear_charges[permutation],
+        int(inverse_permutation[0]),
+        (int(inverse_permutation[1]), int(inverse_permutation[2])),
+    )
+    mapped_back = permuted[inverse_permutation]
+    assert mapped_back == pytest.approx(first, abs=1.0e-12)
