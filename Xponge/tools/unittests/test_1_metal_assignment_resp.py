@@ -124,6 +124,11 @@ def _fake_resp_result(assign, **kwargs):
         "diagnostics": {
             "constraint_rank": 1,
             "max_constraint_residual": 0.0,
+            "esp_point_count": 8,
+            "esp_rmse_au": 0.0,
+            "esp_relative_rmse": 0.0,
+            "esp_mae_au": 0.0,
+            "esp_max_abs_error_au": 0.0,
         },
     }
 
@@ -307,6 +312,11 @@ class RespWorkerTests(unittest.TestCase):
                 "diagnostics": {
                     "constraint_rank": 1,
                     "max_constraint_residual": 0.0,
+                    "esp_point_count": 8,
+                    "esp_rmse_au": 0.0,
+                    "esp_relative_rmse": 0.0,
+                    "esp_mae_au": 0.0,
+                    "esp_max_abs_error_au": 0.0,
                 },
             },
         ) as fit:
@@ -340,6 +350,11 @@ class RespWorkerTests(unittest.TestCase):
                 "diagnostics": {
                     "constraint_rank": 1,
                     "max_constraint_residual": 0.0,
+                    "esp_point_count": 8,
+                    "esp_rmse_au": 0.0,
+                    "esp_relative_rmse": 0.0,
+                    "esp_mae_au": 0.0,
+                    "esp_max_abs_error_au": 0.0,
                 },
             },
         ) as fit:

@@ -130,3 +130,8 @@ def test_two_stage_fit_preserves_fixed_group_and_equivalence_constraints():
     assert result["charges"] == pytest.approx(target, abs=1.0e-8)
     assert result["diagnostics"]["stage1"]["max_constraint_residual"] <= 1.0e-10
     assert result["diagnostics"]["stage2"]["max_constraint_residual"] <= 1.0e-10
+    assert result["diagnostics"]["esp_point_count"] == len(grid)
+    assert result["diagnostics"]["esp_rmse_au"] <= 1.0e-8
+    assert result["diagnostics"]["esp_relative_rmse"] <= 1.0e-8
+    assert result["diagnostics"]["esp_mae_au"] <= 1.0e-8
+    assert result["diagnostics"]["esp_max_abs_error_au"] <= 1.0e-8

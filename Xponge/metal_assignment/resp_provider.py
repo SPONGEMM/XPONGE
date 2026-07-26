@@ -306,6 +306,23 @@ def _validate_worker_response(
             repr(constraint_residual),
             model.external_id,
         )
+    for name in (
+        "esp_rmse_au",
+        "esp_relative_rmse",
+        "esp_mae_au",
+        "esp_max_abs_error_au",
+    ):
+        value = constraint_diagnostics.get(name)
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+            or value < 0.0
+        ):
+            raise ValidationError("invalid_resp_esp_fit_diagnostic", name, model.external_id)
+    point_count = constraint_diagnostics.get("esp_point_count")
+    if isinstance(point_count, bool) or not isinstance(point_count, int) or point_count <= 0:
+        raise ValidationError("invalid_resp_esp_fit_diagnostic", "esp_point_count", model.external_id)
     metadata = report.get("setup_metadata")
     if not isinstance(metadata, Mapping) or metadata.get("method") != "RESP" or metadata.get("scf_converged") is not True:
         raise ValidationError("incomplete_resp_provenance", model.external_id)

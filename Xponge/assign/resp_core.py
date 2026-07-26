@@ -526,6 +526,27 @@ def fit_resp_from_esp(assign, atom_coordinates_bohr, nuclear_charges, grid_point
             only_esp,
         )
         if return_diagnostics:
+            fitted_esp = np.zeros_like(mep, dtype=float)
+            for atom_index in range(mol.natm):
+                distance = np.linalg.norm(
+                    atom_coordinates_bohr[atom_index] - grid_points_bohr,
+                    axis=1,
+                )
+                fitted_esp += float(charges[atom_index]) / distance
+            esp_residual = fitted_esp - mep
+            esp_rmse = float(np.sqrt(np.mean(esp_residual ** 2)))
+            reference_rms = float(np.sqrt(np.mean(mep ** 2)))
+            diagnostics.update({
+                "esp_point_count": int(mep.size),
+                "esp_rmse_au": esp_rmse,
+                "esp_relative_rmse": (
+                    esp_rmse / reference_rms
+                    if reference_rms > np.finfo(float).eps
+                    else 0.0
+                ),
+                "esp_mae_au": float(np.mean(np.abs(esp_residual))),
+                "esp_max_abs_error_au": float(np.max(np.abs(esp_residual))),
+            })
             return {"charges": charges, "diagnostics": diagnostics}
         return charges
 
