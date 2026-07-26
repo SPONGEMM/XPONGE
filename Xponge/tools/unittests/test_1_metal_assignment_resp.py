@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from contextlib import redirect_stderr
+from io import StringIO
 import json
 import os
 from pathlib import Path
@@ -24,18 +26,23 @@ from Xponge.metal_assignment import (
     validate_resp_fit_input,
 )
 from Xponge.metal_assignment._resp_worker import _execute
-from Xponge.metal_assignment.resp_provider import _model_basis_context, _model_payload
+from Xponge.metal_assignment.resp_provider import (
+    _invoke_resp_worker,
+    _model_basis_context,
+    _model_payload,
+)
 from Xponge.metal_assignment._worker_runtime import worker_command
 
 
 def _fit_input(**updates):
     values = {
-        "schema_version": 3,
+        "schema_version": 4,
         "backend": "pyscf",
         "basis_family": "sto-3g",
         "metal_basis_policy": "require_ecp",
         "basis_source": "unit-test-explicit-basis",
         "optimize_geometry": False,
+        "scf_strategy": "direct",
         "grid_density": 1.0,
         "grid_cell_layer": 1,
         "radius_overrides": {},
@@ -97,6 +104,7 @@ def _worker_request(fit_input=None):
             "metal_basis_policy": fit_input.metal_basis_policy,
             "basis_source": fit_input.basis_source,
             "optimize_geometry": fit_input.optimize_geometry,
+            "scf_strategy": fit_input.scf_strategy,
             "grid_density": fit_input.grid_density,
             "grid_cell_layer": fit_input.grid_cell_layer,
             "radius_overrides": dict(fit_input.radius_overrides),
@@ -224,6 +232,33 @@ def _zinc_water_worker_request():
 
 
 class RespFitInputTests(unittest.TestCase):
+    def test_invalid_worker_output_preserves_return_code_and_stderr(self):
+        completed = subprocess.CompletedProcess(
+            ["python"],
+            -9,
+            stdout="",
+            stderr='{"event":"resp_phase","phase":"grid_completed"}\n',
+        )
+        with (
+            mock.patch(
+                "Xponge.metal_assignment.resp_provider.worker_command",
+                return_value=["python"],
+            ),
+            mock.patch(
+                "Xponge.metal_assignment.resp_provider.run_worker_subprocess",
+                return_value=completed,
+            ),
+        ):
+            with self.assertRaisesRegex(
+                ValidationError,
+                r"returncode=-9.*grid_completed",
+            ):
+                _invoke_resp_worker(
+                    {},
+                    timeout_seconds=1.0,
+                    python_executable=None,
+                )
+
     def test_hash_closed_round_trip_and_explicit_equivalence(self):
         value = _fit_input(
             equivalence_groups=(RespEquivalenceGroup("large:water", ("H1", "H2"), "symmetry"),)
@@ -273,6 +308,14 @@ class RespFitInputTests(unittest.TestCase):
         value = _fit_input()
         with self.assertRaisesRegex(ValidationError, "stale_resp_fit_input_hash"):
             validate_resp_fit_input(replace(value, basis_family="6-31G*"))
+
+    def test_scf_strategy_is_explicit_and_backend_compatible(self):
+        for strategy in ("direct", "density_fit", "newton", "density_fit_newton"):
+            validate_resp_fit_input(_fit_input(scf_strategy=strategy))
+        with self.assertRaisesRegex(ValidationError, "unsupported_resp_scf_strategy"):
+            validate_resp_fit_input(_fit_input(scf_strategy="implicit"))
+        with self.assertRaisesRegex(ValidationError, "unsupported_resp_scf_strategy"):
+            validate_resp_fit_input(_fit_input(backend="psi4", scf_strategy="density_fit"))
 
     def test_basis_source_and_metal_policy_are_explicit(self):
         with self.assertRaisesRegex(ValidationError, "missing_resp_basis_source"):
@@ -394,6 +437,26 @@ class RespWorkerTests(unittest.TestCase):
         self.assertEqual(kwargs["spin"], 0)
         self.assertEqual(kwargs["constraint_matrix"], [[1.0, 1.0, 1.0]])
         self.assertEqual(kwargs["constraint_targets"], [0.0])
+        self.assertTrue(callable(kwargs["progress_callback"]))
+
+    def test_worker_emits_machine_readable_phase_progress(self):
+        def fake_with_progress(assign, **kwargs):
+            kwargs["progress_callback"](
+                "scf_completed",
+                {"converged": True, "elapsed_seconds": 1.25},
+            )
+            return _fake_resp_result(assign, **kwargs)
+
+        stderr = StringIO()
+        with mock.patch(
+            "Xponge.assign.resp.resp_fit",
+            side_effect=fake_with_progress,
+        ), redirect_stderr(stderr):
+            _execute(_worker_request())
+        event = json.loads(stderr.getvalue().strip())
+        self.assertEqual(event["event"], "resp_phase")
+        self.assertEqual(event["phase"], "scf_completed")
+        self.assertEqual(event["model_id"], "large:water")
 
     def test_worker_converts_multiplicity_to_twice_spin(self):
         request = _worker_request()
@@ -483,6 +546,29 @@ class RespWorkerTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
         response = json.loads(completed.stdout)
         self.assertTrue(response["ok"])
+        self.assertTrue(response["fit_report"]["setup_metadata"]["scf_converged"])
+        self.assertLess(abs(response["fit_report"]["charge_residual"]), 1.0e-6)
+
+    @unittest.skipUnless(os.environ.get("MOKDA_PYSCF_PYTHON"), "set MOKDA_PYSCF_PYTHON for real RESP")
+    def test_real_pyscf_density_fit_worker_smoke(self):
+        executable = str(Path(os.environ["MOKDA_PYSCF_PYTHON"]).absolute())
+        request = _worker_request(_fit_input(scf_strategy="density_fit"))
+        completed = subprocess.run(
+            worker_command("Xponge.metal_assignment._resp_worker", python_executable=executable),
+            input=json.dumps(request, sort_keys=True, separators=(",", ":"), allow_nan=False),
+            text=True,
+            capture_output=True,
+            timeout=180,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
+        response = json.loads(completed.stdout)
+        self.assertTrue(response["ok"])
+        self.assertEqual(response["fit_report"]["scf_strategy"], "density_fit")
+        self.assertEqual(
+            response["fit_report"]["setup_metadata"]["scf_strategy"],
+            "density_fit",
+        )
         self.assertTrue(response["fit_report"]["setup_metadata"]["scf_converged"])
         self.assertLess(abs(response["fit_report"]["charge_residual"]), 1.0e-6)
 

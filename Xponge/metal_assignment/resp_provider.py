@@ -158,6 +158,7 @@ def _fit_protocol_payload(value: RespFitInput, model_id: str) -> dict[str, Any]:
         "metal_basis_policy": value.metal_basis_policy,
         "basis_source": value.basis_source,
         "optimize_geometry": value.optimize_geometry,
+        "scf_strategy": value.scf_strategy,
         "grid_density": value.grid_density,
         "grid_cell_layer": value.grid_cell_layer,
         "radius_overrides": dict(value.radius_overrides),
@@ -230,14 +231,26 @@ def _invoke_resp_worker(
             timeout_seconds=timeout_seconds,
         )
     except subprocess.TimeoutExpired as exc:
-        raise ValidationError("resp_worker_timeout", str(timeout_seconds)) from exc
+        progress = exc.stderr or ""
+        if isinstance(progress, bytes):
+            progress = progress.decode("utf-8", errors="replace")
+        detail = str(timeout_seconds)
+        if progress.strip():
+            detail = f"{detail}; progress={progress.strip()[-2000:]}"
+        raise ValidationError("resp_worker_timeout", detail) from exc
     except OSError as exc:
         raise ValidationError("resp_worker_launch_failed", str(exc)) from exc
     try:
         response = json.loads(completed.stdout)
     except json.JSONDecodeError as exc:
+        stderr_tail = completed.stderr.strip()[-1000:]
         raise ValidationError(
-            "invalid_resp_worker_output", completed.stderr.strip()[-1000:] or str(exc)
+            "invalid_resp_worker_output",
+            (
+                f"returncode={completed.returncode}; "
+                f"stderr={stderr_tail or '<empty>'}; "
+                f"json_error={exc}"
+            ),
         ) from exc
     if not isinstance(response, dict) or response.get("ok") is not True or completed.returncode != 0:
         error = response.get("error", {}) if isinstance(response, dict) else {}
@@ -292,6 +305,7 @@ def _validate_worker_response(
         "basis_family": fit_input.basis_family,
         "metal_basis_policy": fit_input.metal_basis_policy,
         "basis_source": fit_input.basis_source,
+        "scf_strategy": fit_input.scf_strategy,
         "metal_elements": list(metal_elements),
         "coordinate_unit": "angstrom",
         "geometry_locked": True,
