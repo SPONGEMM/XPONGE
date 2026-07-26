@@ -760,21 +760,35 @@ The function will receive the assignment as input, and give True or False as out
         method = method.upper()
         if method == "RESP":
             from . import resp
-            self.charge = resp.RESP_Fit(self, basis=parameters.get("basis", None), opt=parameters.get("opt", False),
-                                        charge=parameters.get("charge", int(round(sum(self.formal_charge)))),
-                                        spin=parameters.get("spin", 0),
-                                        backend=parameters.get("backend", None),
-                                        core=parameters.get("core", None),
-                                        esp_memory_limit=parameters.get("esp_memory_limit", None),
-                                        esp_chunk_policy=parameters.get("esp_chunk_policy", "auto"),
-                                        esp_safety_factor=parameters.get("esp_safety_factor", 0.8),
-                                        extra_equivalence=parameters.get("extra_equivalence", []),
-                                        grid_density=parameters.get("grid_density", 6),
-                                        grid_cell_layer=parameters.get("grid_cell_layer", 4),
-                                        a1=parameters.get("a1", 0.0005),
-                                        a2=parameters.get("a2", 0.001), two_stage=parameters.get("two_stage", True),
-                                        only_esp=parameters.get("only_esp", False),
-                                        radius=parameters.get("radius", None))
+            return_diagnostics = parameters.get("return_diagnostics", False)
+            result = resp.RESP_Fit(
+                self,
+                basis=parameters.get("basis", None),
+                opt=parameters.get("opt", False),
+                charge=parameters.get("charge", int(round(sum(self.formal_charge)))),
+                spin=parameters.get("spin", 0),
+                backend=parameters.get("backend", None),
+                core=parameters.get("core", None),
+                esp_memory_limit=parameters.get("esp_memory_limit", None),
+                esp_chunk_policy=parameters.get("esp_chunk_policy", "auto"),
+                esp_safety_factor=parameters.get("esp_safety_factor", 0.8),
+                extra_equivalence=parameters.get("extra_equivalence", []),
+                constraint_matrix=parameters.get("constraint_matrix", None),
+                constraint_targets=parameters.get("constraint_targets", None),
+                return_diagnostics=return_diagnostics,
+                grid_density=parameters.get("grid_density", 6),
+                grid_cell_layer=parameters.get("grid_cell_layer", 4),
+                a1=parameters.get("a1", 0.0005),
+                a2=parameters.get("a2", 0.001),
+                two_stage=parameters.get("two_stage", True),
+                only_esp=parameters.get("only_esp", False),
+                radius=parameters.get("radius", None),
+            )
+            if return_diagnostics:
+                self.charge = result["charges"]
+                self.charge_fit_diagnostics = result["diagnostics"]
+            else:
+                self.charge = result
         elif method == "GASTEIGER":
             from . import gasteiger
             self.charge = gasteiger.Gasteiger(self)

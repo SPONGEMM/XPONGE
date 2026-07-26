@@ -285,7 +285,11 @@ def test_calculate_charge_resp_passes_backend_and_core():
     assign.charge = np.array([0.0])
     assign.formal_charge[0] = 0
 
-    with patch("Xponge.assign.resp.RESP_Fit", return_value=np.array([0.0])) as mock_resp:
+    diagnostics = {"max_constraint_residual": 0.0}
+    with patch(
+        "Xponge.assign.resp.RESP_Fit",
+        return_value={"charges": np.array([0.0]), "diagnostics": diagnostics},
+    ) as mock_resp:
         assign.calculate_charge(
             "RESP",
             backend="psi4",
@@ -293,6 +297,9 @@ def test_calculate_charge_resp_passes_backend_and_core():
             esp_memory_limit="256MB",
             esp_chunk_policy="grid",
             esp_safety_factor=0.5,
+            constraint_matrix=[[1.0]],
+            constraint_targets=[0.0],
+            return_diagnostics=True,
         )
 
     assert assign.charge.shape == (1,)
@@ -301,6 +308,10 @@ def test_calculate_charge_resp_passes_backend_and_core():
     assert mock_resp.call_args.kwargs["esp_memory_limit"] == "256MB"
     assert mock_resp.call_args.kwargs["esp_chunk_policy"] == "grid"
     assert mock_resp.call_args.kwargs["esp_safety_factor"] == 0.5
+    assert mock_resp.call_args.kwargs["constraint_matrix"] == [[1.0]]
+    assert mock_resp.call_args.kwargs["constraint_targets"] == [0.0]
+    assert mock_resp.call_args.kwargs["return_diagnostics"] is True
+    assert assign.charge_fit_diagnostics == diagnostics
 
 
 def test_qm_scheduler_normalizes_esp_request_options():
