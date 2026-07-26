@@ -47,7 +47,7 @@ def run_worker_subprocess(
     input_text: str,
     timeout_seconds: float,
 ) -> subprocess.CompletedProcess[str]:
-    """Run one isolated worker and reap its whole POSIX process group on timeout."""
+    """Run one isolated worker and always reap it when the parent is interrupted."""
 
     kwargs = {
         "stdin": subprocess.PIPE,
@@ -58,18 +58,22 @@ def run_worker_subprocess(
     if os.name == "posix":
         kwargs["start_new_session"] = True
     process = subprocess.Popen(list(command), **kwargs)
-    try:
-        stdout, stderr = process.communicate(input=input_text, timeout=timeout_seconds)
-    except subprocess.TimeoutExpired as exc:
+
+    def terminate_worker() -> None:
         if os.name == "posix":
             try:
                 os.killpg(process.pid, signal.SIGKILL)
+                return
             except ProcessLookupError:
-                pass
+                return
             except OSError:
-                process.kill()
-        else:
-            process.kill()
+                pass
+        process.kill()
+
+    try:
+        stdout, stderr = process.communicate(input=input_text, timeout=timeout_seconds)
+    except subprocess.TimeoutExpired as exc:
+        terminate_worker()
         stdout, stderr = process.communicate()
         raise subprocess.TimeoutExpired(
             exc.cmd,
@@ -77,6 +81,10 @@ def run_worker_subprocess(
             output=stdout,
             stderr=stderr,
         ) from exc
+    except BaseException:
+        terminate_worker()
+        process.communicate()
+        raise
     return subprocess.CompletedProcess(list(command), process.returncode, stdout, stderr)
 
 

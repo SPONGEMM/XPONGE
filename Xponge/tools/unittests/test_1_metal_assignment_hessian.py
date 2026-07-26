@@ -342,6 +342,24 @@ class HessianParentProviderTests(unittest.TestCase):
 
 class WorkerRuntimeTests(unittest.TestCase):
     @unittest.skipUnless(os.name == "posix", "POSIX process-group cleanup contract")
+    def test_parent_interrupt_kills_and_reaps_worker_process_group(self):
+        process = mock.Mock()
+        process.pid = 4242
+        process.communicate.side_effect = [
+            KeyboardInterrupt(),
+            ("", "phase-progress"),
+        ]
+        with mock.patch("subprocess.Popen", return_value=process), mock.patch(
+            "os.killpg"
+        ) as killpg:
+            with self.assertRaises(KeyboardInterrupt):
+                run_worker_subprocess(
+                    ["python", "-c", "pass"], input_text="{}", timeout_seconds=1.0
+                )
+        killpg.assert_called_once_with(4242, signal.SIGKILL)
+        self.assertEqual(process.communicate.call_count, 2)
+
+    @unittest.skipUnless(os.name == "posix", "POSIX process-group cleanup contract")
     def test_timeout_kills_and_reaps_worker_process_group(self):
         process = mock.Mock()
         process.pid = 4242
