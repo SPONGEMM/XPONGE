@@ -289,6 +289,7 @@ def _execute(value: Any) -> dict[str, Any]:
 
     from Xponge.assign import Assign
     from Xponge.assign.resp import resp_fit
+    from Xponge.assign.resp_core import _prepare_linear_constraints
     from .charge_fit import ModelChargeArtifact
     from .contracts import _canonicalize
 
@@ -337,6 +338,15 @@ def _execute(value: Any) -> dict[str, Any]:
             file=sys.stderr,
             flush=True,
         )
+
+    _, _, constraint_preflight = _prepare_linear_constraints(
+        len(atom_ids),
+        state["net_charge"],
+        extra_equivalence=equivalence,
+        constraint_matrix=constraint_matrix,
+        constraint_targets=constraint_targets,
+    )
+    report_progress("constraints_validated", constraint_preflight)
 
     result = resp_fit(
         assign,

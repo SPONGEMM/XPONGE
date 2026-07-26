@@ -76,6 +76,46 @@ def test_conflicting_constraints_are_rejected():
         )
 
 
+def test_large_partition_and_reference_constraints_are_reduced_stably():
+    atom_count = 90
+    core_count = 54
+    matrix = []
+    targets = []
+    core = np.zeros(atom_count)
+    core[:core_count] = 1.0
+    matrix.append(core)
+    targets.append(0.0)
+    for fragment_index in range(6):
+        cap = np.zeros(atom_count)
+        start = core_count + fragment_index * 6
+        cap[start:start + 6] = 1.0
+        matrix.append(cap)
+        targets.append(0.0)
+    for atom_index, target in enumerate((
+        -0.4157, 0.2719, 0.0337, 0.0823, 0.5973, -0.5679,
+        -0.3479, 0.2747, -0.2637, 0.1560, 0.7341, -0.5894,
+        -0.4157, 0.2719, 0.0337, 0.0823, 0.5973, -0.5679,
+    )):
+        fixed = np.zeros(atom_count)
+        fixed[atom_index] = 1.0
+        matrix.append(fixed)
+        targets.append(target)
+
+    constraints, reduced_targets, report = _prepare_linear_constraints(
+        atom_count,
+        0,
+        constraint_matrix=matrix,
+        constraint_targets=targets,
+    )
+
+    assert report["input_constraint_count"] == 26
+    assert report["constraint_rank"] == 25
+    assert report["dropped_dependent_constraint_count"] == 1
+    assert constraints.shape == (25, atom_count)
+    candidate, _, _, _ = np.linalg.lstsq(constraints, reduced_targets, rcond=None)
+    assert constraints @ candidate == pytest.approx(reduced_targets, abs=1.0e-10)
+
+
 def test_non_finite_constraints_are_rejected():
     with pytest.raises(ValueError, match="finite"):
         _prepare_linear_constraints(

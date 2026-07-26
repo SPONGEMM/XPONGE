@@ -61,24 +61,33 @@ def _prepare_linear_constraints(
 
     matrix = np.asarray(rows, dtype=float)
     values = np.asarray(targets, dtype=float)
-    matrix_rank = np.linalg.matrix_rank(matrix)
-    augmented_rank = np.linalg.matrix_rank(np.column_stack((matrix, values)))
-    if augmented_rank != matrix_rank:
+    scale = max(
+        1.0,
+        float(np.max(np.abs(matrix))),
+        float(np.max(np.abs(values))),
+    )
+    tolerance = 1.0e-10 * scale
+    candidate_solution, _, _, _ = np.linalg.lstsq(matrix, values, rcond=None)
+    consistency_residual = matrix @ candidate_solution - values
+    if float(np.max(np.abs(consistency_residual))) > tolerance:
         raise ValueError("RESP linear constraints are inconsistent")
 
     independent_rows = []
     independent_targets = []
-    current = np.empty((0, atom_count), dtype=float)
-    current_rank = 0
     for row, target in zip(matrix, values):
-        candidate = np.vstack((current, row))
-        candidate_rank = np.linalg.matrix_rank(candidate)
-        if candidate_rank == current_rank:
+        if not independent_rows:
+            independent_rows.append(row)
+            independent_targets.append(target)
+            continue
+        current = np.asarray(independent_rows, dtype=float)
+        coefficients, _, _, _ = np.linalg.lstsq(current.T, row, rcond=None)
+        row_residual = row - coefficients @ current
+        row_scale = max(1.0, float(np.max(np.abs(row))))
+        if float(np.max(np.abs(row_residual))) <= 1.0e-10 * row_scale:
             continue
         independent_rows.append(row)
         independent_targets.append(target)
-        current = candidate
-        current_rank = candidate_rank
+    matrix_rank = len(independent_rows)
     return (
         np.asarray(independent_rows, dtype=float),
         np.asarray(independent_targets, dtype=float),

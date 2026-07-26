@@ -421,6 +421,31 @@ class RespFitInputTests(unittest.TestCase):
 
 
 class RespWorkerTests(unittest.TestCase):
+    def test_worker_rejects_conflicting_constraints_before_qm(self):
+        request = _worker_request()
+        request["model"]["linear_constraints"].extend([
+            {
+                "constraint_id": "fixed:O1:first",
+                "role": "reference",
+                "atom_ids": ["O1"],
+                "coefficients": [1.0],
+                "target_charge": 0.0,
+                "source": "unit-test-conflict",
+            },
+            {
+                "constraint_id": "fixed:O1:second",
+                "role": "reference",
+                "atom_ids": ["O1"],
+                "coefficients": [1.0],
+                "target_charge": 1.0,
+                "source": "unit-test-conflict",
+            },
+        ])
+        with mock.patch("Xponge.assign.resp.resp_fit") as fit:
+            with self.assertRaisesRegex(ValueError, "constraints are inconsistent"):
+                _execute(request)
+        fit.assert_not_called()
+
     def test_worker_consumes_locked_graph_and_emits_hash_closed_artifact(self):
         with mock.patch("Xponge.assign.resp.resp_fit", side_effect=_fake_resp_result) as fit:
             response = _execute(_worker_request())
@@ -453,10 +478,17 @@ class RespWorkerTests(unittest.TestCase):
             side_effect=fake_with_progress,
         ), redirect_stderr(stderr):
             _execute(_worker_request())
-        event = json.loads(stderr.getvalue().strip())
-        self.assertEqual(event["event"], "resp_phase")
-        self.assertEqual(event["phase"], "scf_completed")
-        self.assertEqual(event["model_id"], "large:water")
+        events = [
+            json.loads(line)
+            for line in stderr.getvalue().splitlines()
+            if line.strip()
+        ]
+        self.assertEqual(
+            [event["phase"] for event in events],
+            ["constraints_validated", "scf_completed"],
+        )
+        self.assertTrue(all(event["event"] == "resp_phase" for event in events))
+        self.assertTrue(all(event["model_id"] == "large:water" for event in events))
 
     def test_worker_converts_multiplicity_to_twice_spin(self):
         request = _worker_request()
