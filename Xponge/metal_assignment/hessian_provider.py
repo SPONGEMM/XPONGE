@@ -75,6 +75,7 @@ def _model_payload(model: DerivedModel, metal_atom_ids: frozenset[str]) -> dict[
             {"model_atom_ids": list(link.model_atom_ids)}
             for link in model.links
         ],
+        "linear_constraints": [],
     }
 
 

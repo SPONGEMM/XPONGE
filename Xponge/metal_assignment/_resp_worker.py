@@ -220,8 +220,13 @@ def _validate_model(
             endpoint_keys.add(key)
             if collection_name == "bonds" and _finite_number(edge["order"], f"model.bonds[{index}].order") <= 0:
                 raise WorkerInputError(f"model.bonds[{index}].order: expected positive value")
-    if not isinstance(model["linear_constraints"], list) or not model["linear_constraints"]:
-        raise WorkerInputError("model.linear_constraints: expected non-empty array")
+    if (
+        not isinstance(model["linear_constraints"], list)
+        or (required_purpose == "large" and not model["linear_constraints"])
+    ):
+        raise WorkerInputError(
+            "model.linear_constraints: expected an array, non-empty for RESP models"
+        )
     constraint_ids: set[str] = set()
     for index, raw_constraint in enumerate(model["linear_constraints"]):
         path = f"model.linear_constraints[{index}]"

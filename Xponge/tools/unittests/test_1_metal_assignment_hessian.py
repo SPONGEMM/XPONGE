@@ -84,6 +84,7 @@ def _worker_request(fit_input=None):
                 {"model_atom_ids": ["O1", "H2"], "order": 1.0},
             ],
             "links": [],
+            "linear_constraints": [],
         },
         "fit_protocol": {
             "fit_input_hash": fit_input.fit_input_hash,
