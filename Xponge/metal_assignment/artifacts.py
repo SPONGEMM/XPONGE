@@ -577,7 +577,12 @@ def _validate_model_topology(
     topology_link_by_id = {edge.external_id: edge for edge in topology.links}
     model_atom_by_id = {atom.model_atom_id: atom for atom in model.atoms}
     core_by_external = {
-        str(atom.external_id): atom for atom in model.atoms if atom.role != "cap"
+        str(atom.external_id): atom for atom in model.atoms if atom.role == "core"
+    }
+    selected_by_external = {
+        str(atom.external_id): atom
+        for atom in model.atoms
+        if atom.role in {"core", "environment"}
     }
     if set(core_by_external) != set(site.atom_ids) or len(core_by_external) != len(site.atom_ids):
         raise ValidationError("model_core_atom_mismatch", model.external_id)
@@ -588,11 +593,11 @@ def _validate_model_topology(
     expected_internal_bonds: set[str] = set()
     expected_internal_links: set[str] = set()
     expected_cuts: set[str] = set()
-    core_ids = set(core_by_external)
+    selected_ids = set(selected_by_external)
     for edge in (*topology.bonds, *topology.links):
         if not edge.active:
             continue
-        selected = [atom_id in core_ids for atom_id in edge.atom_ids]
+        selected = [atom_id in selected_ids for atom_id in edge.atom_ids]
         if all(selected):
             (expected_internal_bonds if edge.external_id in topology_bond_by_id else expected_internal_links).add(
                 edge.external_id
@@ -633,7 +638,7 @@ def _validate_model_topology(
         source_edge = topology_bond_by_id.get(cut.external_id) or topology_link_by_id.get(cut.external_id)
         if source_edge is None or {cut.retained_external_id, cut.excluded_external_id} != set(source_edge.atom_ids):
             raise ValidationError("model_cut_edge_identity_mismatch", cut.external_id, model.external_id)
-        if cut.retained_external_id not in core_ids or cut.excluded_external_id in core_ids:
+        if cut.retained_external_id not in selected_ids or cut.excluded_external_id in selected_ids:
             raise ValidationError("model_cut_edge_orientation_mismatch", cut.external_id, model.external_id)
         expected_semantic = getattr(source_edge, "semantic", getattr(source_edge, "kind", ""))
         if cut.semantic != expected_semantic or cut.source != source_edge.source:
@@ -830,7 +835,9 @@ def validate_derived_models(request: MetalAssignmentInput, bundle: DerivedModelB
                 or manifest["core_model_atom_ids"] != [
                     atom.model_atom_id for atom in model.atoms if atom.role == "core"
                 ]
-                or manifest["environment_model_atom_ids"]
+                or manifest["environment_model_atom_ids"] != [
+                    atom.model_atom_id for atom in model.atoms if atom.role == "environment"
+                ]
                 or manifest["cap_model_atom_ids"] != [
                     atom.model_atom_id for atom in model.atoms if atom.role == "cap"
                 ]
@@ -877,7 +884,7 @@ def validate_derived_models(request: MetalAssignmentInput, bundle: DerivedModelB
                 ):
                     raise ValidationError("invalid_cap_mapping", atom.model_atom_id)
             else:
-                if atom.role != "core":
+                if atom.role not in {"core", "environment"}:
                     raise ValidationError("invalid_model_atom_role", atom.model_atom_id)
                 parent = topology_atom_by_id.get(str(atom.external_id))
                 if parent is None or atom.canonical_atom_id != parent.canonical_atom_id or atom.element != parent.element:

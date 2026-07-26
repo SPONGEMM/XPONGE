@@ -185,6 +185,7 @@ def project_model_charge_artifact(
     raw_parent_charges: dict[str, float] = {}
     cap_projection: dict[str, float] = {}
     discarded_cap_charge = 0.0
+    discarded_environment_charge = 0.0
     max_model_constraint_residual = 0.0
     constrained_models = all(
         model.capped_model_manifest is not None
@@ -224,6 +225,14 @@ def project_model_charge_artifact(
                     raise ValidationError("cap_parent_outside_fit_scope", atom.cap_parent_external_id)
                 cap_projection[atom.cap_parent_external_id] = cap_projection.get(atom.cap_parent_external_id, 0.0) + charge
                 continue
+            if atom.role == "environment":
+                if not constrained_models:
+                    raise ValidationError(
+                        "legacy_environment_charge_projection_unsupported",
+                        atom.model_atom_id,
+                    )
+                discarded_environment_charge += charge
+                continue
             if atom.external_id is None:
                 raise ValidationError("invalid_charge_parent_mapping", atom.model_atom_id)
             if atom.external_id in raw_parent_charges:
@@ -236,6 +245,7 @@ def project_model_charge_artifact(
             "provider_version": artifact.provider_version,
             "atomic_charge_role": artifact.atomic_charge_role,
             "cap_atom_count": sum(atom.role == "cap" for atom in model.atoms),
+            "environment_atom_count": sum(atom.role == "environment" for atom in model.atoms),
         })
     missing_fit_atoms = set(contract.fit_atom_ids) - set(raw_parent_charges)
     if missing_fit_atoms:
@@ -302,9 +312,13 @@ def project_model_charge_artifact(
         "final_fit_scope_charge": sum(fitted.values()),
         "cap_charge_projected": sum(cap_projection.values()),
         "cap_charge_discarded": discarded_cap_charge,
+        "environment_charge_discarded": discarded_environment_charge,
         "constrained_model_charges": constrained_models,
         "max_model_constraint_residual": max_model_constraint_residual,
         "cap_atom_count": sum(item["cap_atom_count"] for item in model_reports),
+        "environment_atom_count": sum(
+            item["environment_atom_count"] for item in model_reports
+        ),
         "max_charge_correction": max(
             abs(fitted[atom_id] - scoped_charges[atom_id]) for atom_id in contract.fit_atom_ids
         ),
