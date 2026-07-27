@@ -17,6 +17,7 @@ from Xponge.metal_assignment import (
     DerivedModel,
     ModelAtom,
     ModelElectronicState,
+    RESP_FIT_INPUT_SCHEMA_VERSION,
     RespEquivalenceGroup,
     RespFitInput,
     RespLinearConstraint,
@@ -36,13 +37,14 @@ from Xponge.metal_assignment._worker_runtime import worker_command
 
 def _fit_input(**updates):
     values = {
-        "schema_version": 4,
+        "schema_version": RESP_FIT_INPUT_SCHEMA_VERSION,
         "backend": "pyscf",
         "basis_family": "sto-3g",
         "metal_basis_policy": "require_ecp",
         "basis_source": "unit-test-explicit-basis",
         "optimize_geometry": False,
         "scf_strategy": "direct",
+        "scf_reference": "auto",
         "grid_density": 1.0,
         "grid_cell_layer": 1,
         "radius_overrides": {},
@@ -105,6 +107,7 @@ def _worker_request(fit_input=None):
             "basis_source": fit_input.basis_source,
             "optimize_geometry": fit_input.optimize_geometry,
             "scf_strategy": fit_input.scf_strategy,
+            "scf_reference": fit_input.scf_reference,
             "grid_density": fit_input.grid_density,
             "grid_cell_layer": fit_input.grid_cell_layer,
             "radius_overrides": dict(fit_input.radius_overrides),
@@ -125,6 +128,9 @@ def _worker_request(fit_input=None):
 
 
 def _fake_resp_result(assign, **kwargs):
+    resolved_reference = kwargs["scf_reference"]
+    if resolved_reference == "auto":
+        resolved_reference = "rhf" if kwargs["spin"] == 0 else "rohf"
     return {
         "charges": [-0.8, 0.4, 0.4],
         "metadata": {
@@ -132,6 +138,8 @@ def _fake_resp_result(assign, **kwargs):
             "backend": kwargs["backend"],
             "basis_family": kwargs["basis"],
             "scf_converged": True,
+            "scf_reference_requested": kwargs["scf_reference"],
+            "scf_reference": resolved_reference,
             "total_energy_hartree": -75.0,
         },
         "diagnostics": {
@@ -317,6 +325,12 @@ class RespFitInputTests(unittest.TestCase):
         with self.assertRaisesRegex(ValidationError, "unsupported_resp_scf_strategy"):
             validate_resp_fit_input(_fit_input(backend="psi4", scf_strategy="density_fit"))
 
+    def test_scf_reference_is_hash_closed_and_explicitly_validated(self):
+        for reference in ("auto", "rhf", "rohf", "uhf"):
+            validate_resp_fit_input(_fit_input(scf_reference=reference))
+        with self.assertRaisesRegex(ValidationError, "unsupported_resp_scf_reference"):
+            validate_resp_fit_input(_fit_input(scf_reference="implicit"))
+
     def test_basis_source_and_metal_policy_are_explicit(self):
         with self.assertRaisesRegex(ValidationError, "missing_resp_basis_source"):
             validate_resp_fit_input(_fit_input(basis_source=""))
@@ -460,6 +474,7 @@ class RespWorkerTests(unittest.TestCase):
         self.assertFalse(kwargs["opt"])
         self.assertEqual(kwargs["charge"], 0)
         self.assertEqual(kwargs["spin"], 0)
+        self.assertEqual(kwargs["scf_reference"], "auto")
         self.assertEqual(kwargs["constraint_matrix"], [[1.0, 1.0, 1.0]])
         self.assertEqual(kwargs["constraint_targets"], [0.0])
         self.assertTrue(callable(kwargs["progress_callback"]))
@@ -524,6 +539,7 @@ class RespWorkerTests(unittest.TestCase):
             response = _execute(request)
         self.assertEqual(response["fit_report"]["backend_spin_2s"], 1)
         self.assertEqual(fit.call_args.kwargs["spin"], 1)
+        self.assertEqual(fit.call_args.kwargs["scf_reference"], "auto")
 
     def test_worker_rejects_duplicate_or_inferred_edges(self):
         request = _worker_request()

@@ -159,6 +159,7 @@ def _fit_protocol_payload(value: RespFitInput, model_id: str) -> dict[str, Any]:
         "basis_source": value.basis_source,
         "optimize_geometry": value.optimize_geometry,
         "scf_strategy": value.scf_strategy,
+        "scf_reference": value.scf_reference,
         "grid_density": value.grid_density,
         "grid_cell_layer": value.grid_cell_layer,
         "radius_overrides": dict(value.radius_overrides),
@@ -306,6 +307,7 @@ def _validate_worker_response(
         "metal_basis_policy": fit_input.metal_basis_policy,
         "basis_source": fit_input.basis_source,
         "scf_strategy": fit_input.scf_strategy,
+        "scf_reference": fit_input.scf_reference,
         "metal_elements": list(metal_elements),
         "coordinate_unit": "angstrom",
         "geometry_locked": True,
@@ -378,11 +380,20 @@ def _validate_worker_response(
     metadata = report.get("setup_metadata")
     if not isinstance(metadata, Mapping) or metadata.get("method") != "RESP" or metadata.get("scf_converged") is not True:
         raise ValidationError("incomplete_resp_provenance", model.external_id)
+    resolved_reference = fit_input.scf_reference
+    if resolved_reference == "auto":
+        resolved_reference = (
+            "rhf"
+            if model.electronic_state.spin_multiplicity == 1
+            else "rohf"
+        )
     expected_setup = {
         "basis_family": resolved_basis.label,
         "basis": _canonicalize(resolved_basis.basis),
         "ecp": _canonicalize(resolved_basis.ecp),
         "cart": resolved_basis.cart,
+        "scf_reference_requested": fit_input.scf_reference,
+        "scf_reference": resolved_reference,
     }
     for name, expected in expected_setup.items():
         if _canonicalize(metadata.get(name)) != expected:

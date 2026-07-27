@@ -44,7 +44,7 @@ def _validate_fit_protocol(
         value,
         {
             "fit_input_hash", "backend", "basis_family", "metal_basis_policy", "basis_source",
-            "optimize_geometry", "scf_strategy", "grid_density",
+            "optimize_geometry", "scf_strategy", "scf_reference", "grid_density",
             "grid_cell_layer", "radius_overrides", "restraint_a1", "restraint_a2", "two_stage",
             "only_esp", "esp_memory_limit_bytes", "esp_chunk_policy", "esp_safety_factor",
             "equivalence_groups", "source",
@@ -74,6 +74,8 @@ def _validate_fit_protocol(
         raise WorkerInputError(
             "fit_protocol.scf_strategy: non-direct strategies require PySCF"
         )
+    if protocol["scf_reference"] not in {"auto", "rhf", "rohf", "uhf"}:
+        raise WorkerInputError("fit_protocol.scf_reference: unsupported value")
     if protocol["two_stage"] is not True or protocol["only_esp"] is not False:
         raise WorkerInputError("fit_protocol: restrained two-stage RESP is required")
     _finite_number(protocol["grid_density"], "fit_protocol.grid_density")
@@ -373,6 +375,7 @@ def _execute(value: Any) -> dict[str, Any]:
         return_diagnostics=True,
         progress_callback=report_progress,
         scf_strategy=protocol["scf_strategy"],
+        scf_reference=protocol["scf_reference"],
     )
     if not isinstance(result, Mapping) or set(result) != {"charges", "metadata", "diagnostics"}:
         raise RuntimeError("RESP backend returned an invalid result object")
@@ -406,6 +409,7 @@ def _execute(value: Any) -> dict[str, Any]:
         "metal_basis_policy": protocol["metal_basis_policy"],
         "basis_source": protocol["basis_source"],
         "scf_strategy": protocol["scf_strategy"],
+        "scf_reference": protocol["scf_reference"],
         "metal_elements": list(metal_elements),
         "net_charge": state["net_charge"],
         "spin_multiplicity": state["spin_multiplicity"],

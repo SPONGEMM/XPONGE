@@ -25,7 +25,7 @@ def _validate_fit_protocol(
         value,
         {
             "fit_input_hash", "backend", "method", "basis_family", "metal_basis_policy",
-            "basis_source", "optimize_geometry", "scf_convergence_tolerance",
+            "basis_source", "optimize_geometry", "scf_reference", "scf_convergence_tolerance",
             "scf_max_cycles", "threads", "memory_limit_bytes", "source",
         },
         "fit_protocol",
@@ -44,6 +44,8 @@ def _validate_fit_protocol(
         raise WorkerInputError("fit_protocol.basis_source: expected non-empty string")
     if protocol["optimize_geometry"] is not False:
         raise WorkerInputError("fit_protocol.optimize_geometry: locked derived-model coordinates are required")
+    if protocol["scf_reference"] not in {"auto", "rhf", "rohf", "uhf"}:
+        raise WorkerInputError("fit_protocol.scf_reference: unsupported value")
     if _finite_number(
         protocol["scf_convergence_tolerance"], "fit_protocol.scf_convergence_tolerance"
     ) <= 0:
@@ -122,6 +124,7 @@ def _execute(value: Any) -> dict[str, Any]:
         memory_limit_bytes=protocol["memory_limit_bytes"],
         scf_convergence_tolerance=protocol["scf_convergence_tolerance"],
         scf_max_cycles=protocol["scf_max_cycles"],
+        scf_reference=protocol["scf_reference"],
         return_timings=True,
     )
     if result.scf_converged is not True:
@@ -169,6 +172,7 @@ def _execute(value: Any) -> dict[str, Any]:
         "basis_family": protocol["basis_family"],
         "metal_basis_policy": protocol["metal_basis_policy"],
         "basis_source": protocol["basis_source"],
+        "scf_reference": protocol["scf_reference"],
         "metal_elements": list(metal_elements),
         "net_charge": state["net_charge"],
         "spin_multiplicity": state["spin_multiplicity"],
@@ -189,6 +193,8 @@ def _execute(value: Any) -> dict[str, Any]:
             "scf_max_cycles": protocol["scf_max_cycles"],
             "threads": protocol["threads"],
             "memory_limit_bytes": protocol["memory_limit_bytes"],
+            "scf_reference_requested": protocol["scf_reference"],
+            "scf_reference": result.reference,
             "timings": dict(result.timings),
         },
         "source": protocol["source"],

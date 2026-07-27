@@ -88,6 +88,7 @@ def _fit_protocol_payload(value: HessianFitInput) -> dict[str, Any]:
         "metal_basis_policy": value.metal_basis_policy,
         "basis_source": value.basis_source,
         "optimize_geometry": value.optimize_geometry,
+        "scf_reference": value.scf_reference,
         "scf_convergence_tolerance": value.scf_convergence_tolerance,
         "scf_max_cycles": value.scf_max_cycles,
         "threads": value.threads,
@@ -207,6 +208,7 @@ def _validate_worker_response(
         "basis_family": fit_input.basis_family,
         "metal_basis_policy": fit_input.metal_basis_policy,
         "basis_source": fit_input.basis_source,
+        "scf_reference": fit_input.scf_reference,
         "metal_elements": list(metal_elements),
         "coordinate_unit": "angstrom",
         "geometry_locked": True,
@@ -221,6 +223,13 @@ def _validate_worker_response(
         or metadata.get("scf_converged") is not True
     ):
         raise ValidationError("incomplete_hessian_provenance", model.external_id)
+    resolved_reference = fit_input.scf_reference
+    if resolved_reference == "auto":
+        resolved_reference = (
+            "rhf"
+            if model.electronic_state.spin_multiplicity == 1
+            else "rohf"
+        )
     expected_setup = {
         "basis_family": resolved_basis.label,
         "basis": _canonicalize(resolved_basis.basis),
@@ -231,6 +240,8 @@ def _validate_worker_response(
         "scf_max_cycles": fit_input.scf_max_cycles,
         "threads": fit_input.threads,
         "memory_limit_bytes": fit_input.memory_limit_bytes,
+        "scf_reference_requested": fit_input.scf_reference,
+        "scf_reference": resolved_reference,
     }
     for name, expected in expected_setup.items():
         if _canonicalize(metadata.get(name)) != expected:

@@ -8,7 +8,14 @@ from .backends import psi4_backend, pyscf_backend
 from ._esp_memory import normalize_chunk_policy, normalize_safety_factor, parse_memory_limit_bytes
 from .capabilities import QMCapabilitySet
 from .errors import QMBackendImportError, QMBackendSelectionError, QMCapabilityError
-from .models import ESPGridRequest, HessianResult, OptimizationResult, QMMolecule, QMRunOptions
+from .models import (
+    ESPGridRequest,
+    HessianResult,
+    OptimizationResult,
+    QMMolecule,
+    QMRunOptions,
+    resolve_scf_reference,
+)
 
 
 _BACKENDS = {
@@ -102,18 +109,20 @@ def run_scf(
     optimize_geometry=False,
     return_timings=False,
     scf_strategy="direct",
+    scf_reference="auto",
 ):
     backend_name = normalize_backend_name(backend)
     scf_strategy = normalize_scf_strategy(backend_name, scf_strategy)
     backend_module = get_backend(backend_name)
     molecule = qmmolecule_from_assign(assign, charge, spin)
+    resolved_reference = resolve_scf_reference(scf_reference, molecule.spin)
     options = QMRunOptions(
         backend=backend_name,
         basis=basis,
         ecp=ecp,
         cart=cart,
         method="scf",
-        reference=None,
+        reference=resolved_reference,
         optimize_geometry=optimize_geometry,
         scf_strategy=scf_strategy,
     )
@@ -153,17 +162,19 @@ def optimize_geometry(
     charge=0,
     spin=0,
     return_timings=False,
+    scf_reference="auto",
 ) -> OptimizationResult:
     backend_name = normalize_backend_name(backend)
     backend_module = get_backend(backend_name)
     molecule = qmmolecule_from_assign(assign, charge, spin)
+    resolved_reference = resolve_scf_reference(scf_reference, molecule.spin)
     options = QMRunOptions(
         backend=backend_name,
         basis=basis,
         ecp=ecp,
         cart=cart,
         method="scf",
-        reference=None,
+        reference=resolved_reference,
         optimize_geometry=True,
     )
     try:
@@ -188,17 +199,19 @@ def compute_hessian(
     scf_convergence_tolerance=None,
     scf_max_cycles=None,
     return_timings=False,
+    scf_reference="auto",
 ) -> HessianResult:
     backend_name = normalize_backend_name(backend)
     backend_module = get_backend(backend_name)
     molecule = qmmolecule_from_assign(assign, charge, spin)
+    resolved_reference = resolve_scf_reference(scf_reference, molecule.spin)
     options = QMRunOptions(
         backend=backend_name,
         basis=basis,
         ecp=ecp,
         cart=cart,
         method="scf",
-        reference=None,
+        reference=resolved_reference,
         optimize_geometry=False,
         threads=threads,
         memory_limit_bytes=memory_limit_bytes,

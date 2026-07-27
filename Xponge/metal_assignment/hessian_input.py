@@ -11,10 +11,11 @@ from typing import Any
 from .contracts import ValidationError, _canonicalize, _sha256, _strict_object
 
 
-HESSIAN_FIT_INPUT_SCHEMA_VERSION = 1
+HESSIAN_FIT_INPUT_SCHEMA_VERSION = 2
 SUPPORTED_HESSIAN_BACKENDS = frozenset({"pyscf"})
 SUPPORTED_HESSIAN_METHODS = frozenset({"scf"})
 SUPPORTED_HESSIAN_METAL_BASIS_POLICIES = frozenset({"require_ecp"})
+SUPPORTED_HESSIAN_SCF_REFERENCES = frozenset({"auto", "rhf", "rohf", "uhf"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,6 +29,7 @@ class HessianFitInput:
     metal_basis_policy: str
     basis_source: str
     optimize_geometry: bool
+    scf_reference: str
     scf_convergence_tolerance: float
     scf_max_cycles: int
     threads: int
@@ -75,6 +77,12 @@ def validate_hessian_fit_input(value: HessianFitInput) -> None:
             "derived small-model coordinates cannot be optimized inside the Hessian provider",
             f"{path}.optimize_geometry",
         )
+    if value.scf_reference not in SUPPORTED_HESSIAN_SCF_REFERENCES:
+        raise ValidationError(
+            "unsupported_hessian_scf_reference",
+            str(value.scf_reference),
+            f"{path}.scf_reference",
+        )
     tolerance = value.scf_convergence_tolerance
     if (
         isinstance(tolerance, bool)
@@ -98,7 +106,7 @@ def hessian_fit_input_from_dict(value: Any) -> HessianFitInput:
         value,
         required={
             "schema_version", "backend", "method", "basis_family", "metal_basis_policy",
-            "basis_source", "optimize_geometry", "scf_convergence_tolerance",
+            "basis_source", "optimize_geometry", "scf_reference", "scf_convergence_tolerance",
             "scf_max_cycles", "threads", "memory_limit_bytes", "source", "fit_input_hash",
         },
         path="hessian_fit_input",
@@ -138,6 +146,7 @@ def load_hessian_fit_input(path: str | Path) -> HessianFitInput:
 __all__ = [
     "HESSIAN_FIT_INPUT_SCHEMA_VERSION", "SUPPORTED_HESSIAN_BACKENDS",
     "SUPPORTED_HESSIAN_METHODS", "SUPPORTED_HESSIAN_METAL_BASIS_POLICIES",
+    "SUPPORTED_HESSIAN_SCF_REFERENCES",
     "HessianFitInput", "hessian_fit_input_dumps", "hessian_fit_input_from_dict",
     "hessian_fit_input_loads", "hessian_fit_input_to_dict", "load_hessian_fit_input",
     "validate_hessian_fit_input",

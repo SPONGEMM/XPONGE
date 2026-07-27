@@ -81,7 +81,7 @@ def resp_fit(assign, basis=None, opt=False, charge=None, spin=0, extra_equivalen
              esp_memory_limit=None, esp_chunk_policy="auto", esp_safety_factor=0.8,
              constraint_matrix=None, constraint_targets=None,
              return_metadata=False, return_diagnostics=False, progress_callback=None,
-             scf_strategy="direct"):
+             scf_strategy="direct", scf_reference="auto"):
     """
     This **function** fits the RESP partial charge for an Assign instance.
 
@@ -134,6 +134,7 @@ def resp_fit(assign, basis=None, opt=False, charge=None, spin=0, extra_equivalen
         optimize_geometry=opt,
         return_timings=True,
         scf_strategy=scf_strategy,
+        scf_reference=scf_reference,
     )
     timings.update({f"scf_{key}": float(value) for key, value in scf_result.timings.items()})
     report_progress(
@@ -146,6 +147,8 @@ def resp_fit(assign, basis=None, opt=False, charge=None, spin=0, extra_equivalen
     metadata = dict(metadata)
     metadata["backend"] = backend_name
     metadata["scf_strategy"] = scf_strategy
+    metadata["scf_reference_requested"] = scf_reference
+    metadata["scf_reference"] = scf_result.reference
     metadata["scf_converged"] = True
     metadata["total_energy_hartree"] = scf_result.total_energy
     grid_started = time.perf_counter()

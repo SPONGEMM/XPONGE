@@ -7,7 +7,16 @@ import time
 from .._esp_memory import estimate_aux_tensor_bytes, iter_chunk_slices
 from ..capabilities import QMCapabilitySet
 from ..errors import QMBackendImportError, QMCapabilityError
-from ..models import ESPGridRequest, ESPResult, HessianResult, OptimizationResult, QMMolecule, QMRunOptions, SCFResult
+from ..models import (
+    ESPGridRequest,
+    ESPResult,
+    HessianResult,
+    OptimizationResult,
+    QMMolecule,
+    QMRunOptions,
+    SCFResult,
+    resolve_scf_reference,
+)
 
 
 name = "psi4"
@@ -67,7 +76,7 @@ def run_scf(molecule: QMMolecule, options: QMRunOptions, assign=None, return_tim
     psi4.set_options(
         {
             "basis": options.basis,
-            "reference": options.reference or ("rhf" if int(molecule.spin) == 0 else "uhf"),
+            "reference": resolve_scf_reference(options.reference, molecule.spin),
         }
     )
     timings["build"] = time.perf_counter() - start
@@ -93,6 +102,7 @@ def run_scf(molecule: QMMolecule, options: QMRunOptions, assign=None, return_tim
         charge=molecule.total_charge,
         spin=molecule.spin,
         atom_symbols=list(molecule.atom_symbols),
+        reference=resolve_scf_reference(options.reference, molecule.spin),
         backend_handle={"wavefunction": wavefunction},
         timings=timings,
         optimized_coordinates_angstrom=optimized_coordinates if options.optimize_geometry else None,

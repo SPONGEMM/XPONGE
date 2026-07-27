@@ -26,6 +26,7 @@ from Xponge.metal_assignment import (
     HessianArtifact,
     MetalAtomParameterSpec,
     ModelChargeArtifact,
+    RESP_FIT_INPUT_SCHEMA_VERSION,
     RespFitInput,
     RespLinearConstraint,
     ValidationError,
@@ -855,13 +856,14 @@ class ChemcoreArtifactContractTests(unittest.TestCase):
         package = replace(package, request=request, package_hash="")
         package = replace(package, package_hash=package.computed_hash())
         fit_input = RespFitInput(
-            schema_version=4,
+            schema_version=RESP_FIT_INPUT_SCHEMA_VERSION,
             backend="pyscf",
             basis_family="SDD",
             metal_basis_policy="require_ecp",
             basis_source="xponge:sdd-stuttgart-dz-v1",
             optimize_geometry=False,
             scf_strategy="direct",
+            scf_reference="auto",
             grid_density=1.0,
             grid_cell_layer=1,
             radius_overrides={},

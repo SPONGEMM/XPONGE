@@ -42,6 +42,7 @@ def _fit_input(**updates):
         "metal_basis_policy": "require_ecp",
         "basis_source": "unit-test-explicit-basis",
         "optimize_geometry": False,
+        "scf_reference": "auto",
         "scf_convergence_tolerance": 1.0e-9,
         "scf_max_cycles": 80,
         "threads": 1,
@@ -95,6 +96,7 @@ def _worker_request(fit_input=None):
             "metal_basis_policy": fit_input.metal_basis_policy,
             "basis_source": fit_input.basis_source,
             "optimize_geometry": fit_input.optimize_geometry,
+            "scf_reference": fit_input.scf_reference,
             "scf_convergence_tolerance": fit_input.scf_convergence_tolerance,
             "scf_max_cycles": fit_input.scf_max_cycles,
             "threads": fit_input.threads,
@@ -111,6 +113,7 @@ def _fake_hessian_result(assign, **kwargs):
         atom_symbols=list(assign.atoms),
         scf_converged=True,
         total_energy=-75.0,
+        reference="rhf",
         timings={"scf": 0.1, "hessian": 0.2},
     )
 
@@ -209,6 +212,12 @@ class HessianFitInputTests(unittest.TestCase):
         with self.assertRaisesRegex(ValidationError, "stale_hessian_fit_input_hash"):
             validate_hessian_fit_input(replace(value, scf_max_cycles=81))
 
+    def test_scf_reference_is_hash_closed_and_explicitly_validated(self):
+        for reference in ("auto", "rhf", "rohf", "uhf"):
+            validate_hessian_fit_input(_fit_input(scf_reference=reference))
+        with self.assertRaisesRegex(ValidationError, "unsupported_hessian_scf_reference"):
+            validate_hessian_fit_input(_fit_input(scf_reference="implicit"))
+
 
 class HessianWorkerTests(unittest.TestCase):
     def test_worker_consumes_locked_small_model_and_emits_hash_closed_response(self):
@@ -224,6 +233,7 @@ class HessianWorkerTests(unittest.TestCase):
         self.assertEqual(kwargs["threads"], 1)
         self.assertEqual(kwargs["memory_limit_bytes"], 256 * 1024 * 1024)
         self.assertEqual(kwargs["scf_convergence_tolerance"], 1.0e-9)
+        self.assertEqual(kwargs["scf_reference"], "auto")
         self.assertTrue(response["fit_report"]["setup_metadata"]["scf_converged"])
 
     def test_unconverged_result_is_rejected(self):
@@ -417,6 +427,16 @@ class PySCFBackendGateTests(unittest.TestCase):
                 calls.append("rhf")
                 return wavefunction
 
+            @staticmethod
+            def ROHF(_mol):
+                calls.append("rohf")
+                return wavefunction
+
+            @staticmethod
+            def UHF(_mol):
+                calls.append("uhf")
+                return wavefunction
+
         molecule = QMMolecule(["He"], [(0.0, 0.0, 0.0)], 0, 0)
         for strategy, expected in (
             ("direct", ["rhf"]),
@@ -433,6 +453,30 @@ class PySCFBackendGateTests(unittest.TestCase):
             )
             self.assertIs(result, wavefunction)
             self.assertEqual(calls, expected)
+
+        open_shell = QMMolecule(["H"], [(0.0, 0.0, 0.0)], 0, 1)
+        calls.clear()
+        result = pyscf_backend._build_wavefunction(
+            object(),
+            open_shell,
+            FakeSCF,
+            QMRunOptions(
+                backend="pyscf",
+                reference="auto",
+                scf_strategy="density_fit",
+            ),
+        )
+        self.assertIs(result, wavefunction)
+        self.assertEqual(calls, ["rohf", "density_fit"])
+
+        calls.clear()
+        pyscf_backend._build_wavefunction(
+            object(),
+            open_shell,
+            FakeSCF,
+            QMRunOptions(backend="pyscf", reference="uhf"),
+        )
+        self.assertEqual(calls, ["uhf"])
 
     def test_backend_rejects_unconverged_scf_before_hessian(self):
         from Xponge.qm.backends import pyscf_backend

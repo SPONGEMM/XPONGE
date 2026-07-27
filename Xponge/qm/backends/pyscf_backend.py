@@ -8,7 +8,16 @@ import time
 from .._esp_memory import choose_dual_chunk_layout, estimate_aux_tensor_bytes, iter_chunk_slices
 from ..capabilities import QMCapabilitySet
 from ..errors import QMBackendImportError
-from ..models import ESPGridRequest, ESPResult, HessianResult, OptimizationResult, QMMolecule, QMRunOptions, SCFResult
+from ..models import (
+    ESPGridRequest,
+    ESPResult,
+    HessianResult,
+    OptimizationResult,
+    QMMolecule,
+    QMRunOptions,
+    SCFResult,
+    resolve_scf_reference,
+)
 
 
 name = "pyscf"
@@ -65,7 +74,13 @@ def _build_molecule(molecule: QMMolecule, options: QMRunOptions, gto):
 
 
 def _build_wavefunction(mol, molecule: QMMolecule, scf, options: QMRunOptions):
-    wavefunction = scf.RHF(mol) if molecule.spin == 0 else scf.UHF(mol)
+    reference = resolve_scf_reference(options.reference, molecule.spin)
+    if reference == "rhf":
+        wavefunction = scf.RHF(mol)
+    elif reference == "rohf":
+        wavefunction = scf.ROHF(mol)
+    else:
+        wavefunction = scf.UHF(mol)
     if options.scf_strategy == "direct":
         return wavefunction
     if options.scf_strategy == "density_fit":
@@ -198,6 +213,7 @@ def run_scf(molecule: QMMolecule, options: QMRunOptions, assign=None, return_tim
         charge=molecule.total_charge,
         spin=molecule.spin,
         atom_symbols=list(molecule.atom_symbols),
+        reference=resolve_scf_reference(options.reference, molecule.spin),
         backend_handle={"mol": mol, "wavefunction": wavefunction},
         timings=timings,
         optimized_coordinates_angstrom=optimized_coordinates,
@@ -395,5 +411,6 @@ def compute_hessian(molecule: QMMolecule, options: QMRunOptions, assign=None, re
         atom_symbols=list(molecule.atom_symbols),
         scf_converged=converged,
         total_energy=float(wavefunction.e_tot) if hasattr(wavefunction, "e_tot") else None,
+        reference=resolve_scf_reference(options.reference, molecule.spin),
         timings=timings,
     )
