@@ -192,6 +192,10 @@ def parameterize(
         empirical_geometry=bonded_fit_input.empirical_geometry,
         empirical_base_force_field=bonded_fit_input.empirical_base_force_field,
         empirical_water_model=bonded_fit_input.empirical_water_model,
+        manual_bond_force_constant=bonded_fit_input.manual_bond_force_constant,
+        manual_angle_force_constant=bonded_fit_input.manual_angle_force_constant,
+        manual_site_force_constants=bonded_fit_input.manual_site_force_constants,
+        reference_geometry_artifact=bonded_fit_input.reference_geometry_artifact,
     )
 
 

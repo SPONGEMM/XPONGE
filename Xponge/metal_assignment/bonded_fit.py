@@ -22,6 +22,7 @@ from .force_fit import (
     HessianArtifact,
     empirical_registry_bonded_terms,
     empirical_zn_nos_bonded_terms,
+    manual_bonded_terms,
     seminario_bonded_terms,
 )
 from .input import MetalAssignmentPackage, validate_package
@@ -147,6 +148,10 @@ def compose_bonded_fit(
     empirical_geometry: str = "unclassified",
     empirical_base_force_field: str = "",
     empirical_water_model: str = "",
+    manual_bond_force_constant: float | None = None,
+    manual_angle_force_constant: float | None = None,
+    manual_site_force_constants: Mapping[str, Any] | None = None,
+    reference_geometry_artifact: Mapping[str, Any] | None = None,
 ) -> ParameterizationResult:
     """Compose immutable base, charge, metal and bonded overlays for a bonded request."""
 
@@ -214,6 +219,21 @@ def compose_bonded_fit(
             )
         else:
             terms, report = empirical_zn_nos_bonded_terms(request.topology)
+        _merge_terms(bonded_terms, terms)
+        bonded_reports.append(report)
+    elif normalized_force_method == "manual_bonded":
+        if hessian_artifacts:
+            raise ValidationError(
+                "unexpected_hessian_artifact",
+                "manual_bonded does not consume Hessians",
+            )
+        terms, report = manual_bonded_terms(
+            request.topology,
+            bond_force_constant=manual_bond_force_constant,
+            angle_force_constant=manual_angle_force_constant,
+            site_force_constants=manual_site_force_constants,
+            reference_geometry_artifact=reference_geometry_artifact,
+        )
         _merge_terms(bonded_terms, terms)
         bonded_reports.append(report)
     else:

@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, fields, replace
 import json
+import math
 from pathlib import Path
 from typing import Any, Mapping
 
 from .bonded_fit import BondedMetalParameterSpec, MetalAtomParameterSpec
 from .charge_fit import ModelChargeArtifact, model_charge_artifact_from_dict
-from .contracts import ValidationError, _canonicalize, _sha256, _strict_object
+from .contracts import ValidationError, _canonicalize, _freeze, _sha256, _strict_object
 from .force_fit import HessianArtifact, hessian_artifact_from_dict
 
 
@@ -25,7 +26,26 @@ class BondedFitInput:
     empirical_geometry: str = "unclassified"
     empirical_base_force_field: str = ""
     empirical_water_model: str = ""
+    manual_bond_force_constant: float | None = None
+    manual_angle_force_constant: float | None = None
+    manual_site_force_constants: Mapping[str, Any] | None = None
+    equilibrium_geometry_source: str = ""
+    reference_geometry_artifact: Mapping[str, Any] | None = None
     fit_input_hash: str = ""
+
+    def __post_init__(self) -> None:
+        if self.reference_geometry_artifact is not None:
+            object.__setattr__(
+                self,
+                "reference_geometry_artifact",
+                _freeze(self.reference_geometry_artifact),
+            )
+        if self.manual_site_force_constants is not None:
+            object.__setattr__(
+                self,
+                "manual_site_force_constants",
+                _freeze(self.manual_site_force_constants),
+            )
 
     def canonical_payload(self) -> dict[str, Any]:
         return {
@@ -44,12 +64,104 @@ class BondedFitInput:
 def validate_bonded_fit_input(value: BondedFitInput) -> None:
     if value.schema_version != 1:
         raise ValidationError("unsupported_schema_version", str(value.schema_version), "bonded_fit_input")
-    if value.force_method not in {"seminario", "empirical_registry", "empirical_zn_nos"}:
+    if value.force_method not in {
+        "seminario", "empirical_registry", "empirical_zn_nos", "manual_bonded",
+    }:
         raise ValidationError("unsupported_bonded_force_method", value.force_method)
     if value.force_method == "empirical_registry" and not value.empirical_registry_id:
         raise ValidationError("missing_empirical_registry_id", value.force_method)
     if value.force_method == "seminario" and value.empirical_registry_id:
         raise ValidationError("unexpected_empirical_registry_id", value.empirical_registry_id)
+    if value.force_method == "manual_bonded":
+        for name in ("manual_bond_force_constant", "manual_angle_force_constant"):
+            constant = getattr(value, name)
+            if (
+                isinstance(constant, bool)
+                or not isinstance(constant, (int, float))
+                or not math.isfinite(constant)
+                or constant <= 0
+                or constant > 10000
+            ):
+                raise ValidationError("invalid_manual_force_constant", name)
+        if value.manual_site_force_constants is not None:
+            if not isinstance(value.manual_site_force_constants, Mapping):
+                raise ValidationError(
+                    "invalid_manual_site_force_constants",
+                    "expected selection-id mapping",
+                )
+            for selection_id, constants in value.manual_site_force_constants.items():
+                if not isinstance(selection_id, str) or not selection_id:
+                    raise ValidationError(
+                        "invalid_manual_site_force_constants",
+                        "selection IDs must be non-empty strings",
+                    )
+                if not isinstance(constants, Mapping):
+                    raise ValidationError(
+                        "invalid_manual_site_force_constants",
+                        selection_id,
+                    )
+                for name in ("bond_force_constant", "angle_force_constant"):
+                    constant = constants.get(name)
+                    if (
+                        isinstance(constant, bool)
+                        or not isinstance(constant, (int, float))
+                        or not math.isfinite(constant)
+                        or constant <= 0
+                        or constant > 10000
+                    ):
+                        raise ValidationError(
+                            "invalid_manual_site_force_constant",
+                            f"{selection_id}:{name}",
+                        )
+        if value.equilibrium_geometry_source != "frozen_current_geometry":
+            raise ValidationError(
+                "invalid_equilibrium_geometry_source",
+                value.equilibrium_geometry_source,
+            )
+        reference_geometry = value.reference_geometry_artifact
+        if not isinstance(reference_geometry, Mapping):
+            raise ValidationError(
+                "missing_reference_geometry_artifact",
+                "manual_bonded requires explicit reference geometry",
+            )
+        if (
+            reference_geometry.get("schema_version") != 1
+            or reference_geometry.get("geometry_source") != "frozen_current_geometry"
+            or reference_geometry.get("coordinate_unit") != "angstrom"
+            or reference_geometry.get("angle_unit") != "rad"
+            or not isinstance(reference_geometry.get("selections"), (list, tuple))
+            or not reference_geometry.get("selections")
+        ):
+            raise ValidationError(
+                "invalid_reference_geometry_artifact",
+                "unsupported identity, units, source, or empty selections",
+            )
+        artifact_hash = reference_geometry.get("artifact_hash")
+        if (
+            not isinstance(artifact_hash, str)
+            or artifact_hash != _sha256(_canonicalize({
+                key: item
+                for key, item in reference_geometry.items()
+                if key != "artifact_hash"
+            }))
+        ):
+            raise ValidationError(
+                "stale_reference_geometry_artifact_hash",
+                "reference geometry hash mismatch",
+            )
+        if value.charge_artifacts or value.hessian_artifacts:
+            raise ValidationError(
+                "unexpected_manual_fit_artifact",
+                "manual_bonded does not consume RESP/Hessian artifacts",
+            )
+    elif (
+        value.manual_bond_force_constant is not None
+        or value.manual_angle_force_constant is not None
+        or value.manual_site_force_constants is not None
+        or value.equilibrium_geometry_source
+        or value.reference_geometry_artifact is not None
+    ):
+        raise ValidationError("unexpected_manual_bonded_input", value.force_method)
     for name in (
         "empirical_registry_id", "empirical_geometry",
         "empirical_base_force_field", "empirical_water_model",
@@ -66,6 +178,10 @@ def default_bonded_fit_input(
     parameter_source: str = "qm_fit",
     water_model: str,
     timeout_seconds: float = 60.0,
+    manual_bond_force_constant: float | None = None,
+    manual_angle_force_constant: float | None = None,
+    manual_site_force_constants: Mapping[str, Any] | None = None,
+    reference_geometry_artifact: Mapping[str, Any] | None = None,
 ) -> BondedFitInput:
     """Build the provider-owned metal baseline for a bonded fit.
 
@@ -87,6 +203,9 @@ def default_bonded_fit_input(
     elif parameter_source.startswith("empirical:") and parameter_source[10:]:
         force_method = "empirical_registry"
         registry_id = parameter_source[10:]
+    elif parameter_source == "manual_bonded":
+        force_method = "manual_bonded"
+        registry_id = ""
     else:
         raise ValidationError("unsupported_parameter_source", parameter_source)
     metal_spec = BondedMetalParameterSpec(
@@ -123,6 +242,19 @@ def default_bonded_fit_input(
         empirical_geometry="unclassified",
         empirical_base_force_field="",
         empirical_water_model=water_model,
+        manual_bond_force_constant=manual_bond_force_constant,
+        manual_angle_force_constant=manual_angle_force_constant,
+        manual_site_force_constants=manual_site_force_constants,
+        equilibrium_geometry_source=(
+            "frozen_current_geometry"
+            if force_method == "manual_bonded"
+            else ""
+        ),
+        reference_geometry_artifact=(
+            reference_geometry_artifact
+            if force_method == "manual_bonded"
+            else None
+        ),
     ).with_computed_hash()
     validate_bonded_fit_input(result)
     return result
@@ -191,6 +323,10 @@ def bonded_fit_input_from_dict(value: Any) -> BondedFitInput:
         optional={
             "empirical_registry_id", "empirical_geometry",
             "empirical_base_force_field", "empirical_water_model",
+            "manual_bond_force_constant", "manual_angle_force_constant",
+            "manual_site_force_constants",
+            "equilibrium_geometry_source",
+            "reference_geometry_artifact",
         },
         path="bonded_fit_input",
     )
@@ -211,6 +347,11 @@ def bonded_fit_input_from_dict(value: Any) -> BondedFitInput:
         empirical_geometry=data.get("empirical_geometry", "unclassified"),
         empirical_base_force_field=data.get("empirical_base_force_field", ""),
         empirical_water_model=data.get("empirical_water_model", ""),
+        manual_bond_force_constant=data.get("manual_bond_force_constant"),
+        manual_angle_force_constant=data.get("manual_angle_force_constant"),
+        manual_site_force_constants=data.get("manual_site_force_constants"),
+        equilibrium_geometry_source=data.get("equilibrium_geometry_source", ""),
+        reference_geometry_artifact=data.get("reference_geometry_artifact"),
         fit_input_hash=data["fit_input_hash"],
     )
     validate_bonded_fit_input(result)

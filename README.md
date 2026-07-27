@@ -87,6 +87,43 @@ Xponge.save_mol2(peptide2, "ala12.mol2")
 Xponge.save_sponge_input(peptide3, "ala5")
 ```
 
+### Metal force-field overlays
+
+`Xponge.metal_assignment` extends an already loaded and normally assigned
+`Molecule`; it is not a separate structure-building pipeline. Callers provide
+the locked metal sites, topology mapping, electronic state and parameter
+protocol, then continue with the ordinary saver:
+
+```python
+import Xponge
+import Xponge.forcefield.amber.ff19sb
+import Xponge.forcefield.amber.tip3p
+
+mol = Xponge.load_mmcif("system.cif")
+result = Xponge.metal_assignment.assign(
+    mol,
+    package=metal_assignment_package,
+    atom_mapping=atom_mapping,
+    operation="fit-bonded",
+    water_model="tip3p",
+    bonded_fit_input=bonded_fit_input,
+)
+Xponge.save_sponge_input(result.molecule, "system", format="bundle")
+```
+
+The API also exposes separate `parameterize` and transactional `apply`
+operations. Xponge never splits residues, chooses coordination bonds or builds
+caps; the caller must provide a complete topology and stable mapping.
+
+For `manual_bonded`, `bonded_fit_input` carries explicit, hash-closed reference
+bond lengths and angles plus site force constants. Xponge validates term
+coverage and applies the resulting overlay without running Hessian or
+Seminario and without inferring terms from distances. The potential convention
+is `E = k * delta^2`; canonical units are
+`kcal/mol/angstrom^2` for bonds and `kcal/mol/rad^2` for angles. This path is
+intended for experimental engineering validation, not as a claim of
+QM-fitted scientific accuracy.
+
 ### Amber lipid force fields
 
 Lipid17 and Lipid21 are available as mutually exclusive base lipid force fields:

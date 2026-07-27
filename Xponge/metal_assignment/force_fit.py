@@ -274,6 +274,225 @@ def _angle(atom1, atom2, atom3) -> float:
     return math.acos(cosine)
 
 
+def manual_bonded_terms(
+    topology: PreparedChemicalTopology,
+    *,
+    bond_force_constant: float,
+    angle_force_constant: float,
+    reference_geometry_artifact: Mapping[str, Any],
+    site_force_constants: Mapping[str, Any] | None = None,
+) -> tuple[dict[str, Mapping[str, Any]], Mapping[str, Any]]:
+    """Project uniform constants onto an explicit, topology-locked geometry."""
+
+    for name, value in (
+        ("bond_force_constant", bond_force_constant),
+        ("angle_force_constant", angle_force_constant),
+    ):
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+            or value <= 0
+            or value > 10000
+        ):
+            raise ValidationError("invalid_manual_force_constant", name)
+    artifact = _strict_object(
+        reference_geometry_artifact,
+        required={
+            "schema_version", "graph_revision", "input_hash",
+            "coordinate_unit", "angle_unit", "geometry_source", "selections",
+            "artifact_hash",
+        },
+        path="reference_geometry_artifact",
+    )
+    if (
+        artifact["schema_version"] != 1
+        or artifact["graph_revision"] != topology.graph_revision
+        or artifact["input_hash"] != topology.input_hash
+        or artifact["coordinate_unit"] != "angstrom"
+        or artifact["angle_unit"] != "rad"
+        or artifact["geometry_source"] != "frozen_current_geometry"
+        or not isinstance(artifact["selections"], (list, tuple))
+        or not artifact["selections"]
+    ):
+        raise ValidationError(
+            "reference_geometry_identity_mismatch",
+            "reference geometry does not match the prepared topology",
+        )
+    atom_by_id = {atom.external_id: atom for atom in topology.atoms}
+    expected_edges: dict[str, tuple[str, str]] = {}
+    for edge in topology.bonds:
+        if edge.active and edge.semantic == "coordination":
+            expected_edges[edge.external_id] = edge.atom_ids
+    for edge in topology.links:
+        if edge.active and edge.confirmed and edge.kind == "coordination":
+            if edge.external_id in expected_edges:
+                raise ValidationError(
+                    "duplicate_manual_coordination_link",
+                    edge.external_id,
+                )
+            expected_edges[edge.external_id] = edge.atom_ids
+    if not expected_edges:
+        raise ValidationError(
+            "missing_manual_coordination_terms",
+            "no confirmed active coordination links",
+        )
+    expected_selection_ids = {
+        selection.get("selection_id")
+        for selection in artifact["selections"]
+        if isinstance(selection, Mapping)
+    }
+    if site_force_constants is not None and set(site_force_constants) != expected_selection_ids:
+        raise ValidationError(
+            "manual_site_force_constant_coverage_mismatch",
+            f"expected={sorted(expected_selection_ids)},"
+            f"actual={sorted(site_force_constants)}",
+        )
+
+    seen_edges: set[str] = set()
+    seen_angle_pairs: set[tuple[str, str]] = set()
+    terms: dict[str, Mapping[str, Any]] = {}
+    expected_angle_count = 0
+    for selection_index, raw_selection in enumerate(artifact["selections"]):
+        selection = _strict_object(
+            raw_selection,
+            required={"selection_id", "center_external_id", "bonds", "angles"},
+            path=f"reference_geometry_artifact.selections[{selection_index}]",
+        )
+        metal_id = selection["center_external_id"]
+        selection_constants = (
+            site_force_constants.get(selection["selection_id"], {})
+            if site_force_constants is not None
+            else {}
+        )
+        site_bond_force_constant = float(
+            selection_constants.get("bond_force_constant", bond_force_constant)
+        )
+        site_angle_force_constant = float(
+            selection_constants.get("angle_force_constant", angle_force_constant)
+        )
+        metal = atom_by_id.get(metal_id)
+        if metal is None or not metal.is_metal:
+            raise ValidationError("invalid_reference_geometry_center", str(metal_id))
+        if not isinstance(selection["bonds"], (list, tuple)):
+            raise ValidationError("invalid_reference_geometry_bonds", str(metal_id))
+        donor_by_edge: dict[str, str] = {}
+        for raw_bond in selection["bonds"]:
+            bond = _strict_object(
+                raw_bond,
+                required={
+                    "edge_id", "center_external_id", "neighbor_external_id",
+                    "equilibrium", "unit",
+                },
+                path="reference_geometry_artifact.bond",
+            )
+            edge_id = bond["edge_id"]
+            donor_id = bond["neighbor_external_id"]
+            equilibrium = bond["equilibrium"]
+            if (
+                edge_id in seen_edges
+                or bond["center_external_id"] != metal_id
+                or bond["unit"] != "angstrom"
+                or donor_id not in atom_by_id
+                or atom_by_id[donor_id].is_metal
+                or isinstance(equilibrium, bool)
+                or not isinstance(equilibrium, (int, float))
+                or not math.isfinite(equilibrium)
+                or equilibrium <= 1.0e-12
+                or set(expected_edges.get(edge_id, ())) != {metal_id, donor_id}
+            ):
+                raise ValidationError("invalid_reference_geometry_bond", str(edge_id))
+            seen_edges.add(edge_id)
+            donor_by_edge[edge_id] = donor_id
+            terms[f"manual:bond:{edge_id}"] = {
+                "kind": "bond",
+                "atom_ids": (metal_id, donor_id),
+                "parameters": {
+                    "k": site_bond_force_constant,
+                    "equilibrium": round(float(equilibrium), 8),
+                    "k_unit": "kcal/mol/angstrom^2",
+                    "equilibrium_unit": "angstrom",
+                },
+                "source": "manual_bonded:explicit_reference_geometry",
+            }
+        expected_angle_count += len(donor_by_edge) * (len(donor_by_edge) - 1) // 2
+        if not isinstance(selection["angles"], (list, tuple)):
+            raise ValidationError("invalid_reference_geometry_angles", str(metal_id))
+        for raw_angle in selection["angles"]:
+            angle = _strict_object(
+                raw_angle,
+                required={
+                    "edge_id1", "edge_id2", "neighbor1_external_id",
+                    "center_external_id", "neighbor2_external_id",
+                    "equilibrium", "unit",
+                },
+                path="reference_geometry_artifact.angle",
+            )
+            pair = tuple(sorted((angle["edge_id1"], angle["edge_id2"])))
+            equilibrium = angle["equilibrium"]
+            if (
+                pair in seen_angle_pairs
+                or pair[0] == pair[1]
+                or angle["center_external_id"] != metal_id
+                or angle["unit"] != "rad"
+                or donor_by_edge.get(angle["edge_id1"]) != angle["neighbor1_external_id"]
+                or donor_by_edge.get(angle["edge_id2"]) != angle["neighbor2_external_id"]
+                or isinstance(equilibrium, bool)
+                or not isinstance(equilibrium, (int, float))
+                or not math.isfinite(equilibrium)
+                or equilibrium <= 0
+                or equilibrium > math.pi
+            ):
+                raise ValidationError("invalid_reference_geometry_angle", ":".join(pair))
+            seen_angle_pairs.add(pair)
+            terms[f"manual:angle:{pair[0]}:{pair[1]}"] = {
+                "kind": "angle",
+                "atom_ids": (
+                    angle["neighbor1_external_id"],
+                    metal_id,
+                    angle["neighbor2_external_id"],
+                ),
+                "parameters": {
+                    "k": site_angle_force_constant,
+                    "equilibrium": round(float(equilibrium), 8),
+                    "k_unit": "kcal/mol/rad^2",
+                    "equilibrium_unit": "rad",
+                },
+                "source": "manual_bonded:explicit_reference_geometry",
+            }
+    if seen_edges != set(expected_edges) or len(seen_angle_pairs) != expected_angle_count:
+        raise ValidationError(
+            "reference_geometry_term_coverage_mismatch",
+            f"bonds={len(seen_edges)}/{len(expected_edges)},"
+            f"angles={len(seen_angle_pairs)}/{expected_angle_count}",
+        )
+    return terms, {
+        "provider": "manual_bonded",
+        "provider_revision": "explicit-reference-geometry-v1",
+        "equilibrium_geometry_source": "frozen_current_geometry",
+        "bond_force_constant": float(bond_force_constant),
+        "bond_force_constant_unit": "kcal/mol/angstrom^2",
+        "angle_force_constant": float(angle_force_constant),
+        "angle_force_constant_unit": "kcal/mol/rad^2",
+        "potential_convention": "E=k*delta^2",
+        "site_force_constants": (
+            {
+                key: {
+                    "bond_force_constant": float(value["bond_force_constant"]),
+                    "angle_force_constant": float(value["angle_force_constant"]),
+                }
+                for key, value in sorted(site_force_constants.items())
+            }
+            if site_force_constants is not None
+            else {}
+        ),
+        "metal_site_count": len(artifact["selections"]),
+        "bond_term_count": len(seen_edges),
+        "angle_term_count": len(seen_angle_pairs),
+        "term_count": len(terms),
+    }
+
+
 def _interpolate(points: Sequence[tuple[float, float]], distance: float) -> float:
     if distance <= points[0][0]:
         return float(points[0][1])
@@ -387,5 +606,6 @@ def empirical_zn_nos_bonded_terms(
 __all__ = [
     "ANGLE_FORCE_CONVERSION", "BOHR_TO_ANGSTROM", "BOND_FORCE_CONVERSION", "HARTREE_TO_KCAL_MOL",
     "HessianArtifact", "empirical_registry_bonded_terms", "empirical_zn_nos_bonded_terms",
+    "manual_bonded_terms",
     "hessian_artifact_from_dict", "seminario_bonded_terms", "validate_hessian_artifact",
 ]

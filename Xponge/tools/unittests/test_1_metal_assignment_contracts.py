@@ -46,6 +46,7 @@ from Xponge.metal_assignment import (
     bonded_fit_input_loads,
     compose_partial_charge_artifacts,
     empirical_registry_descriptor,
+    manual_bonded_terms,
     resolve_empirical_registry,
     validate_empirical_registry_entry,
     validate_input,
@@ -613,6 +614,110 @@ class MetalAssignmentContractTests(unittest.TestCase):
         corrupted["scale_factor"] = 2.0
         with self.assertRaisesRegex(ValidationError, "stale_bonded_fit_input_hash"):
             bonded_fit_input_loads(json.dumps(corrupted))
+
+    def test_manual_bonded_uses_confirmed_current_geometry(self):
+        topology = _bonded_request().topology
+        reference_geometry = {
+            "schema_version": 1,
+            "graph_revision": topology.graph_revision,
+            "input_hash": topology.input_hash,
+            "coordinate_unit": "angstrom",
+            "angle_unit": "rad",
+            "geometry_source": "frozen_current_geometry",
+            "selections": [{
+                "selection_id": "site:heme-fe",
+                "center_external_id": "heme-fe",
+                "bonds": [
+                    {
+                        "edge_id": "fe-na",
+                        "center_external_id": "heme-fe",
+                        "neighbor_external_id": "heme-na",
+                        "equilibrium": 1.9,
+                        "unit": "angstrom",
+                    },
+                    {
+                        "edge_id": "fe-his",
+                        "center_external_id": "heme-fe",
+                        "neighbor_external_id": "his-ne2",
+                        "equilibrium": 2.1,
+                        "unit": "angstrom",
+                    },
+                ],
+                "angles": [{
+                    "edge_id1": "fe-na",
+                    "edge_id2": "fe-his",
+                    "neighbor1_external_id": "heme-na",
+                    "center_external_id": "heme-fe",
+                    "neighbor2_external_id": "his-ne2",
+                    "equilibrium": 1.5707963267948966,
+                    "unit": "rad",
+                }],
+            }],
+        }
+        reference_geometry["artifact_hash"] = hashlib.sha256(
+            json.dumps(
+                reference_geometry,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode()
+        ).hexdigest()
+        terms, report = manual_bonded_terms(
+            topology,
+            bond_force_constant=100.0,
+            angle_force_constant=20.0,
+            reference_geometry_artifact=reference_geometry,
+            site_force_constants={
+                "site:heme-fe": {
+                    "bond_force_constant": 111.0,
+                    "angle_force_constant": 22.0,
+                },
+            },
+        )
+        bonds = [term for term in terms.values() if term["kind"] == "bond"]
+        angles = [term for term in terms.values() if term["kind"] == "angle"]
+        self.assertEqual(len(bonds), 2)
+        self.assertEqual(len(angles), 1)
+        self.assertEqual(
+            sorted(term["parameters"]["equilibrium"] for term in bonds),
+            [1.9, 2.1],
+        )
+        self.assertAlmostEqual(angles[0]["parameters"]["equilibrium"], 1.57079633)
+        self.assertTrue(all(term["parameters"]["k"] == 111.0 for term in bonds))
+        self.assertEqual(angles[0]["parameters"]["k"], 22.0)
+        self.assertEqual(report["potential_convention"], "E=k*delta^2")
+
+        request = _bonded_request()
+        spec = BondedMetalParameterSpec(
+            schema_version=1,
+            topology_hash=request.topology.topology_hash,
+            metal_atoms=(MetalAtomParameterSpec(
+                "heme-fe", "Fe", 2, "Fe-site", 1.2, 55.845, 0.01, 1.35,
+            ),),
+            donor_atom_types={"heme-na": "n-site", "his-ne2": "n-site"},
+            parameter_source="manual-bonded-test",
+            provenance={"protocol": "fixture"},
+        ).with_computed_hash()
+        fit_input = BondedFitInput(
+            schema_version=1,
+            metal_parameter_spec=spec,
+            charge_artifacts=(),
+            hessian_artifacts=(),
+            force_method="manual_bonded",
+            manual_bond_force_constant=100.0,
+            manual_angle_force_constant=20.0,
+            manual_site_force_constants={
+                "site:heme-fe": {
+                    "bond_force_constant": 111.0,
+                    "angle_force_constant": 22.0,
+                },
+            },
+            equilibrium_geometry_source="frozen_current_geometry",
+            reference_geometry_artifact=reference_geometry,
+        ).with_computed_hash()
+        self.assertEqual(
+            bonded_fit_input_loads(bonded_fit_input_dumps(fit_input)),
+            fit_input,
+        )
 
     def test_empirical_registry_is_hash_closed_and_citation_bearing(self):
         registry_id = "xponge-zn-nos-experimental-v1"

@@ -140,6 +140,7 @@ from .force_fit import (
     empirical_registry_bonded_terms,
     empirical_zn_nos_bonded_terms,
     hessian_artifact_from_dict,
+    manual_bonded_terms,
     seminario_bonded_terms,
     validate_hessian_artifact,
 )
@@ -224,6 +225,7 @@ __all__ = [
     "validate_package",
     "HessianArtifact", "ModelChargeArtifact", "empirical_registry_bonded_terms",
     "empirical_zn_nos_bonded_terms",
+    "manual_bonded_terms",
     "hessian_artifact_from_dict", "validate_hessian_artifact",
     "model_charge_artifact_from_dict", "validate_model_charge_artifact",
     "compose_partial_charge_artifacts", "project_model_charge_artifact",
