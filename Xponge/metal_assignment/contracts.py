@@ -320,6 +320,23 @@ class AssignmentComponent:
     base_force_field: bool = True
 
 
+def atomic_center_atom_ids(request: Any) -> frozenset[str]:
+    """Return the structural metal centers selected for the metal overlay."""
+
+    return frozenset(
+        atom_id
+        for component in request.assignment_components
+        if component.classification == "atomic_center"
+        for atom_id in component.atom_ids
+    )
+
+
+def base_metal_component_supported(component: AssignmentComponent) -> bool:
+    """Whether a metal-containing component belongs to ordinary ion assignment."""
+
+    return component.base_force_field and component.classification == "solvent_ion"
+
+
 @dataclass(frozen=True, slots=True)
 class ChargeConstraintGroup:
     external_id: str
@@ -699,9 +716,6 @@ def validate_topology(topology: PreparedChemicalTopology) -> None:
             raise ValidationError("component_membership_mismatch", atom.external_id, f"atoms.{atom.external_id}")
         if component.chemical_component_id != atom.chemical_component_id:
             raise ValidationError("chemical_component_mismatch", atom.external_id, f"components.{component.external_id}")
-        if atom.is_metal and BASE_FORCE_FIELD_SCOPE in atom.scopes:
-            raise ValidationError("metal_in_base_force_field", atom.external_id, f"atoms.{atom.external_id}")
-
     for group_name, groups in (("residues", topology.residues), ("components", topology.components)):
         for group in groups:
             if group_name == "residues":
@@ -1106,8 +1120,32 @@ def _validate_projection_mapping(request: MetalAssignmentInput) -> None:
             raise ValidationError("empty_or_duplicate_assignment_component", component.external_id)
         if not set(component.atom_ids) <= set(atom_by_id):
             raise ValidationError("missing_atom_reference", component.external_id, "assignment_components")
-        if component.base_force_field and any(atom_by_id[atom_id].is_metal for atom_id in component.atom_ids):
-            raise ValidationError("metal_in_base_force_field", component.external_id, "assignment_components")
+        component_contains_metal = any(
+            atom_by_id[atom_id].is_metal for atom_id in component.atom_ids
+        )
+        if component.classification == "atomic_center":
+            if component.base_force_field:
+                raise ValidationError(
+                    "metal_in_base_force_field",
+                    component.external_id,
+                    "assignment_components",
+                )
+            if not component_contains_metal:
+                raise ValidationError(
+                    "invalid_atomic_center_assignment",
+                    component.external_id,
+                    "assignment_components",
+                )
+        elif (
+            component.base_force_field
+            and component_contains_metal
+            and not base_metal_component_supported(component)
+        ):
+            raise ValidationError(
+                "metal_in_base_force_field",
+                component.external_id,
+                "assignment_components",
+            )
         if isinstance(component.net_formal_charge, bool) or not isinstance(component.net_formal_charge, int):
             raise ValidationError("invalid_component_net_charge", component.external_id, "assignment_components")
         if not component.charge_resolution_method:
@@ -1514,22 +1552,20 @@ def validate_result(request: MetalAssignmentInput, result: ParameterizationResul
         raise ValidationError("duplicate_overlay_atom", "overlay coverage must be unique")
     if not base_ids <= set(atom_by_id) or not metal_ids <= set(atom_by_id):
         raise ValidationError("overlay_unknown_atom", "overlay references an unknown atom")
-    if any(atom_by_id[atom_id].is_metal for atom_id in base_ids):
-        raise ValidationError("metal_in_base_force_field", "base overlay covers a metal atom")
     expected_base_ids = {
         atom_id
         for component in request.assignment_components
         if component.base_force_field
         for atom_id in component.atom_ids
     }
-    all_metal_ids = {atom_id for atom_id, atom in atom_by_id.items() if atom.is_metal}
+    target_metal_ids = set(atomic_center_atom_ids(request))
     if base_ids != expected_base_ids:
         raise ValidationError("base_overlay_coverage_mismatch", "base overlay must cover every base assignment atom")
-    if not all_metal_ids <= metal_ids:
+    if not target_metal_ids <= metal_ids:
         raise ValidationError("metal_overlay_coverage_mismatch", "metal overlay must cover every metal atom")
     allowed_metal_overlay_ids = {
         atom_id for atom_id, atom in atom_by_id.items()
-        if atom.is_metal or "metalOverlay" in atom.scopes
+        if atom_id in target_metal_ids or "metalOverlay" in atom.scopes
     }
     if not metal_ids <= allowed_metal_overlay_ids:
         raise ValidationError(
@@ -2194,6 +2230,7 @@ __all__ = [
     "partial_charge_artifact_bundle_from_dict",
     "parameterization_result_loads", "parameterization_result_to_dict", "validate_charge_contract",
     "validate_partial_charge_artifacts",
+    "atomic_center_atom_ids", "base_metal_component_supported",
     "validate_electronic_state", "validate_input",
     "validate_capability_snapshot", "validate_result", "validate_topology",
 ]

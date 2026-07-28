@@ -25,6 +25,7 @@ from .contracts import (
     _parse_topology,
     _sha256,
     _strict_object,
+    atomic_center_atom_ids,
     validate_input,
     validate_result,
     validate_topology,
@@ -383,7 +384,7 @@ def apply_base_force_field(
 
     validate_input(request)
     validate_force_realization_protocol(force_protocol)
-    if any(atom.is_metal for atom in request.topology.atoms):
+    if atomic_center_atom_ids(request):
         raise ValidationError(
             "metal_in_base_force_field_application",
             "use metal-assignment for systems containing metals",

@@ -511,6 +511,7 @@ def empirical_registry_bonded_terms(
     geometry: str = "unclassified",
     base_force_field: str = "",
     water_model: str = "",
+    metal_atom_ids: frozenset[str] | None = None,
 ) -> tuple[dict[str, Mapping[str, Any]], Mapping[str, Any]]:
     """Return an exact-match empirical overlay from Xponge's registry."""
 
@@ -520,6 +521,7 @@ def empirical_registry_bonded_terms(
         geometry=geometry,
         base_force_field=base_force_field,
         water_model=water_model,
+        metal_atom_ids=metal_atom_ids,
     )
     parameters = match.entry.parameters
     bond_tables = parameters["bond_tables"]
@@ -594,12 +596,15 @@ def empirical_registry_bonded_terms(
 
 def empirical_zn_nos_bonded_terms(
     topology: PreparedChemicalTopology,
+    *,
+    metal_atom_ids: frozenset[str] | None = None,
 ) -> tuple[dict[str, Mapping[str, Any]], Mapping[str, Any]]:
     """Compatibility adapter for the pre-registry experimental Zn provider."""
 
     return empirical_registry_bonded_terms(
         topology,
         registry_id="xponge-zn-nos-experimental-v1",
+        metal_atom_ids=metal_atom_ids,
     )
 
 

@@ -15,6 +15,8 @@ from .contracts import (
     _sha256,
     _strict_object,
     _strings,
+    atomic_center_atom_ids,
+    base_metal_component_supported,
     validate_electronic_state,
 )
 
@@ -467,7 +469,11 @@ def validate_structural_artifacts(request: MetalAssignmentInput, bundle: Structu
             or artifact.atom_formal_charges_complete != component.atom_formal_charges_complete
         ):
             raise ValidationError("assignment_artifact_metadata_mismatch", component_id)
-        if artifact.base_force_field and any(atom_by_id[atom_id].is_metal for atom_id in artifact.atom_ids):
+        if (
+            artifact.base_force_field
+            and any(atom_by_id[atom_id].is_metal for atom_id in artifact.atom_ids)
+            and not base_metal_component_supported(component)
+        ):
             raise ValidationError("metal_in_base_force_field", component_id)
         expected_internal_edges = {
             edge_id for edge_id, edge in edge_by_id.items()
@@ -499,11 +505,11 @@ def _validate_derived_sites(request: MetalAssignmentInput, bundle: DerivedModelB
     topology = request.topology
     atom_by_id = {atom.external_id: atom for atom in topology.atoms}
     edge_by_id = {edge.external_id: edge for edge in (*topology.bonds, *topology.links)}
-    metal_ids = {atom.external_id for atom in topology.atoms if atom.is_metal}
+    metal_ids = set(atomic_center_atom_ids(request))
     all_metal_edge_ids = {
         edge.external_id
         for edge in (*topology.bonds, *topology.links)
-        if any(atom_by_id[atom_id].is_metal for atom_id in edge.atom_ids)
+        if set(edge.atom_ids) & metal_ids
     }
     active_metal_edge_ids = {edge_id for edge_id in all_metal_edge_ids if edge_by_id[edge_id].active}
     removed_edge_ids = {

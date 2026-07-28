@@ -8,7 +8,14 @@ import math
 import subprocess
 from typing import Any, Mapping
 
-from .contracts import BaseForceFieldOverlay, ValidationError, _canonicalize, _freeze_field, _sha256
+from .contracts import (
+    BaseForceFieldOverlay,
+    ValidationError,
+    _canonicalize,
+    _freeze_field,
+    _sha256,
+    base_metal_component_supported,
+)
 from .input import MetalAssignmentPackage, validate_package
 from ._worker_runtime import run_worker_subprocess, worker_command
 from .base_charge import BaseChargeInput, base_charge_input_to_dict, validate_base_charge_input
@@ -116,7 +123,10 @@ def _worker_payload(
     for component in components:
         path = f"assignment_components.{component.external_id}"
         component_atom_ids = set(component.atom_ids)
-        if any(atom_by_id[atom_id].is_metal for atom_id in component.atom_ids):
+        if (
+            any(atom_by_id[atom_id].is_metal for atom_id in component.atom_ids)
+            and not base_metal_component_supported(component)
+        ):
             raise ValidationError("metal_in_base_force_field", component.external_id, path)
         proof = component.chemical_topology_proof
         if not proof.valence_complete or proof.explicit_hydrogen_status != "complete":

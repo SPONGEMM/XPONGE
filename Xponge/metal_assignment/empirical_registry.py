@@ -329,6 +329,7 @@ def resolve_empirical_registry(
     geometry: str = "unclassified",
     base_force_field: str = "",
     water_model: str = "",
+    metal_atom_ids: frozenset[str] | None = None,
 ) -> EmpiricalRegistryMatch:
     entry = EMPIRICAL_REGISTRY.get(registry_id)
     if entry is None:
@@ -350,8 +351,11 @@ def resolve_empirical_registry(
 
     atom_by_id = {atom.external_id: atom for atom in topology.atoms}
     centers: list[EmpiricalCenterMatch] = []
+    selected_metal_ids = metal_atom_ids or frozenset(
+        atom.external_id for atom in topology.atoms if atom.is_metal
+    )
     for metal in sorted(
-        (atom for atom in topology.atoms if atom.is_metal),
+        (atom for atom in topology.atoms if atom.external_id in selected_metal_ids),
         key=lambda atom: (atom.stable_order, atom.external_id),
     ):
         if metal.element != applicability.element:

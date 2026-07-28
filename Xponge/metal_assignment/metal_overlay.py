@@ -18,6 +18,7 @@ from .contracts import (
     _validate_atom_parameter_maps,
     _validate_bonded_parameter_mapping,
     _validate_mass_parameters,
+    atomic_center_atom_ids,
 )
 from .input import MetalAssignmentPackage, validate_package
 from ._worker_runtime import worker_command
@@ -98,10 +99,10 @@ def build_metal_parameter_overlay(
     coverage = set(covered_atom_ids)
     if len(coverage) != len(covered_atom_ids):
         raise ValidationError("duplicate_overlay_atom", "metal overlay coverage must be unique")
-    metal_ids = {atom_id for atom_id, atom in atom_by_id.items() if atom.is_metal}
+    metal_ids = set(atomic_center_atom_ids(request))
     allowed_ids = {
         atom_id for atom_id, atom in atom_by_id.items()
-        if atom.is_metal or "metalOverlay" in atom.scopes
+        if atom_id in metal_ids or "metalOverlay" in atom.scopes
     }
     if not metal_ids or not metal_ids <= coverage:
         raise ValidationError("metal_overlay_coverage_mismatch", "every metal atom must be covered")
@@ -203,7 +204,11 @@ def resolve_metal_ion_parameters(
     normalized_water_model = water_model.lower()
     if normalized_water_model not in SUPPORTED_ION_WATER_MODELS:
         raise ValidationError("unsupported_ion_water_model", water_model)
-    metal_atoms = tuple(atom for atom in request.topology.atoms if atom.is_metal)
+    target_ids = atomic_center_atom_ids(request)
+    metal_atoms = tuple(
+        atom for atom in request.topology.atoms
+        if atom.external_id in target_ids
+    )
     if not metal_atoms:
         raise ValidationError("missing_metal_atom", "ion assignment requires at least one metal")
     for atom in metal_atoms:

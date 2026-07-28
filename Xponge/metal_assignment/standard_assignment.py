@@ -8,7 +8,12 @@ import subprocess
 from typing import Any, Mapping
 
 from .base_assignment import BaseAssignmentOutput, BaseAssignmentReport
-from .contracts import BaseForceFieldOverlay, ValidationError, _sha256
+from .contracts import (
+    BaseForceFieldOverlay,
+    ValidationError,
+    _sha256,
+    base_metal_component_supported,
+)
 from .input import MetalAssignmentPackage, validate_package
 from ._worker_runtime import worker_command
 
@@ -75,7 +80,10 @@ def _worker_payload(
         residue = residue_by_atom[component.atom_ids[0]]
         if set(residue.atom_ids) != set(component.atom_ids):
             raise ValidationError("standard_component_is_partial_residue", component.external_id, path)
-        if any(atom_by_id[atom_id].is_metal for atom_id in component.atom_ids):
+        if (
+            any(atom_by_id[atom_id].is_metal for atom_id in component.atom_ids)
+            and not base_metal_component_supported(component)
+        ):
             raise ValidationError("metal_in_base_force_field", component.external_id, path)
         artifact = artifact_by_id.get(component.external_id)
         if artifact is None:

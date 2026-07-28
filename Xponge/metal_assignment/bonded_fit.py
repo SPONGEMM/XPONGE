@@ -16,6 +16,7 @@ from .contracts import (
     _canonicalize,
     _freeze_field,
     _sha256,
+    atomic_center_atom_ids,
     validate_result,
 )
 from .force_fit import (
@@ -87,7 +88,7 @@ def validate_bonded_metal_parameter_spec(
     if isinstance(spec.precedence, bool) or not isinstance(spec.precedence, int) or spec.precedence <= 0:
         raise ValidationError("invalid_overlay_precedence", str(spec.precedence))
     atom_by_id = {atom.external_id: atom for atom in topology.atoms}
-    expected_metal_ids = {atom_id for atom_id, atom in atom_by_id.items() if atom.is_metal}
+    expected_metal_ids = set(atomic_center_atom_ids(request))
     actual_ids = [atom.external_id for atom in spec.metal_atoms]
     if len(actual_ids) != len(set(actual_ids)) or set(actual_ids) != expected_metal_ids:
         raise ValidationError("metal_parameter_spec_coverage_mismatch", ",".join(actual_ids))
@@ -216,9 +217,13 @@ def compose_bonded_fit(
                 geometry=empirical_geometry,
                 base_force_field=empirical_base_force_field,
                 water_model=empirical_water_model,
+                metal_atom_ids=atomic_center_atom_ids(request),
             )
         else:
-            terms, report = empirical_zn_nos_bonded_terms(request.topology)
+            terms, report = empirical_zn_nos_bonded_terms(
+                request.topology,
+                metal_atom_ids=atomic_center_atom_ids(request),
+            )
         _merge_terms(bonded_terms, terms)
         bonded_reports.append(report)
     elif normalized_force_method == "manual_bonded":
