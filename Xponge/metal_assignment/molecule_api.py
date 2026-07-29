@@ -12,81 +12,63 @@ from dataclasses import dataclass
 import hashlib
 import json
 import math
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
-from ._apply_worker import _angle_values, _bond_values, _improper_values, _proper_values
 from .contracts import (
-    MetalAssignmentInput,
     ParameterizationResult,
     ValidationError,
     _freeze_field,
-    validate_input,
-    validate_result,
 )
-from .base_assignment import assign_base_force_field
-from .base_composition import compose_base_force_field
 from .bonded_fit import compose_bonded_fit
 from .fit_input import validate_bonded_fit_input
 from .input import MetalAssignmentPackage, validate_package
-from .metal_overlay import assign_nonbonded_metal_ions
-from .nonbonded_assignment import compose_nonbonded_assignment
-from .standard_assignment import assign_standard_biomolecular
 
 
-_PARAMETERIZATION_OPERATIONS = frozenset({"assign-nonbonded-complete", "fit-bonded"})
+_PARAMETERIZATION_OPERATIONS = frozenset({"fit-bonded-local"})
 
 
-def _assign_complete_base(
-    package: MetalAssignmentPackage,
-    *,
-    provider: str | None,
-    water_model: str,
-    complete_missing_parameters: bool,
-    timeout_seconds: float,
-    base_charge_input: Any | None,
-) -> Any:
-    request = package.request
-    native_providers = sorted({
-        component.provider
-        for component in request.assignment_components
-        if component.base_force_field and component.provider in {"gaff", "gaff2"}
-    })
-    if len(native_providers) > 1:
-        raise ValidationError(
-            "multiple_native_base_providers",
-            ",".join(native_providers),
-        )
-    if native_providers and provider != native_providers[0]:
-        raise ValidationError(
-            "base_force_field_provider_mismatch",
-            f"expected {native_providers[0]}, got {provider}",
-            "provider",
-        )
-    if not native_providers and provider is not None:
-        raise ValidationError(
-            "unexpected_base_force_field_provider",
-            provider,
-            "provider",
-        )
-    fragments = []
-    if native_providers:
-        fragments.append(assign_base_force_field(
-            package,
-            native_providers[0],
-            complete_missing_parameters=complete_missing_parameters,
-            timeout_seconds=timeout_seconds,
-            base_charge_input=base_charge_input,
-        ))
-    if any(
-        component.base_force_field and component.provider == "standard_biomolecular"
-        for component in request.assignment_components
-    ):
-        fragments.append(assign_standard_biomolecular(
-            package,
-            water_model=water_model,
-            timeout_seconds=timeout_seconds,
-        ))
-    return compose_base_force_field(package, fragments)
+def _bond_values(term: Any) -> tuple[float, float]:
+    values = term.parameters
+    if "force_constant" in values and "equilibrium_distance" in values:
+        return float(values["force_constant"]), float(values["equilibrium_distance"])
+    if "k" in values and "equilibrium" in values:
+        return float(values["k"]), float(values["equilibrium"])
+    raise ValidationError("unsupported_bond_parameter_shape", term.external_id)
+
+
+def _angle_values(term: Any) -> tuple[float, float]:
+    values = term.parameters
+    if "force_constant" in values and "equilibrium_angle" in values:
+        return float(values["force_constant"]), float(values["equilibrium_angle"])
+    if "k" in values and "equilibrium" in values:
+        return float(values["k"]), float(values["equilibrium"])
+    raise ValidationError("unsupported_angle_parameter_shape", term.external_id)
+
+
+def _proper_values(term: Any) -> tuple[list[float], list[float], list[int]]:
+    values = term.parameters
+    if {"force_constants", "phases", "periodicities"} <= set(values):
+        ks = [float(value) for value in values["force_constants"]]
+        phases = [float(value) for value in values["phases"]]
+        periodicities = [int(value) for value in values["periodicities"]]
+    elif {"k", "phase", "periodicity"} <= set(values):
+        ks = [float(values["k"])]
+        phases = [float(values["phase"])]
+        periodicities = [int(values["periodicity"])]
+    else:
+        raise ValidationError("unsupported_proper_parameter_shape", term.external_id)
+    if not ks or len(ks) != len(phases) or len(ks) != len(periodicities):
+        raise ValidationError("invalid_proper_parameter_multiplicity", term.external_id)
+    return ks, phases, periodicities
+
+
+def _improper_values(term: Any) -> tuple[float, float, int]:
+    values = term.parameters
+    if {"force_constant", "phase", "periodicity"} <= set(values):
+        return float(values["force_constant"]), float(values["phase"]), int(values["periodicity"])
+    if {"k", "phase", "periodicity"} <= set(values):
+        return float(values["k"]), float(values["phase"]), int(values["periodicity"])
+    raise ValidationError("unsupported_improper_parameter_shape", term.external_id)
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,9 +92,9 @@ def parameterize(
 ) -> ParameterizationResult:
     """Return a validated metal parameterization result.
 
-    ``operation`` is deliberately limited to the two operations that produce
-    an apply-ready overlay.  Lower-level RESP/Hessian providers remain
-    available from their existing modules.
+    ``fit-bonded-local`` produces only the metal-local patch for application
+    to an already assigned Molecule.  Lower-level RESP/Hessian providers
+    remain available from their existing modules.
     """
 
     validate_package(package)
@@ -121,57 +103,18 @@ def parameterize(
             "unsupported_molecule_parameterization_operation",
             operation,
         )
-    allowed_options = {
-        "provider",
-        "water_model",
-        "complete_missing_parameters",
-        "timeout_seconds",
-        "base_charge_input",
-        "bonded_fit_input",
-    }
+    allowed_options = {"bonded_fit_input"}
     unknown = set(options) - allowed_options
     if unknown:
         raise ValidationError(
             "unexpected_molecule_parameterization_option",
             ",".join(sorted(unknown)),
         )
-    provider = options.get("provider")
-    water_model = options.get("water_model")
-    complete_missing_parameters = options.get("complete_missing_parameters", True)
-    timeout_seconds = float(options.get("timeout_seconds", 120.0))
-    base_charge_input = options.get("base_charge_input")
     request = package.request
-    if not water_model:
+    if request.interaction_model != "bonded":
         raise ValidationError(
-            "missing_standard_water_model",
-            f"{operation} requires a water model",
-        )
-    base = _assign_complete_base(
-        package,
-        provider=provider,
-        water_model=water_model,
-        complete_missing_parameters=complete_missing_parameters,
-        timeout_seconds=timeout_seconds,
-        base_charge_input=base_charge_input,
-    )
-    if operation == "assign-nonbonded-complete":
-        if request.interaction_model != "nonbonded_12_6":
-            raise ValidationError(
-                "ion_provider_interaction_model_mismatch",
-                request.interaction_model,
-            )
-        if options.get("bonded_fit_input") is not None:
-            raise ValidationError("unexpected_bonded_fit_input", operation)
-        metal = assign_nonbonded_metal_ions(
-            package,
-            water_model=water_model,
-            timeout_seconds=timeout_seconds,
-        )
-        return compose_nonbonded_assignment(
-            request,
-            base,
-            metal,
-            package_hash=package.package_hash,
+            "invalid_bonded_fit_interaction_model",
+            request.interaction_model,
         )
     bonded_fit_input = options.get("bonded_fit_input")
     if bonded_fit_input is None:
@@ -182,7 +125,7 @@ def parameterize(
     validate_bonded_fit_input(bonded_fit_input)
     return compose_bonded_fit(
         package,
-        base,
+        None,
         bonded_fit_input.metal_parameter_spec,
         charge_artifacts=bonded_fit_input.charge_artifacts,
         hessian_artifacts=bonded_fit_input.hessian_artifacts,
@@ -199,25 +142,29 @@ def parameterize(
     )
 
 
-def _normalized_atom_mapping(
+def _normalized_patch_mapping(
     molecule: Any,
-    request: MetalAssignmentInput,
-    atom_mapping: Mapping[str, Any],
+    patch: Any,
+    atom_mapping: Mapping[str, Any] | None,
 ) -> tuple[tuple[str, int], ...]:
     molecule.get_atoms()
+    expected_atoms = {atom.external_id: atom for atom in patch.atoms}
+    if atom_mapping is None:
+        atom_mapping = {
+            atom.external_id: atom.stable_order
+            for atom in patch.atoms
+        }
     if not isinstance(atom_mapping, Mapping):
         raise ValidationError("invalid_molecule_atom_mapping", "expected mapping")
-    expected = {atom.external_id for atom in request.topology.atoms}
-    provided = set(atom_mapping)
-    if not expected <= provided:
-        missing = sorted(expected - provided)
+    if not set(expected_atoms) <= set(atom_mapping):
+        missing = sorted(set(expected_atoms) - set(atom_mapping))
         raise ValidationError(
             "molecule_atom_mapping_coverage_mismatch",
             f"missing={missing}",
         )
-    atom_index = {atom: index for index, atom in enumerate(molecule.atoms)}
-    normalized = []
-    for external_id in expected:
+    molecule_atom_index = {atom: index for index, atom in enumerate(molecule.atoms)}
+    normalized: list[tuple[str, int]] = []
+    for external_id, identity in expected_atoms.items():
         value = atom_mapping[external_id]
         if isinstance(value, bool):
             raise ValidationError("invalid_molecule_atom_index", external_id)
@@ -225,20 +172,49 @@ def _normalized_atom_mapping(
             index = value
         else:
             try:
-                index = atom_index[value]
+                index = molecule_atom_index[value]
             except (KeyError, TypeError) as exc:
-                raise ValidationError(
-                    "molecule_atom_not_found",
-                    external_id,
-                ) from exc
+                raise ValidationError("molecule_atom_not_found", external_id) from exc
         if index < 0 or index >= len(molecule.atoms):
             raise ValidationError("invalid_molecule_atom_index", external_id)
-        normalized.append((str(external_id), index))
+        molecule_atom = molecule.atoms[index]
+        observed_name = str(getattr(molecule_atom, "name", "") or "").strip()
+        if observed_name != identity.atom_name:
+            raise ValidationError(
+                "molecule_atom_identity_mismatch",
+                f"{external_id}:expected_name={identity.atom_name},observed_name={observed_name}",
+            )
+        observed_element = getattr(molecule_atom, "element", None)
+        if observed_element is None:
+            observed_element = getattr(
+                getattr(molecule_atom, "type", None),
+                "element",
+                None,
+            )
+        if (
+            observed_element is not None
+            and str(observed_element).strip()
+            and str(observed_element).strip().upper()
+            != identity.element.strip().upper()
+        ):
+            raise ValidationError(
+                "molecule_atom_identity_mismatch",
+                (
+                    f"{external_id}:expected_element={identity.element},"
+                    f"observed_element={observed_element}"
+                ),
+            )
+        normalized.append((external_id, index))
     indices = [index for _, index in normalized]
     if len(indices) != len(set(indices)):
         raise ValidationError("duplicate_molecule_atom_mapping", "atom indices")
-    stable_order = {atom.external_id: atom.stable_order for atom in request.topology.atoms}
-    return tuple(sorted(normalized, key=lambda item: (stable_order[item[0]], item[0])))
+    return tuple(sorted(
+        normalized,
+        key=lambda item: (
+            expected_atoms[item[0]].stable_order,
+            item[0],
+        ),
+    ))
 
 
 def _topology_fingerprint(molecule: Any) -> tuple[Any, ...]:
@@ -260,14 +236,12 @@ def _topology_fingerprint(molecule: Any) -> tuple[Any, ...]:
     )
 
 
-def _validate_prepared_links(
+def _validate_patch_links(
     molecule: Any,
-    request: MetalAssignmentInput,
+    patch: Any,
     index_by_external_id: Mapping[str, int],
 ) -> None:
-    for link in request.topology.links:
-        if not link.active:
-            continue
+    for link in patch.required_links:
         atom1 = molecule.atoms[index_by_external_id[link.atom_ids[0]]]
         atom2 = molecule.atoms[index_by_external_id[link.atom_ids[1]]]
         if molecule.get_residue_link(atom1, atom2) is None:
@@ -453,11 +427,92 @@ def _register_native_build_force_types(
         )
 
 
+def prepare_residue_templates(
+    patch: Any,
+    atom_records: Sequence[Mapping[str, Any]],
+) -> Mapping[str, Any]:
+    """Ensure embedded patch metals can be loaded without GAFF typing them."""
+
+    from Xponge.forcefield.base.lj_base import LJType
+    from Xponge.helper import AtomType, ResidueType
+    from .patch import MetalParameterPatch, validate_metal_parameter_patch
+
+    if not isinstance(patch, MetalParameterPatch):
+        raise TypeError(
+            "metal_assignment.prepare_residue_templates expects a "
+            "MetalParameterPatch"
+        )
+    validate_metal_parameter_patch(patch)
+    records = {
+        str(record.get("external_id") or ""): record
+        for record in atom_records
+        if isinstance(record, Mapping)
+        and str(record.get("external_id") or "")
+    }
+    overlay = patch.parameterization_result.metal_overlay
+    prepared: list[str] = []
+    for external_id in patch.target_metal_atom_ids:
+        record = records.get(external_id)
+        if record is None:
+            raise ValidationError(
+                "metal_template_atom_record_missing",
+                external_id,
+            )
+        residue_name = str(record.get("residue_name") or "").strip()
+        atom_name = str(record.get("atom_name") or "").strip()
+        if not residue_name or not atom_name:
+            raise ValidationError(
+                "invalid_metal_template_atom_record",
+                external_id,
+            )
+        try:
+            residue_type = ResidueType.get_type(residue_name)
+        except KeyError as exc:
+            raise ValidationError(
+                "metal_template_residue_type_missing",
+                residue_name,
+            ) from exc
+        try:
+            residue_type.name2atom(atom_name)
+            continue
+        except KeyError:
+            pass
+
+        lj = overlay.lj_parameters.get(external_id)
+        mass = overlay.masses.get(external_id)
+        charge = overlay.charges.get(external_id)
+        if lj is None or mass is None or charge is None:
+            raise ValidationError(
+                "metal_template_baseline_parameters_missing",
+                external_id,
+            )
+        namespace = patch.patch_hash[:12]
+        lj_name = f"MA_LOAD_LJ_{namespace}_{len(prepared)}"
+        _get_or_create_type(
+            LJType,
+            f"{lj_name}-{lj_name}",
+            epsilon=float(lj["epsilon"]),
+            rmin=float(lj["rmin"]),
+        )
+        atom_type = _get_or_create_type(
+            AtomType,
+            f"MA_LOAD_{namespace}_{len(prepared)}",
+            charge=float(charge),
+            mass=float(mass),
+            LJtype=lj_name,
+        )
+        residue_type.add_atom(atom_name, atom_type, 0.0, 0.0, 0.0)
+        prepared.append(external_id)
+    return {
+        "patch_hash": patch.patch_hash,
+        "prepared_atom_ids": tuple(prepared),
+    }
+
+
 def apply(
     molecule: Any,
-    request: MetalAssignmentInput,
-    result: ParameterizationResult,
-    atom_mapping: Mapping[str, Any],
+    patch: Any,
+    atom_mapping: Mapping[str, Any] | None = None,
     *,
     inplace: bool = False,
 ) -> MetalAssignmentResult:
@@ -473,15 +528,26 @@ def apply(
     from Xponge.forcefield.base.dihedral_base import ImproperType, ProperType
     from Xponge.forcefield.base.lj_base import LJType
     from Xponge.helper import AtomType, Molecule
+    from .patch import MetalParameterPatch, validate_metal_parameter_patch
 
     if not isinstance(molecule, Molecule):
         raise TypeError("metal_assignment.apply expects an Xponge Molecule")
-    validate_input(request)
-    validate_result(request, result)
-    normalized_mapping = _normalized_atom_mapping(molecule, request, atom_mapping)
+    if not isinstance(patch, MetalParameterPatch):
+        raise TypeError(
+            "metal_assignment.apply expects a MetalParameterPatch"
+        )
+    validate_metal_parameter_patch(patch)
+    result = patch.parameterization_result
+    normalized_mapping = _normalized_patch_mapping(
+        molecule,
+        patch,
+        atom_mapping,
+    )
+    request_id = patch.request_id
+    request_atom_ids = {atom.external_id for atom in patch.atoms}
     index_by_external_id = dict(normalized_mapping)
     before = _topology_fingerprint(molecule)
-    _validate_prepared_links(molecule, request, index_by_external_id)
+    _validate_patch_links(molecule, patch, index_by_external_id)
 
     local_terms = _local_force_terms(result)
     local_atom_ids = set(result.metal_overlay.covered_atom_ids)
@@ -490,7 +556,6 @@ def apply(
         local_atom_ids.update(result.charge_overlay.charges)
     for _, term in local_terms:
         local_atom_ids.update(term["atom_ids"])
-    request_atom_ids = {atom.external_id for atom in request.topology.atoms}
     if not local_atom_ids <= request_atom_ids:
         raise ValidationError(
             "metal_overlay_atom_not_in_request",
@@ -513,6 +578,14 @@ def apply(
             assigned_residue.name = source_residue.name
         assigned.get_atoms()
         if not assigned.built:
+            suspended_patch_links = []
+            for link in patch.required_links:
+                atom1 = assigned.atoms[index_by_external_id[link.atom_ids[0]]]
+                atom2 = assigned.atoms[index_by_external_id[link.atom_ids[1]]]
+                residue_link = assigned.get_residue_link(atom1, atom2)
+                if residue_link is not None:
+                    assigned.del_residue_link(atom1, atom2)
+                    suspended_patch_links.append((atom1, atom2))
             try:
                 build_bonded_force(assigned)
             except Exception as exc:
@@ -520,6 +593,8 @@ def apply(
                     "ordinary_force_field_not_assigned",
                     "build the ordinary Xponge force field before applying metal parameters",
                 ) from exc
+            for atom1, atom2 in suspended_patch_links:
+                assigned.add_residue_link(atom1, atom2)
 
         atom_by_external_id = {
             external_id: assigned.atoms[index]
@@ -529,7 +604,11 @@ def apply(
         for local_index, external_id in enumerate(sorted(local_atom_ids)):
             atom = atom_by_external_id[external_id]
             old_type = atom.type
+            original_atom_name = atom.name
+            original_coordinates = (atom.x, atom.y, atom.z)
             contents = dict(old_type.contents)
+            if getattr(atom, "charge", None) is not None:
+                contents["charge"] = float(atom.charge)
             if external_id in result.metal_overlay.charges:
                 contents["charge"] = float(result.metal_overlay.charges[external_id])
             if result.charge_overlay is not None and external_id in result.charge_overlay.charges:
@@ -562,6 +641,8 @@ def apply(
             effective_type = _get_or_create_type(AtomType, effective_name, **parameters)
             atom.type = effective_type
             atom.contents = dict(effective_type.contents)
+            atom.name = original_atom_name
+            atom.x, atom.y, atom.z = original_coordinates
 
         force_counts: dict[str, int] = {}
         for term_index, (term_id, value) in enumerate(local_terms):
@@ -613,7 +694,7 @@ def apply(
         )
         after = _topology_fingerprint(assigned)
         if after != before:
-            raise ValidationError("molecule_topology_changed_during_apply", request.request_id)
+            raise ValidationError("molecule_topology_changed_during_apply", request_id)
         assigned.built = True
     except Exception:
         _restore_registries(registry_snapshots)
@@ -627,8 +708,9 @@ def apply(
         assigned = molecule
         Molecule._all[assigned.name] = assigned
     report = {
-        "request_id": request.request_id,
+        "request_id": request_id,
         "result_hash": result.result_hash,
+        "patch_hash": patch.patch_hash,
         "inplace": bool(inplace),
         "atom_count": len(assigned.atoms),
         "residue_count": len(assigned.residues),
@@ -646,30 +728,9 @@ def apply(
     )
 
 
-def assign(
-    molecule: Any,
-    package: MetalAssignmentPackage,
-    atom_mapping: Mapping[str, Any],
-    *,
-    operation: str,
-    inplace: bool = False,
-    **options: Any,
-) -> MetalAssignmentResult:
-    """Parameterize a metal site and apply it to an existing Molecule."""
-
-    result = parameterize(package, operation=operation, **options)
-    return apply(
-        molecule,
-        package.request,
-        result,
-        atom_mapping,
-        inplace=inplace,
-    )
-
-
 __all__ = [
     "MetalAssignmentResult",
     "apply",
-    "assign",
     "parameterize",
+    "prepare_residue_templates",
 ]

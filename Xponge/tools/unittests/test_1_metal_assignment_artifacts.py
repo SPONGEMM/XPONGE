@@ -14,7 +14,6 @@ import json
 import os
 from pathlib import Path
 import sys
-from tempfile import TemporaryDirectory
 from unittest import mock
 import unittest
 
@@ -22,9 +21,7 @@ from Xponge.metal_assignment import (
     BaseChargeInput,
     ChargeAssignmentContract,
     ChargePolicy,
-    BondedMetalParameterSpec,
     HessianArtifact,
-    MetalAtomParameterSpec,
     ModelChargeArtifact,
     RESP_FIT_INPUT_SCHEMA_VERSION,
     RespFitInput,
@@ -32,20 +29,13 @@ from Xponge.metal_assignment import (
     ValidationError,
     assign_base_force_field,
     assign_nonbonded_metal_ions,
-    assign_standard_biomolecular,
-    compose_base_force_field,
-    compose_bonded_fit,
     fit_resp_charges,
-    metal_assignment_package_dumps,
-    metal_assignment_package_loads,
+    metal_local_model_package_from_dict,
+    metal_local_model_package_to_dict,
     parameterize,
     project_model_charges,
     seminario_bonded_terms,
     validate_package,
-)
-from Xponge.metal_assignment.assigned_system import (
-    ForceRealizationProtocol,
-    apply_parameterization,
 )
 from Xponge.metal_assignment.artifacts import _validate_mol2
 
@@ -210,21 +200,20 @@ class ChemcoreArtifactContractTests(unittest.TestCase):
             request,
             self.mokda_root,
         )
-        return metal_assignment_package_loads(
-            json.dumps(package_payload, sort_keys=True, separators=(",", ":"))
-        )
+        return metal_local_model_package_from_dict(package_payload)
 
     def adapt(self, interaction_model: str):
         return self.prepare(interaction_model)
 
     @staticmethod
     def rehash_package(package, *, artifacts=None, models=None):
-        prepared = package.prepared_artifacts
         if artifacts is not None:
-            prepared = replace(prepared, structural_artifacts=artifacts)
-        if models is not None:
-            prepared = replace(prepared, derived_models=models)
-        updated = replace(package, prepared_artifacts=prepared, package_hash="")
+            raise AssertionError("local model packages do not contain structural artifacts")
+        updated = replace(
+            package,
+            derived_models=package.derived_models if models is None else models,
+            package_hash="",
+        )
         return replace(updated, package_hash=updated.computed_hash())
 
     @staticmethod
@@ -250,12 +239,12 @@ class ChemcoreArtifactContractTests(unittest.TestCase):
     def test_bonded_output_is_consumed_and_round_trips(self):
         package = self.adapt("bonded")
         validate_package(package)
-        self.assertTrue(package.prepared_artifacts.derived_models.models_generated)
+        self.assertTrue(package.derived_models.models_generated)
         self.assertEqual(
-            tuple(model.purpose for model in package.prepared_artifacts.derived_models.models),
+            tuple(model.purpose for model in package.derived_models.models),
             ("site", "small", "large"),
         )
-        site, small, large = package.prepared_artifacts.derived_models.models
+        site, small, large = package.derived_models.models
         self.assertIsNone(site.electronic_state)
         self.assertEqual((small.electronic_state.net_charge, large.electronic_state.net_charge), (2, 2))
         self.assertEqual(
@@ -270,27 +259,25 @@ class ChemcoreArtifactContractTests(unittest.TestCase):
             (small.electronic_state.selection_id, large.electronic_state.selection_id),
             (expected_selection_id, expected_selection_id),
         )
-        payload = metal_assignment_package_dumps(package)
-        self.assertEqual(metal_assignment_package_loads(payload), package)
-        self.assertEqual(metal_assignment_package_dumps(metal_assignment_package_loads(payload)), payload)
+        payload = metal_local_model_package_to_dict(package)
+        self.assertEqual(metal_local_model_package_from_dict(payload), package)
+        self.assertNotIn("prepared_artifacts", payload)
+        self.assertNotIn("prepared_system", json.dumps(payload))
 
-    def test_nonbonded_parameterize_operation_is_closed(self):
+    def test_molecule_parameterize_rejects_nonbonded_full_system_assignment(self):
         nonbonded = self.adapt("nonbonded_12_6")
-        result = parameterize(
-            nonbonded,
-            operation="assign-nonbonded-complete",
-            provider="gaff2",
-            water_model="tip3p",
-        )
-        self.assertEqual(result.status, "overlay_validated")
-        self.assertEqual(
-            result.topology_hash,
-            nonbonded.request.topology.topology_hash,
-        )
+        with self.assertRaisesRegex(
+            ValidationError,
+            "unsupported_molecule_parameterization_operation",
+        ):
+            parameterize(
+                nonbonded,
+                operation="assign-nonbonded-complete",
+            )
 
     def test_nonbonded_output_proves_model_generation_was_skipped(self):
         package = self.adapt("nonbonded_12_6")
-        models = package.prepared_artifacts.derived_models
+        models = package.derived_models
         self.assertFalse(models.models_generated)
         self.assertEqual(models.skipped_reason, "nonbonded_12_6_fast_path")
         self.assertFalse(models.models)
@@ -402,249 +389,6 @@ class ChemcoreArtifactContractTests(unittest.TestCase):
                 atom_by_id = {atom.external_id: atom for atom in package.request.topology.atoms}
                 self.assertFalse(any(atom_by_id[atom_id].is_metal for atom_id in output.overlay.covered_atom_ids))
 
-    def _assert_real_nonbonded_component_charges_apply_and_export(
-        self,
-        fixture: Path,
-        expected_atom_count: int,
-        formats: tuple[str, ...],
-    ) -> None:
-        charge_input = BaseChargeInput(
-            schema_version=1,
-            method="tpacm4",
-            source="real-fixture-empirical-component-charge",
-        ).with_computed_hash()
-        protocol = ForceRealizationProtocol(
-            family="amber",
-            exclusion_bond_depth=3,
-            one_four_lj_scale=0.5,
-            one_four_electrostatic_scale=0.8333333333333334,
-            source="amber-default",
-        ).with_computed_hash()
-        with TemporaryDirectory(prefix="xponge-real-nonbonded-export-") as tempdir:
-            self.structure = fixture.read_text()
-            package = self.adapt("nonbonded_12_6")
-            result = parameterize(
-                package,
-                operation="assign-nonbonded-complete",
-                provider="gaff2",
-                water_model="tip3p",
-                base_charge_input=charge_input,
-                timeout_seconds=180.0,
-            )
-            applied = apply_parameterization(
-                package.request,
-                result,
-                protocol,
-                timeout_seconds=180.0,
-            )
-            self.assertTrue(applied.assigned_system.complete)
-            self.assertEqual(len(applied.assigned_system.atom_parameters), expected_atom_count)
-            self.assertEqual(
-                applied.assigned_system.topology.topology_hash,
-                package.request.topology.topology_hash,
-            )
-            self.assertLess(
-                applied.assigned_system.application_audit["materialized_lj_type_count"],
-                expected_atom_count,
-            )
-            from Xponge import save_sponge_input
-            from Xponge.metal_assignment._apply_worker import materialize_assigned_system
-
-            molecule, atoms_by_external_id, _ = materialize_assigned_system(
-                applied.assigned_system
-            )
-            molecule.box_length = [500.0, 500.0, 500.0]
-            molecule.box_angle = [90.0, 90.0, 90.0]
-            source_ids = {
-                atom: external_id
-                for external_id, atom in atoms_by_external_id.items()
-            }
-            mappings = []
-            for format_name in formats:
-                output_root = Path(tempdir) / format_name
-                output_root.mkdir(parents=True, exist_ok=True)
-                _, mapping = save_sponge_input(
-                    molecule,
-                    "system",
-                    str(output_root),
-                    format=format_name,
-                    source_atom_ids=source_ids,
-                    return_mapping=True,
-                )
-                mappings.append(mapping)
-                self.assertTrue(any(output_root.iterdir()))
-            self.assertTrue(mappings)
-            self.assertTrue(all(mapping == mappings[0] for mapping in mappings))
-
-    @unittest.skipUnless(
-        os.environ.get("MOKDA_METAL_FIXTURE_3GOU"),
-        "set repaired 3GOU fixture path to run nonbonded apply/export integration",
-    )
-    def test_real_3gou_nonbonded_component_charges_apply_and_export_raw(self):
-        self._assert_real_nonbonded_component_charges_apply_and_export(
-            Path(os.environ["MOKDA_METAL_FIXTURE_3GOU"]),
-            9206,
-            ("raw",),
-        )
-
-    @unittest.skipUnless(
-        os.environ.get("MOKDA_METAL_FIXTURE_3GOU"),
-        "set repaired 3GOU fixture path to run nonbonded apply/export integration",
-    )
-    def test_real_3gou_nonbonded_component_charges_apply_and_export_bundle(self):
-        self._assert_real_nonbonded_component_charges_apply_and_export(
-            Path(os.environ["MOKDA_METAL_FIXTURE_3GOU"]),
-            9206,
-            ("bundle",),
-        )
-
-    @unittest.skipUnless(
-        os.environ.get("MOKDA_METAL_FIXTURE_4EWL"),
-        "set repaired 4EWL fixture path to run nonbonded apply/export integration",
-    )
-    def test_real_4ewl_nonbonded_component_charges_apply_and_export_raw(self):
-        self._assert_real_nonbonded_component_charges_apply_and_export(
-            Path(os.environ["MOKDA_METAL_FIXTURE_4EWL"]),
-            10652,
-            ("raw",),
-        )
-
-    @unittest.skipUnless(
-        os.environ.get("MOKDA_METAL_FIXTURE_4EWL"),
-        "set repaired 4EWL fixture path to run nonbonded apply/export integration",
-    )
-    def test_real_4ewl_nonbonded_component_charges_apply_and_export_bundle(self):
-        self._assert_real_nonbonded_component_charges_apply_and_export(
-            Path(os.environ["MOKDA_METAL_FIXTURE_4EWL"]),
-            10652,
-            ("bundle",),
-        )
-
-    @unittest.skipUnless(
-        os.environ.get("MOKDA_METAL_FIXTURE_3GOU") and os.environ.get("MOKDA_METAL_FIXTURE_4EWL"),
-        "set repaired real-fixture paths to run complete base-assignment integration tests",
-    )
-    def test_real_bonded_empirical_component_charges_apply_for_3gou_and_repaired_4ewl(self):
-        charge_input = BaseChargeInput(
-            schema_version=1,
-            method="tpacm4",
-            source="real-fixture-empirical-component-charge",
-        ).with_computed_hash()
-        cases = (
-            (Path(os.environ["MOKDA_METAL_FIXTURE_3GOU"]), 604, 8914),
-            (Path(os.environ["MOKDA_METAL_FIXTURE_4EWL"]), 1154, 10394),
-        )
-        for fixture, expected_standard_components, expected_standard_atoms in cases:
-            with self.subTest(fixture=fixture.name):
-                self.structure = fixture.read_text()
-                package = self.adapt("bonded")
-                gaff = assign_base_force_field(
-                    package,
-                    "gaff2",
-                    timeout_seconds=120.0,
-                    base_charge_input=charge_input,
-                )
-                standard = assign_standard_biomolecular(package, timeout_seconds=120.0)
-                complete = compose_base_force_field(package, (standard, gaff))
-                expected_base_ids = {
-                    atom_id
-                    for component in package.request.assignment_components
-                    if component.base_force_field
-                    for atom_id in component.atom_ids
-                }
-                self.assertEqual(len(standard.report.component_ids), expected_standard_components)
-                self.assertEqual(standard.report.atom_count, expected_standard_atoms)
-                self.assertEqual(set(complete.overlay.covered_atom_ids), expected_base_ids)
-                self.assertEqual(set(complete.overlay.atom_types), expected_base_ids)
-                self.assertEqual(set(complete.overlay.charges), expected_base_ids)
-                self.assertEqual(set(complete.overlay.masses), expected_base_ids)
-                self.assertEqual(set(complete.overlay.lj_parameters), expected_base_ids)
-                self.assertEqual(
-                    complete.report.providers,
-                    ("gaff2", "standard_biomolecular"),
-                )
-                self.assertEqual(complete.report.report_hash, complete.report.computed_hash())
-                metal_atoms = tuple(atom for atom in package.request.topology.atoms if atom.is_metal)
-                specs = []
-                for atom in metal_atoms:
-                    if atom.element == "Fe":
-                        atom_type, mass, epsilon, rmin = "Fe2+", 55.85, 0.00941798, 1.353
-                    else:
-                        atom_type, mass, epsilon, rmin = "Zn2+", 65.4, 0.00330286, 1.271
-                    specs.append(MetalAtomParameterSpec(
-                        atom.external_id,
-                        atom.element,
-                        atom.formal_charge,
-                        atom_type,
-                        float(atom.formal_charge),
-                        mass,
-                        epsilon,
-                        rmin,
-                    ))
-                metal_spec = BondedMetalParameterSpec(
-                    schema_version=package.request.schema_version,
-                    topology_hash=package.request.topology.topology_hash,
-                    metal_atoms=tuple(specs),
-                    donor_atom_types={},
-                    parameter_source="unit-test:explicit-metal-nonbonded-v1",
-                    provenance={"fixture": fixture.name, "purpose": "deterministic-fit-composition"},
-                ).with_computed_hash()
-                if fixture.name.startswith("3GOU"):
-                    import numpy as np
-                    hessians = tuple(
-                        HessianArtifact(
-                            model.external_id,
-                            model.model_hash,
-                            tuple(atom.model_atom_id for atom in model.atoms),
-                            tuple(tuple(atom.coordinates) for atom in model.atoms),
-                            np.eye(len(model.atoms) * 3, dtype=float) * 0.01,
-                            "deterministic-test",
-                            "1",
-                        )
-                        for model in package.prepared_artifacts.derived_models.models
-                        if model.purpose == "small"
-                    )
-                    fitted = compose_bonded_fit(
-                        package,
-                        complete,
-                        metal_spec,
-                        hessian_artifacts=hessians,
-                        force_method="seminario",
-                    )
-                else:
-                    fitted = compose_bonded_fit(
-                        package,
-                        complete,
-                        metal_spec,
-                        force_method="empirical_zn_nos",
-                    )
-                self.assertEqual(fitted.status, "overlay_validated")
-                self.assertFalse(fitted.complete)
-                self.assertTrue(fitted.bonded_overlay.terms)
-                self.assertTrue(all(
-                    any(atom_id in {atom.external_id for atom in metal_atoms} for atom_id in term["atom_ids"])
-                    for term in fitted.bonded_overlay.terms.values()
-                ))
-                protocol = ForceRealizationProtocol(
-                    "amber", 3, 0.5, 0.833333, "xponge:amber-explicit-v1",
-                ).with_computed_hash()
-                applied = apply_parameterization(
-                    package.request,
-                    fitted,
-                    protocol,
-                    timeout_seconds=180.0,
-                )
-                self.assertTrue(applied.assigned_system.complete)
-                self.assertEqual(
-                    applied.assigned_system.topology.topology_hash,
-                    package.request.topology.topology_hash,
-                )
-                self.assertEqual(len(applied.assigned_system.atom_parameters), len(package.request.topology.atoms))
-                self.assertLess(
-                    applied.assigned_system.application_audit["materialized_lj_type_count"],
-                    len(package.request.topology.atoms),
-                )
-
     @unittest.skipUnless(
         os.environ.get("MOKDA_METAL_FIXTURE_3GOU") and os.environ.get("MOKDA_METAL_FIXTURE_4EWL"),
         "set repaired real-fixture paths to run native ion integration tests",
@@ -664,24 +408,9 @@ class ChemcoreArtifactContractTests(unittest.TestCase):
                 self.assertEqual(set(output.overlay.covered_atom_ids), {atom.external_id for atom in metal_atoms})
                 self.assertTrue(all(output.overlay.masses[atom.external_id] > 0 for atom in metal_atoms))
 
-    def test_tampered_structural_artifact_is_rejected(self):
-        package = self.adapt("bonded")
-        artifacts = package.prepared_artifacts.structural_artifacts
-        corrupted_prepared = replace(
-            artifacts.prepared_system,
-            mol2_text=artifacts.prepared_system.mol2_text.replace("NO_CHARGES", "USER_CHARGES", 1),
-        )
-        corrupted_artifacts = replace(artifacts, prepared_system=corrupted_prepared)
-        corrupted_package = replace(
-            package,
-            prepared_artifacts=replace(package.prepared_artifacts, structural_artifacts=corrupted_artifacts),
-        )
-        with self.assertRaisesRegex(ValidationError, "stale_structural_bundle_hash|stale_artifact_hash"):
-            validate_package(corrupted_package)
-
     def test_hash_closed_model_edge_with_unknown_endpoint_is_rejected(self):
         package = self.adapt("bonded")
-        bundle = package.prepared_artifacts.derived_models
+        bundle = package.derived_models
         model = bundle.models[0]
         bond = model.bonds[0]
         corrupted_bond = replace(bond, model_atom_ids=("missing-model-atom", bond.model_atom_ids[1]))
@@ -692,12 +421,12 @@ class ChemcoreArtifactContractTests(unittest.TestCase):
             models=(corrupted_model, *bundle.models[1:]),
         )
         corrupted_package = self.rehash_package(package, models=corrupted_bundle)
-        with self.assertRaisesRegex(ValidationError, "model_edge_unknown_atom"):
+        with self.assertRaisesRegex(ValidationError, "invalid_model_edge|model_edge_unknown_atom"):
             validate_package(corrupted_package)
 
     def test_hash_closed_site_with_unknown_metal_is_rejected(self):
         package = self.adapt("bonded")
-        bundle = package.prepared_artifacts.derived_models
+        bundle = package.derived_models
         corrupted_site = replace(bundle.sites[0], metal_atom_ids=("missing-metal",))
         corrupted_bundle = self.rehash_model_bundle(
             bundle,
@@ -709,7 +438,7 @@ class ChemcoreArtifactContractTests(unittest.TestCase):
 
     def test_nonbonded_hash_closed_active_edge_mismatch_is_rejected(self):
         package = self.adapt("nonbonded_12_6")
-        bundle = package.prepared_artifacts.derived_models
+        bundle = package.derived_models
         self.assertTrue(bundle.removed_interaction_edge_ids)
         corrupted_bundle = self.rehash_model_bundle(
             bundle,
@@ -719,25 +448,10 @@ class ChemcoreArtifactContractTests(unittest.TestCase):
         with self.assertRaisesRegex(ValidationError, "active_metal_interaction_edge_mismatch"):
             validate_package(corrupted_package)
 
-    def test_hash_closed_mol2_without_atom_section_is_rejected(self):
-        package = self.adapt("bonded")
-        bundle = package.prepared_artifacts.structural_artifacts
-        corrupted_artifact = replace(
-            bundle.prepared_system,
-            mol2_text=bundle.prepared_system.mol2_text.replace("@<TRIPOS>ATOM", "@<TRIPOS>ATXM", 1),
-        )
-        corrupted_bundle = self.rehash_structural_bundle(
-            bundle,
-            prepared_system=corrupted_artifact,
-        )
-        corrupted_package = self.rehash_package(package, artifacts=corrupted_bundle)
-        with self.assertRaisesRegex(ValidationError, "invalid_mol2"):
-            validate_package(corrupted_package)
-
     def test_seminario_provider_consumes_explicit_small_model_hessian(self):
         package = self.adapt("bonded")
         small = next(
-            model for model in package.prepared_artifacts.derived_models.models if model.purpose == "small"
+            model for model in package.derived_models.models if model.purpose == "small"
         )
         atom_count = len(small.atoms)
         hessian = tuple(
@@ -762,7 +476,7 @@ class ChemcoreArtifactContractTests(unittest.TestCase):
         package = self.adapt("bonded")
         topology = package.request.topology
         large = next(
-            model for model in package.prepared_artifacts.derived_models.models if model.purpose == "large"
+            model for model in package.derived_models.models if model.purpose == "large"
         )
         fit_atom_ids = tuple(str(atom.external_id) for atom in large.atoms if atom.role != "cap")
         component_targets = {
@@ -832,7 +546,7 @@ class ChemcoreArtifactContractTests(unittest.TestCase):
         package = self.adapt("bonded")
         topology = package.request.topology
         large_models = tuple(
-            model for model in package.prepared_artifacts.derived_models.models if model.purpose == "large"
+            model for model in package.derived_models.models if model.purpose == "large"
         )
         fit_atom_ids = tuple(
             str(atom.external_id)
@@ -907,6 +621,10 @@ class ChemcoreArtifactContractTests(unittest.TestCase):
             metadata.update({
                 "backend": kwargs["backend"],
                 "scf_converged": True,
+                "scf_reference_requested": kwargs["scf_reference"],
+                "scf_reference": (
+                    "rhf" if kwargs["spin"] == 0 else "rohf"
+                ),
                 "total_energy_hartree": -1.0,
             })
             constraints, targets, constraint_report = _prepare_linear_constraints(

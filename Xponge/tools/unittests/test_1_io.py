@@ -6,6 +6,7 @@ from io import StringIO
 __all__ = ["test_pdb_general",
            "test_pdb_oxt_terminal_without_ter",
            "test_pdb_oxt_terminal_with_calcium_ion",
+           "test_pdb_chain_change_splits_equal_residue_numbers_without_ter",
            "test_pdb_ssbond_link_and_conect",
            "test_pdb_unterminal_residue_overrides",
            "test_mmcif_explicit_terminal_residues_disable_inference",
@@ -900,6 +901,25 @@ HETATM    8  CA  CA  A   2       3.200   0.000   0.000  1.00  0.00          Ca
     mol = Xponge.load_pdb(s)
     assert mol.residues[0].type.name == "CSER"
     assert mol.residues[1].type.name == "CA2"
+
+
+def test_pdb_chain_change_splits_equal_residue_numbers_without_ter():
+    """A chain change is a residue boundary even when PDB omits TER."""
+    import Xponge
+    import Xponge.forcefield.amber.tip3p
+    s = StringIO(r"""
+HETATM    1  O   WAT A 148       0.000   0.000   0.000  1.00  0.00           O
+HETATM    2  H1  WAT A 148       0.957   0.000   0.000  1.00  0.00           H
+HETATM    3  H2  WAT A 148      -0.240   0.927   0.000  1.00  0.00           H
+HETATM    4  O   WAT B 148       3.000   0.000   0.000  1.00  0.00           O
+HETATM    5  H1  WAT B 148       3.957   0.000   0.000  1.00  0.00           H
+HETATM    6  H2  WAT B 148       2.760   0.927   0.000  1.00  0.00           H
+""")
+    mol = Xponge.load_pdb(s)
+    assert len(mol.residues) == 2
+    assert [len(residue.atoms) for residue in mol.residues] == [3, 3]
+    assert [residue.name2atom("O").x for residue in mol.residues] == [0.0, 3.0]
+
 
 def test_pdb_ssbond_link_and_conect():
     """

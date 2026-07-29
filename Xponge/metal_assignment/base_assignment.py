@@ -16,7 +16,7 @@ from .contracts import (
     _sha256,
     base_metal_component_supported,
 )
-from .input import MetalAssignmentPackage, validate_package
+from .input import MetalAssignmentPackage, MetalLocalModelPackage, validate_package
 from ._worker_runtime import run_worker_subprocess, worker_command
 from .base_charge import BaseChargeInput, base_charge_input_to_dict, validate_base_charge_input
 
@@ -92,7 +92,7 @@ class BaseAssignmentOutput:
 
 
 def _worker_payload(
-    package: MetalAssignmentPackage,
+    package: MetalAssignmentPackage | MetalLocalModelPackage,
     *,
     provider: str,
     complete_missing_parameters: bool,
@@ -101,10 +101,14 @@ def _worker_payload(
     request = package.request
     topology = request.topology
     atom_by_id = {atom.external_id: atom for atom in topology.atoms}
-    artifact_by_id = {
-        artifact.external_id: artifact
-        for artifact in package.prepared_artifacts.structural_artifacts.assignment_components
-    }
+    artifact_by_id = (
+        {}
+        if isinstance(package, MetalLocalModelPackage)
+        else {
+            artifact.external_id: artifact
+            for artifact in package.prepared_artifacts.structural_artifacts.assignment_components
+        }
+    )
     components = tuple(
         component
         for component in request.assignment_components
@@ -143,7 +147,12 @@ def _worker_payload(
         bonds = [
             bond for bond in active_bonds.values() if set(bond.atom_ids) <= component_atom_ids
         ]
-        expected_edge_ids = set(artifact_by_id[component.external_id].active_edge_ids)
+        artifact = artifact_by_id.get(component.external_id)
+        expected_edge_ids = (
+            {bond.external_id for bond in bonds}
+            if artifact is None
+            else set(artifact.active_edge_ids)
+        )
         if {bond.external_id for bond in bonds} != expected_edge_ids:
             raise ValidationError("base_assignment_edge_mismatch", component.external_id, path)
         for bond in bonds:
@@ -155,12 +164,21 @@ def _worker_payload(
                 or bond.order > 3
             ):
                 raise ValidationError("invalid_base_assignment_bond_order", bond.external_id, path)
-        artifact = artifact_by_id[component.external_id]
+        artifact_hash = (
+            artifact.artifact_hash
+            if artifact is not None
+            else _sha256({
+                "external_id": component.external_id,
+                "proof_hash": proof.proof_hash,
+                "atom_ids": list(component.atom_ids),
+                "active_edge_ids": [bond.external_id for bond in bonds],
+            })
+        )
         payload_components.append({
             "external_id": component.external_id,
             "net_formal_charge": component.net_formal_charge,
             "proof_hash": proof.proof_hash,
-            "artifact_hash": artifact.artifact_hash,
+            "artifact_hash": artifact_hash,
             "atoms": [
                 {
                     "external_id": atom_id,

@@ -1559,7 +1559,24 @@ def validate_result(request: MetalAssignmentInput, result: ParameterizationResul
         for atom_id in component.atom_ids
     }
     target_metal_ids = set(atomic_center_atom_ids(request))
-    if base_ids != expected_base_ids:
+    preassigned_molecule = (
+        result.provenance.get("base_assignment") == "preassigned_molecule"
+    )
+    if preassigned_molecule:
+        if (
+            base_ids
+            or result.base_overlay.atom_types
+            or result.base_overlay.charges
+            or result.base_overlay.masses
+            or result.base_overlay.lj_parameters
+            or result.base_overlay.bonded_parameters
+            or result.base_overlay.parameter_source != "xponge:preassigned-molecule"
+        ):
+            raise ValidationError(
+                "invalid_local_patch_base_overlay",
+                "local metal patches must not carry base-system parameters",
+            )
+    elif base_ids != expected_base_ids:
         raise ValidationError("base_overlay_coverage_mismatch", "base overlay must cover every base assignment atom")
     if not target_metal_ids <= metal_ids:
         raise ValidationError("metal_overlay_coverage_mismatch", "metal overlay must cover every metal atom")
@@ -1684,8 +1701,7 @@ def validate_result(request: MetalAssignmentInput, result: ParameterizationResul
             path="bonded_overlay.terms",
         )
     valid_statuses = {
-        "base_assignment_completed", "fit_completed", "overlay_validated", "system_applied",
-        "assigned_system_validated",
+        "base_assignment_completed", "fit_completed", "overlay_validated",
     }
     if result.status not in valid_statuses:
         raise ValidationError("invalid_result_status", result.status)
@@ -1693,10 +1709,16 @@ def validate_result(request: MetalAssignmentInput, result: ParameterizationResul
         raise ValidationError("missing_result_provenance", "fit reports and provenance are required")
     if not all(isinstance(warning, str) and warning for warning in result.warnings):
         raise ValidationError("invalid_result_warning", "warnings must be non-empty strings")
-    if result.complete != (result.status == "assigned_system_validated"):
-        raise ValidationError("result_completion_mismatch", "complete is reserved for assigned-system validation")
-    if result.complete and not result.application_audit:
-        raise ValidationError("missing_application_audit", "complete results require an application audit")
+    if result.complete:
+        raise ValidationError(
+            "invalid_result_completion",
+            "parameterization results are local overlays, not full-system checkpoints",
+        )
+    if result.application_audit:
+        raise ValidationError(
+            "invalid_parameterization_application_audit",
+            "Molecule application reports are returned by metal_assignment.apply",
+        )
     if not result.result_hash:
         raise ValidationError("missing_result_hash", "a computed result hash is required")
     if result.result_hash != result.computed_hash():
@@ -2167,6 +2189,22 @@ def parameterization_result_from_dict(
     value: Any,
     request: MetalAssignmentInput,
 ) -> ParameterizationResult:
+    result = _parameterization_result_from_dict_unchecked(value)
+    validate_result(request, result)
+    return result
+
+
+def _parameterization_result_from_dict_unchecked(
+    value: Any,
+) -> ParameterizationResult:
+    """Parse the result wire shape without requiring a full-system request.
+
+    This private helper exists for the local ``MetalParameterPatch`` parser.
+    The patch validator supplies the identity, hash and strictly-local overlay
+    checks that ``validate_result`` normally derives from a
+    ``MetalAssignmentInput``.
+    """
+
     data = _strict_object(
         value,
         required={
@@ -2196,7 +2234,6 @@ def parameterization_result_from_dict(
         complete=data["complete"],
         result_hash=data["result_hash"],
     )
-    validate_result(request, result)
     return result
 
 

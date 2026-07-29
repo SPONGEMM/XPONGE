@@ -61,26 +61,22 @@ from .artifacts import (
     ModelElectronicState,
     ModelLink,
     ModelMappingRecord,
-    PreparedArtifactPackage,
     StructuralArtifact,
     StructuralArtifactBundle,
     StructuralAtomMapping,
     closed_atom_mapping_from_dict,
     derived_model_bundle_from_dict,
-    prepared_artifact_package_from_dict,
     structural_artifact_bundle_from_dict,
-    validate_artifact_package,
     validate_closed_mapping,
     validate_derived_models,
     validate_structural_artifacts,
 )
 from .input import (
-    MetalAssignmentPackage,
-    metal_assignment_package_dumps,
-    metal_assignment_package_from_chemcore_result,
-    metal_assignment_package_from_dict,
-    metal_assignment_package_loads,
-    metal_assignment_package_to_dict,
+    MetalLocalModelPackage,
+    metal_local_model_package_from_chemcore_result,
+    metal_local_model_package_from_dict,
+    metal_local_model_package_to_dict,
+    package_derived_models,
     validate_package,
 )
 from .charge_fit import (
@@ -196,14 +192,32 @@ from .metal_overlay import (
     build_metal_parameter_overlay,
 )
 from .nonbonded_assignment import compose_nonbonded_assignment
-from .molecule_api import MetalAssignmentResult, apply, assign, parameterize
+from .patch import (
+    PATCH_SCHEMA_VERSION,
+    MetalParameterPatch,
+    PatchAtomIdentity,
+    PatchLinkIdentity,
+    build_metal_parameter_patch,
+    metal_parameter_patch_dumps,
+    metal_parameter_patch_from_dict,
+    metal_parameter_patch_loads,
+    metal_parameter_patch_to_dict,
+    validate_metal_parameter_patch,
+)
+from .molecule_api import (
+    MetalAssignmentResult,
+    apply,
+    parameterize,
+    prepare_residue_templates,
+)
 
 __all__ = [
     "ATOMIC_CHARGE_ROLES", "ClosedAtomMapping", "DerivedModel", "DerivedModelBundle", "DerivedModelMapping",
     "DerivedSite", "ModelAtom", "ModelBond", "ModelCutEdge", "ModelElectronicState", "ModelLink", "ModelMappingRecord",
-    "PreparedArtifactPackage", "StructuralArtifact", "StructuralArtifactBundle", "StructuralAtomMapping",
-    "MetalAssignmentPackage", "metal_assignment_package_dumps", "metal_assignment_package_from_chemcore_result",
-    "metal_assignment_package_from_dict", "metal_assignment_package_loads", "metal_assignment_package_to_dict",
+    "StructuralArtifact", "StructuralArtifactBundle", "StructuralAtomMapping",
+    "MetalLocalModelPackage",
+    "metal_local_model_package_from_chemcore_result", "metal_local_model_package_from_dict",
+    "metal_local_model_package_to_dict", "package_derived_models",
     "AssignmentComponent", "BASE_FORCE_FIELD_SCOPE", "BaseForceFieldOverlay", "BondedParameterOverlay",
     "COORDINATE_UNIT", "ChargeAssignmentContract", "ChargeConstraintGroup", "ChargeOverlay", "ChargePolicy",
     "ChemicalTopologyProof",
@@ -219,8 +233,8 @@ __all__ = [
     "bookkeeping_electronic_state",
     "validate_electronic_state", "validate_input", "validate_partial_charge_artifacts",
     "validate_result", "validate_topology",
-    "closed_atom_mapping_from_dict", "derived_model_bundle_from_dict", "prepared_artifact_package_from_dict",
-    "structural_artifact_bundle_from_dict", "validate_artifact_package", "validate_closed_mapping",
+    "closed_atom_mapping_from_dict", "derived_model_bundle_from_dict",
+    "structural_artifact_bundle_from_dict", "validate_closed_mapping",
     "validate_derived_models", "validate_structural_artifacts",
     "validate_package",
     "HessianArtifact", "ModelChargeArtifact", "empirical_registry_bonded_terms",
@@ -246,6 +260,11 @@ __all__ = [
     "BondedFitInput", "bonded_fit_input_dumps", "bonded_fit_input_from_dict",
     "bonded_fit_input_loads", "bonded_fit_input_to_dict", "load_bonded_fit_input",
     "validate_bonded_fit_input", "default_bonded_fit_input",
+    "PATCH_SCHEMA_VERSION", "MetalParameterPatch", "PatchAtomIdentity", "PatchLinkIdentity",
+    "build_metal_parameter_patch", "metal_parameter_patch_dumps",
+    "metal_parameter_patch_from_dict", "metal_parameter_patch_loads",
+    "metal_parameter_patch_to_dict", "validate_metal_parameter_patch",
+    "prepare_residue_templates",
     "RESP_FIT_INPUT_SCHEMA_VERSION", "RESP_WORKER_PROTOCOL_VERSION", "SUPPORTED_ESP_CHUNK_POLICIES",
     "SUPPORTED_METAL_BASIS_POLICIES", "SUPPORTED_RESP_BACKENDS",
     "SUPPORTED_SCF_REFERENCES", "RespEquivalenceGroup",
@@ -265,5 +284,5 @@ __all__ = [
     "MetalOverlayBuildOutput", "MetalOverlayBuildReport", "SUPPORTED_ION_WATER_MODELS",
     "assign_nonbonded_metal_ions", "build_metal_parameter_overlay",
     "compose_nonbonded_assignment",
-    "MetalAssignmentResult", "apply", "assign", "parameterize",
+    "MetalAssignmentResult", "apply", "parameterize",
 ]

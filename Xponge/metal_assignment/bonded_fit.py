@@ -9,6 +9,7 @@ from typing import Any, Mapping, Sequence
 from .base_composition import BaseCompositionOutput
 from .charge_fit import ModelChargeArtifact, project_model_charge_artifact
 from .contracts import (
+    BaseForceFieldOverlay,
     BondedParameterOverlay,
     MetalAssignmentInput,
     ParameterizationResult,
@@ -26,7 +27,7 @@ from .force_fit import (
     manual_bonded_terms,
     seminario_bonded_terms,
 )
-from .input import MetalAssignmentPackage, validate_package
+from .input import MetalAssignmentPackage, MetalLocalModelPackage, package_derived_models, validate_package
 from .metal_overlay import build_metal_parameter_overlay
 from .partial_charge import compose_partial_charge_artifacts
 
@@ -137,8 +138,8 @@ def _merge_terms(target: dict[str, Mapping[str, Any]], source: Mapping[str, Mapp
 
 
 def compose_bonded_fit(
-    package: MetalAssignmentPackage,
-    base: BaseCompositionOutput,
+    package: MetalAssignmentPackage | MetalLocalModelPackage,
+    base: BaseCompositionOutput | None,
     metal_spec: BondedMetalParameterSpec,
     *,
     charge_artifacts: Sequence[ModelChargeArtifact] = (),
@@ -154,16 +155,23 @@ def compose_bonded_fit(
     manual_site_force_constants: Mapping[str, Any] | None = None,
     reference_geometry_artifact: Mapping[str, Any] | None = None,
 ) -> ParameterizationResult:
-    """Compose immutable base, charge, metal and bonded overlays for a bonded request."""
+    """Compose immutable charge, metal and bonded overlays for a bonded request.
+
+    ``base=None`` means that the caller will apply the result to a Molecule
+    whose ordinary force field has already been assigned.  In that mode the
+    result is a strictly local metal patch and carries no base-system
+    parameters.
+    """
 
     validate_package(package)
     request = package.request
     if request.interaction_model != "bonded":
         raise ValidationError("invalid_bonded_fit_interaction_model", request.interaction_model)
-    _validate_complete_base(package, base)
+    if base is not None:
+        _validate_complete_base(package, base)
     validate_bonded_metal_parameter_spec(request, metal_spec)
 
-    model_by_id = {model.external_id: model for model in package.prepared_artifacts.derived_models.models}
+    model_by_id = {model.external_id: model for model in package_derived_models(package).models}
     projected_charge_artifacts = ()
     charge_projection_report: Mapping[str, Any] = {"status": "not_requested"}
     if request.charge_contract is None:
@@ -287,6 +295,21 @@ def compose_bonded_fit(
         empirical_provenance = {
             "empirical_registry": _canonicalize(bonded_reports[0].get("registry", {})),
         }
+    if base is None:
+        base_overlay = BaseForceFieldOverlay(
+            topology_hash=request.topology.topology_hash,
+            parameter_source="xponge:preassigned-molecule",
+        )
+        base_report: Mapping[str, Any] = {
+            "status": "preassigned_molecule",
+            "topology_hash": request.topology.topology_hash,
+            "projection_hash": request.projection_hash,
+            "covered_atom_ids": (),
+            "parameter_source": base_overlay.parameter_source,
+        }
+    else:
+        base_overlay = base.overlay
+        base_report = _canonicalize(base.report)
     result = ParameterizationResult(
         schema_version=request.schema_version,
         request_id=request.request_id,
@@ -294,12 +317,12 @@ def compose_bonded_fit(
         graph_revision=request.graph_revision,
         topology_hash=request.topology.topology_hash,
         projection_hash=request.projection_hash,
-        base_overlay=base.overlay,
+        base_overlay=base_overlay,
         metal_overlay=metal_output.overlay,
         charge_overlay=charge_overlay,
         bonded_overlay=bonded_overlay,
         fit_reports={
-            "base_composition": _canonicalize(base.report),
+            "base_composition": base_report,
             "metal_parameters": _canonicalize(metal_output.report),
             "charge_fit": charge_report,
             "bonded_fit": tuple(bonded_reports),
@@ -308,6 +331,11 @@ def compose_bonded_fit(
             "package_hash": package.package_hash,
             "metal_parameter_spec_hash": metal_spec.spec_hash,
             "force_method": normalized_force_method,
+            "base_assignment": (
+                "preassigned_molecule"
+                if base is None
+                else "included_overlay"
+            ),
             **empirical_provenance,
         },
         status="overlay_validated",

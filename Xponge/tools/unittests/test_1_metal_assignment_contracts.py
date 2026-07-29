@@ -318,6 +318,7 @@ def _overlay_result(request):
             topology_hash=request.topology.topology_hash,
             covered_atom_ids=("heme-fe",),
             atom_types={"heme-fe": "FE-site-1"},
+            charges={"heme-fe": 2.0},
             masses={"heme-fe": 55.845},
             lj_parameters={
                 "heme-fe": {

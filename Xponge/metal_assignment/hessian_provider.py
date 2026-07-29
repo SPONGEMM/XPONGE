@@ -13,7 +13,7 @@ from .artifacts import DerivedModel
 from .contracts import ValidationError, _canonicalize, _freeze, _sha256
 from .force_fit import HessianArtifact, hessian_artifact_from_dict, validate_hessian_artifact
 from .hessian_input import HessianFitInput, validate_hessian_fit_input
-from .input import MetalAssignmentPackage, validate_package
+from .input import MetalAssignmentPackage, MetalLocalModelPackage, package_derived_models, validate_package
 from ..qm.resp_basis import ResolvedRespBasis, resolve_resp_basis
 
 
@@ -250,7 +250,7 @@ def _validate_worker_response(
 
 
 def fit_model_hessians(
-    package: MetalAssignmentPackage,
+    package: MetalAssignmentPackage | MetalLocalModelPackage,
     fit_input: HessianFitInput,
     *,
     timeout_seconds: float = 1800.0,
@@ -261,7 +261,7 @@ def fit_model_hessians(
     validate_package(package)
     validate_hessian_fit_input(fit_input)
     small_models = tuple(
-        model for model in package.prepared_artifacts.derived_models.models
+        model for model in package_derived_models(package).models
         if model.purpose == "small"
     )
     if not small_models:

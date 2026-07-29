@@ -12,7 +12,7 @@ from ._worker_runtime import run_worker_subprocess, worker_command
 from .artifacts import DerivedModel
 from .charge_fit import ModelChargeArtifact, model_charge_artifact_from_dict, validate_model_charge_artifact
 from .contracts import ValidationError, _canonicalize, _freeze, _sha256
-from .input import MetalAssignmentPackage, validate_package
+from .input import MetalAssignmentPackage, MetalLocalModelPackage, package_derived_models, validate_package
 from .resp_input import RespFitInput, validate_resp_fit_input
 from ..qm.resp_basis import ResolvedRespBasis, resolve_resp_basis
 
@@ -402,7 +402,7 @@ def _validate_worker_response(
 
 
 def fit_resp_charges(
-    package: MetalAssignmentPackage,
+    package: MetalAssignmentPackage | MetalLocalModelPackage,
     fit_input: RespFitInput,
     *,
     timeout_seconds: float = 600.0,
@@ -417,7 +417,7 @@ def fit_resp_charges(
         raise ValidationError("resp_interaction_model_mismatch", request.interaction_model)
     if request.charge_contract is None:
         raise ValidationError("missing_charge_contract", "RESP requires an explicit charge contract")
-    models = package.prepared_artifacts.derived_models
+    models = package_derived_models(package)
     large_models = tuple(model for model in models.models if model.purpose == "large")
     if not large_models:
         raise ValidationError("missing_large_model", "RESP requires at least one large model")

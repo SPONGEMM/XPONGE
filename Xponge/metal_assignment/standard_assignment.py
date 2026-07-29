@@ -14,7 +14,7 @@ from .contracts import (
     _sha256,
     base_metal_component_supported,
 )
-from .input import MetalAssignmentPackage, validate_package
+from .input import MetalAssignmentPackage, MetalLocalModelPackage, validate_package
 from ._worker_runtime import worker_command
 
 
@@ -29,7 +29,7 @@ SUPPORTED_TEMPLATE_PROVIDERS = {
 
 
 def _worker_payload(
-    package: MetalAssignmentPackage,
+    package: MetalAssignmentPackage | MetalLocalModelPackage,
     *,
     provider: str,
     force_field: str,
@@ -42,10 +42,14 @@ def _worker_payload(
     for residue in topology.residues:
         for atom_id in residue.atom_ids:
             residue_by_atom[atom_id] = residue
-    artifact_by_id = {
-        artifact.external_id: artifact
-        for artifact in package.prepared_artifacts.structural_artifacts.assignment_components
-    }
+    artifact_by_id = (
+        {}
+        if isinstance(package, MetalLocalModelPackage)
+        else {
+            artifact.external_id: artifact
+            for artifact in package.prepared_artifacts.structural_artifacts.assignment_components
+        }
+    )
     active_bonds = tuple(bond for bond in topology.bonds if bond.active)
     components = tuple(
         component
@@ -86,16 +90,29 @@ def _worker_payload(
         ):
             raise ValidationError("metal_in_base_force_field", component.external_id, path)
         artifact = artifact_by_id.get(component.external_id)
-        if artifact is None:
+        if artifact is None and not isinstance(package, MetalLocalModelPackage):
             raise ValidationError("missing_structural_artifact", component.external_id, path)
         component_atom_ids = set(component.atom_ids)
         bonds = [bond for bond in active_bonds if set(bond.atom_ids) <= component_atom_ids]
-        if {bond.external_id for bond in bonds} != set(artifact.active_edge_ids):
+        if (
+            artifact is not None
+            and {bond.external_id for bond in bonds} != set(artifact.active_edge_ids)
+        ):
             raise ValidationError("base_assignment_edge_mismatch", component.external_id, path)
+        component_input_hash = (
+            artifact.artifact_hash
+            if artifact is not None
+            else _sha256({
+                "external_id": component.external_id,
+                "proof_hash": component.chemical_topology_proof.proof_hash,
+                "atom_ids": list(component.atom_ids),
+                "active_edge_ids": [bond.external_id for bond in bonds],
+            })
+        )
         payload_components.append({
             "external_id": component.external_id,
             "proof_hash": component.chemical_topology_proof.proof_hash,
-            "artifact_hash": artifact.artifact_hash,
+            "artifact_hash": component_input_hash,
             "residue_name": residue.residue_name,
             "polymer_position": residue.polymer_position,
             "template_id": residue.template_id,
@@ -234,7 +251,7 @@ def _validate_response(payload: Mapping[str, Any], response: Mapping[str, Any]) 
 
 
 def assign_template_force_field(
-    package: MetalAssignmentPackage,
+    package: MetalAssignmentPackage | MetalLocalModelPackage,
     *,
     provider: str,
     force_field: str = "ff14sb",
@@ -328,7 +345,7 @@ def assign_template_force_field(
 
 
 def assign_standard_biomolecular(
-    package: MetalAssignmentPackage,
+    package: MetalAssignmentPackage | MetalLocalModelPackage,
     *,
     force_field: str = "ff14sb",
     water_model: str = "tip3p",

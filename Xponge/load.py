@@ -287,6 +287,7 @@ def _pdb_add_residue(f, molecule, position_need, residue_type_map, ignore_hydrog
     current_residue_count = -1
     current_residue_index = None
     current_insertion_code = None
+    current_chain_id = None
     current_residue = None
     current_resname = None
     links = []
@@ -295,6 +296,7 @@ def _pdb_add_residue(f, molecule, position_need, residue_type_map, ignore_hydrog
         if line.startswith("ATOM") or line.startswith("HETATM"):
             extra = line[16]
             insertion_code = line[26]
+            chain_id = line[21]
             resindex = _pdb_parse_atom_serial(line[22:26])
             if resindex is None:
                 continue
@@ -308,6 +310,7 @@ def _pdb_add_residue(f, molecule, position_need, residue_type_map, ignore_hydrog
             y = float(line[38:46])
             z = float(line[46:54])
             if current_residue_index is None or current_residue_index != resindex or \
+                    current_chain_id != chain_id or \
                     current_resname != resname or current_insertion_code != insertion_code:
                 current_residue_count += 1
                 if current_residue:
@@ -318,6 +321,7 @@ def _pdb_add_residue(f, molecule, position_need, residue_type_map, ignore_hydrog
                 current_residue = Residue(ResidueType.get_type(residue_type_map[current_residue_count]))
                 current_residue_index = resindex
                 current_insertion_code = insertion_code
+                current_chain_id = chain_id
                 current_resname = resname
             if extra not in (" ", position_need):
                 continue
@@ -326,6 +330,7 @@ def _pdb_add_residue(f, molecule, position_need, residue_type_map, ignore_hydrog
         elif line.startswith("TER"):
             current_residue_index = None
             current_resname = None
+            current_chain_id = None
 
     if current_residue:
         molecule.Add_Residue(current_residue)
@@ -1219,6 +1224,7 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
     current_insertion_code = None
     current_residue_index = None
     current_resname = None
+    current_chain_id = None
     chain_id_processed = set()
     current_histone_information = {"DeltaH": False, "EpsilonH": False}
     cryst1 = None
@@ -1245,9 +1251,9 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
                 resindex += insertion_count
                 insertion_code = line[26]
                 chain_id = line[21]
+                chain_id_in_file = chain_id.strip() or " "
                 if not chain_id.strip() or chain_id in chain_id_processed:
                     chain_id = 0
-                chain_id_in_file = line[21].strip() or " "
                 resname = line[17:20].strip()
                 resname = GlobalSetting.PDBResidueAliasMap.get(resname, resname)
                 atomname = line[12:16].strip()
@@ -1262,6 +1268,7 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
                     current_residue_count += 1
                     current_resname = resname
                     current_insertion_code = insertion_code
+                    current_chain_id = chain_id_in_file
                     should_map_head = explicit_n_terminal or (
                         infer_terminals and not skip_terminal_mapping
                     )
@@ -1273,11 +1280,13 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
                     current_residue_index = resindex
                     chain[chain_id][resindex] = current_residue_count
                 elif (current_residue_index != resindex or current_insertion_code != insertion_code) or \
+                        current_chain_id != chain_id_in_file or \
                         current_resname != resname:
                     _pdb_judge_histone(judge_histone, residue_type_map, current_histone_information)
                     current_residue_count += 1
                     current_resname = resname
                     current_insertion_code = insertion_code
+                    current_chain_id = chain_id_in_file
                     if insertion_code != " ":
                         insertion_count += 1
                         resindex += 1
@@ -1300,6 +1309,7 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
                 current_residue_index = None
                 current_resname = None
                 current_insertion_code = None
+                current_chain_id = None
                 insertion_count = 0
                 chain_id_processed.add(chain_id)
                 if infer_terminals and residue_type_map and not residue_unterminal_map[-1] and \
