@@ -45,6 +45,11 @@ def set_head(res, n):
     :param n:
     :return:
     """
+    if n == 0:
+        res.head = None
+        res.head_next = None
+        res.head_link_conditions.clear()
+        return
     head_dihedral = -60 if (n <= 6 and res.name[-1] not in "DU") else -180
     res.head = f"O{n}"
     res.head_next = f"C{n}"

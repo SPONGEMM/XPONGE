@@ -1,6 +1,7 @@
 """
     This **module** includes lightweight GLYCAM/glycoprotein regression tests.
 """
+import importlib
 from io import StringIO
 
 __all__ = [
@@ -10,6 +11,8 @@ __all__ = [
     "test_glycam_functional_group_templates_and_linkability",
     "test_glycam_modified_monosaccharide_templates_load",
     "test_glycam_coverage_audit_classifies_extension_layers",
+    "test_glycam_terminal_zero_residues_have_no_synthetic_head",
+    "test_glycam_terminal_zero_residue_can_be_saved_as_pdb",
 ]
 
 
@@ -112,6 +115,48 @@ def test_glycam_modified_monosaccharide_templates_load():
 
     for resname in ["0TV", "0AE", "0AF", "0GL", "AGL", "5AD", "ACX", "ZOLS", "ZOLT"]:
         assert Xponge.ResidueType.get_type(resname).name == resname
+
+
+def test_glycam_terminal_zero_residues_have_no_synthetic_head():
+    """
+        Terminal-zero GLYCAM names do not denote synthetic O0/C0 atoms.
+    """
+    import Xponge
+
+    representatives = [
+        ("Xponge.forcefield.amber.glycam_06j.d_pyranose", "0MA"),
+        ("Xponge.forcefield.amber.glycam_06j.l_pyranose", "0aA"),
+        ("Xponge.forcefield.amber.glycam_06j.d_furanose", "0AD"),
+        ("Xponge.forcefield.amber.glycam_06j.l_furanose", "0aD"),
+    ]
+    for module_name, residue_name in representatives:
+        importlib.import_module(module_name)
+        residue_type = Xponge.ResidueType.get_type(residue_name)
+        assert residue_type.head is None
+        assert residue_type.head_next is None
+        assert not residue_type.head_link_conditions
+        assert "O0" not in {atom.name for atom in residue_type.atoms}
+        assert "C0" not in {atom.name for atom in residue_type.atoms}
+
+
+def test_glycam_terminal_zero_residue_can_be_saved_as_pdb(tmp_path):
+    """
+        PDB chain assignment must not look up a nonexistent O0 on terminal sugars.
+    """
+    import Xponge
+    import Xponge.forcefield.amber.glycam_06j.d_pyranose
+
+    residue_type = Xponge.ResidueType.get_type("0MA")
+    molecule = Xponge.Molecule(name="TERMINAL_ZERO")
+    molecule.add_residue(residue_type)
+    molecule.add_residue(residue_type)
+
+    output_path = tmp_path / "terminal-zero.pdb"
+    Xponge.save_pdb(molecule, str(output_path))
+
+    pdb_text = output_path.read_text(encoding="utf-8")
+    assert "0MA" in pdb_text
+    assert " O0 " not in pdb_text
 
 
 def test_glycam_coverage_audit_classifies_extension_layers():
