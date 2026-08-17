@@ -1,6 +1,5 @@
 """
 This **module** is used to calculate the RESP charge.
-The **module** is not available on Windows unless a supported backend is installed.
 """
 
 from __future__ import annotations

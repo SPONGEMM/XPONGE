@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import sys
+from importlib.util import find_spec
 
 from .backends import psi4_backend, pyscf_backend
 from ._esp_memory import normalize_chunk_policy, normalize_safety_factor, parse_memory_limit_bytes
@@ -31,10 +31,21 @@ _SCF_STRATEGIES = frozenset({
 })
 
 
+def _backend_available(backend_name):
+    try:
+        return find_spec(backend_name) is not None
+    except (ImportError, ValueError):
+        return False
+
+
 def default_backend_name():
-    if sys.platform.startswith("win"):
-        return "psi4"
-    return "pyscf"
+    for backend_name in ("pyscf", "psi4"):
+        if _backend_available(backend_name):
+            return backend_name
+    raise QMBackendImportError(
+        "Neither PySCF nor Psi4 is installed; quantum chemistry features are "
+        "unavailable. Install PySCF (preferred) or Psi4 before retrying."
+    )
 
 
 def normalize_backend_name(backend):
@@ -49,10 +60,8 @@ def normalize_backend_name(backend):
 
 def backend_import_or_hint(backend_name, exc):
     message = str(exc)
-    if backend_name == "pyscf" and sys.platform.startswith("win"):
-        message += " On Windows, install Psi4 via conda-forge or the official Psi4 installer and call calculate_charge('resp', backend='psi4', ...)."
-    elif backend_name == "psi4":
-        message += " On Windows, Psi4 is not installed through pip by default; install it via conda-forge or the official Psi4 installer and retry."
+    if backend_name == "psi4":
+        message += " Install Psi4 via conda-forge or the official Psi4 installer and retry."
     raise QMBackendImportError(message) from exc
 
 

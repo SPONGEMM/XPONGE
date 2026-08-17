@@ -259,29 +259,54 @@ def test_qm_capabilities_report_psi4_hessian_as_unsupported():
     assert not caps.supports_hessian
 
 
-def test_qm_scheduler_default_backend_matches_platform(monkeypatch):
+def test_qm_scheduler_default_backend_prefers_pyscf(monkeypatch):
     """
-        Test the default QM backend selection matches the current platform policy
+        Test the default QM backend prefers PySCF when both are installed
     """
-    import Xponge
     from Xponge.qm import scheduler as qm_scheduler
 
-    monkeypatch.setattr(qm_scheduler.sys, "platform", "linux")
+    monkeypatch.setattr(qm_scheduler, "find_spec", lambda name: object())
+
     assert qm_scheduler.normalize_backend_name(None) == "pyscf"
     assert qm_scheduler.get_backend(None).name == "pyscf"
 
-    monkeypatch.setattr(qm_scheduler.sys, "platform", "win32")
+
+def test_qm_scheduler_default_backend_falls_back_to_psi4(monkeypatch):
+    """
+        Test the default QM backend falls back to Psi4 when PySCF is absent
+    """
+    from Xponge.qm import scheduler as qm_scheduler
+
+    monkeypatch.setattr(
+        qm_scheduler,
+        "find_spec",
+        lambda name: object() if name == "psi4" else None,
+    )
+
     assert qm_scheduler.normalize_backend_name(None) == "psi4"
     assert qm_scheduler.get_backend(None).name == "psi4"
 
 
-def test_qm_scheduler_windows_import_hint_mentions_external_psi4_install(monkeypatch):
+def test_qm_scheduler_default_backend_errors_when_none_installed(monkeypatch):
     """
-        Test the Windows Psi4 import hint points users to external installation.
+        Test QM features fail clearly when neither backend is installed
     """
     from Xponge.qm import scheduler as qm_scheduler
 
-    monkeypatch.setattr(qm_scheduler.sys, "platform", "win32")
+    monkeypatch.setattr(qm_scheduler, "find_spec", lambda name: None)
+
+    with pytest.raises(
+        qm_scheduler.QMBackendImportError,
+        match="Neither PySCF nor Psi4 is installed",
+    ):
+        qm_scheduler.normalize_backend_name(None)
+
+
+def test_qm_scheduler_psi4_import_hint_mentions_external_install():
+    """
+        Test the Psi4 import hint points users to external installation.
+    """
+    from Xponge.qm import scheduler as qm_scheduler
 
     with pytest.raises(qm_scheduler.QMBackendImportError, match="conda-forge"):
         qm_scheduler.backend_import_or_hint("psi4", ImportError("Psi4 is required"))

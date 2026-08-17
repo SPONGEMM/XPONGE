@@ -10,7 +10,7 @@ Xponge includes three major categories of functionality, namely, the simulation 
 
 ## Installation
 
-Xponge can be used on all operating systems (Windows/Linux/MacOS). Some functions (See [here](https://spongemm.cn/xponge_doc/dependency.html#unavalable-functions-on-windows) for the detailed list) to do the quantum chemistry calculations can not be used on Windows because `pyscf` is not available on Windows.
+Xponge can be used on all operating systems (Windows/Linux/macOS), including its quantum chemistry workflows. Xponge prefers PySCF and automatically falls back to Psi4 when PySCF is not installed; these workflows report an error if neither backend is available. Until official Windows PySCF wheels are released, build and install a compatible PySCF wheel separately to use the PySCF backend.
 
 ### 1. pip install
 
@@ -47,8 +47,6 @@ pip install Xponge
     conda env create -f extras_requirements.yml
     conda activate Xponge
     ```
-
-     It is worth noting that `extras_requirements.yml` can not be used on Windows because `pyscf` is not available on Windows.
 
 - 2.4 Run the command
 

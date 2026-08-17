@@ -24,8 +24,8 @@ Default Python installation now includes:
 - rdkit
 - PubChemPy
 - MDAnalysis
-- PySCF on Linux/macOS
-- Psi4 on Windows
+- PySCF
+- Psi4 (optional alternative QM backend)
 
 The tests include:
 

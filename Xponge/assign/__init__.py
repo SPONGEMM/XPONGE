@@ -751,7 +751,7 @@ The function will receive the assignment as input, and give True or False as out
     def calculate_charge(self, method, **parameters):
         """
         This **function** calculates the partial charge for every atom.
-        the method "RESP" to calculate the partial charge is not available on Windows.
+        The "RESP" method prefers PySCF and falls back to Psi4 by default.
 
         :param method: the method to calculate the charge
         :param parameters: the parameters to calculate the charge
