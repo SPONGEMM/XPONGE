@@ -42,6 +42,7 @@ class ProtocolCollectiveVariable:
     name: str
     type: str
     atom_indices: tuple[int, ...] = ()
+    atom_refs: tuple[int | str, ...] = ()
     parameters: Mapping[str, Any] = field(default_factory=dict)
     period: tuple[float, ...] = ()
     sigma: tuple[float, ...] = ()
@@ -52,6 +53,17 @@ class ProtocolCollectiveVariable:
     function: str | None = None
     min_padding: float | None = None
     max_padding: float | None = None
+
+
+@dataclass(frozen=True)
+class ProtocolVirtualAtom:
+    """One named center used as an atom by collective variables."""
+
+    name: str
+    type: str
+    atom_indices: tuple[int, ...]
+    weight: tuple[float, ...] = ()
+    enabled: bool = True
 
 
 @dataclass(frozen=True)
@@ -180,6 +192,7 @@ class SpongeProtocol:
     """Composable native protocol attached to a serialized XPONGE system."""
 
     collective_variables: tuple[ProtocolCollectiveVariable, ...] = ()
+    virtual_atoms: tuple[ProtocolVirtualAtom, ...] = ()
     distance_constraints: tuple[ProtocolDistanceConstraints, ...] = ()
     positional_restraints: tuple[ProtocolPositionalRestraint, ...] = ()
     cv_restraints: tuple[ProtocolCVRestraint, ...] = ()
@@ -216,6 +229,7 @@ def add_protocol_to_bundle(
         )
 
     cvs = tuple(protocol.collective_variables)
+    virtual_atoms = tuple(protocol.virtual_atoms)
     constraints = tuple(protocol.distance_constraints)
     positional = tuple(protocol.positional_restraints)
     cv_restraints = tuple(protocol.cv_restraints)
@@ -226,6 +240,7 @@ def add_protocol_to_bundle(
     soft_walls = tuple(protocol.soft_walls)
     _validate_protocol(
         cvs,
+        virtual_atoms,
         constraints,
         positional,
         cv_restraints,
@@ -237,6 +252,8 @@ def add_protocol_to_bundle(
         atom_count=atom_count,
     )
 
+    for virtual_atom in virtual_atoms:
+        _write_virtual_atom(builder, virtual_atom)
     for cv in cvs:
         _write_cv(builder, cv)
     for constraint in constraints:
@@ -272,6 +289,7 @@ def add_protocol_to_bundle(
 
 def _validate_protocol(
     cvs: tuple[ProtocolCollectiveVariable, ...],
+    virtual_atoms: tuple[ProtocolVirtualAtom, ...],
     constraints: tuple[ProtocolDistanceConstraints, ...],
     positional: tuple[ProtocolPositionalRestraint, ...],
     cv_restraints: tuple[ProtocolCVRestraint, ...],
@@ -286,19 +304,75 @@ def _validate_protocol(
     if atom_count <= 0:
         raise BundleValidationError("a native protocol requires a positive atom count")
     _require_unique_names(cvs, "collective variable")
+    _require_unique_names(virtual_atoms, "virtual atom")
     _require_unique_names(constraints, "distance constraint")
     _require_unique_names(positional + cv_restraints, "restraint")
     _require_unique_names(metadynamics, "metadynamics")
 
     cv_by_name = {cv.name: cv for cv in cvs if cv.enabled}
+    virtual_atom_names = {item.name for item in virtual_atoms if item.enabled}
+    overlapping_names = {cv.name for cv in cvs} & {item.name for item in virtual_atoms}
+    if overlapping_names:
+        raise BundleValidationError(
+            f"collective variables and virtual atoms must use distinct names: {sorted(overlapping_names)}"
+        )
+    for item in virtual_atoms:
+        _validate_name(item.name, "virtual atom")
+        if item.type not in {"center", "center_of_mass"}:
+            raise BundleValidationError(
+                f"virtual atom {item.name!r} type must be 'center' or 'center_of_mass'"
+            )
+        if not item.atom_indices:
+            raise BundleValidationError(f"virtual atom {item.name!r} requires atom_indices")
+        _validate_atom_indices(item.atom_indices, atom_count, f"virtual atom {item.name!r}")
+        if item.type == "center":
+            _validate_vector_length(
+                item.weight,
+                len(item.atom_indices),
+                f"virtual atom {item.name!r} weight",
+                required=True,
+            )
+            _require_finite(item.weight, f"virtual atom {item.name!r} weight")
+        elif item.weight:
+            raise BundleValidationError(
+                f"virtual atom {item.name!r} center_of_mass must not define weight"
+            )
     for cv in cvs:
         _validate_name(cv.name, "collective variable")
+        if cv.name == "virtual_atom":
+            raise BundleValidationError(
+                "collective variable name 'virtual_atom' is reserved by /cv/virtual_atom"
+            )
         _validate_name(cv.type, f"collective variable {cv.name!r} type")
         if cv.dimension != 1:
             raise BundleValidationError(
                 f"collective variable {cv.name!r} dimension must be 1 for the current SPONGE runtime"
             )
+        if cv.atom_indices and cv.atom_refs:
+            raise BundleValidationError(
+                f"collective variable {cv.name!r} atom_indices and atom_refs are mutually exclusive"
+            )
         _validate_atom_indices(cv.atom_indices, atom_count, f"collective variable {cv.name!r}")
+        physical_atom_refs = [item for item in cv.atom_refs if isinstance(item, (int, np.integer))]
+        invalid_atom_refs = [item for item in cv.atom_refs if not isinstance(item, (str, int, np.integer))]
+        if invalid_atom_refs:
+            raise BundleValidationError(
+                f"collective variable {cv.name!r} atom_refs must contain atom indices or virtual atom names"
+            )
+        normalized_atom_refs = tuple(str(item) for item in cv.atom_refs)
+        if len(normalized_atom_refs) != len(set(normalized_atom_refs)):
+            raise BundleValidationError(
+                f"collective variable {cv.name!r} atom_refs must be unique"
+            )
+        _validate_atom_indices(physical_atom_refs, atom_count, f"collective variable {cv.name!r}")
+        missing_atom_refs = [
+            name for name in cv.atom_refs if isinstance(name, str) and name not in virtual_atom_names
+        ]
+        if missing_atom_refs:
+            raise BundleValidationError(
+                f"collective variable {cv.name!r} references missing or disabled virtual atoms: "
+                f"{missing_atom_refs}"
+            )
         _validate_vector_length(cv.period, cv.dimension, f"collective variable {cv.name!r} period")
         _validate_vector_length(cv.sigma, cv.dimension, f"collective variable {cv.name!r} sigma")
         if cv.sigma and any(value <= 0 or not np.isfinite(value) for value in cv.sigma):
@@ -308,7 +382,7 @@ def _validate_protocol(
         if cv.reference_coordinates:
             _validate_xyz(
                 cv.reference_coordinates,
-                len(cv.atom_indices),
+                len(cv.atom_indices or cv.atom_refs),
                 f"collective variable {cv.name!r} reference coordinates",
             )
         for key, value in cv.parameters.items():
@@ -655,6 +729,8 @@ def _write_cv(builder: BundleBuilder, cv: ProtocolCollectiveVariable) -> None:
     _add_scalar(builder, root + "/enabled_default", int(cv.enabled), np.int32)
     if cv.atom_indices:
         _add_array(builder, root + "/atom_indices", cv.atom_indices, np.int32)
+    if cv.atom_refs:
+        _add_array(builder, root + "/atom_refs", tuple(str(item) for item in cv.atom_refs), object)
     if cv.period:
         _add_array(builder, root + "/period", cv.period, np.float32)
     if cv.sigma:
@@ -681,6 +757,15 @@ def _write_cv(builder: BundleBuilder, cv: ProtocolCollectiveVariable) -> None:
             np.float32,
             bundle_file="restart.spgr.h5",
         )
+
+
+def _write_virtual_atom(builder: BundleBuilder, virtual_atom: ProtocolVirtualAtom) -> None:
+    root = f"/cv/virtual_atom/{virtual_atom.name}"
+    _add_scalar(builder, root + "/type", virtual_atom.type)
+    _add_scalar(builder, root + "/enabled_default", int(virtual_atom.enabled), np.int32)
+    _add_array(builder, root + "/atom_indices", virtual_atom.atom_indices, np.int32)
+    if virtual_atom.weight:
+        _add_array(builder, root + "/weight", virtual_atom.weight, np.float32)
 
 
 def _write_constraint(builder: BundleBuilder, constraint: ProtocolDistanceConstraints) -> None:

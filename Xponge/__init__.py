@@ -97,7 +97,7 @@ from .build import save_mol2, save_pdb, save_sponge_input, save_sponge_input_raw
     build_bonded_force, get_mindsponge_system_energy
 from .io_bundle.saver import save_sponge_input_bundle
 from .io_bundle.protocol import ProtocolCVRestraint, ProtocolCollectiveVariable, \
-    ProtocolDistanceConstraints, ProtocolHardWall, ProtocolMetadynamics, ProtocolPositionalRestraint, ProtocolSITS, ProtocolSoftWall, ProtocolSteering, SpongeProtocol
+    ProtocolDistanceConstraints, ProtocolHardWall, ProtocolMetadynamics, ProtocolPositionalRestraint, ProtocolSITS, ProtocolSoftWall, ProtocolSteering, ProtocolVirtualAtom, SpongeProtocol
 from .process import impose_bond, impose_angle, impose_dihedral, add_solvent_box, h_mass_repartition, solvent_replace, \
     sort_atoms_by, main_axis_rotate, get_peptide_from_sequence, optimize, Region, UnionRegion, IntersectRegion, \
     BlockRegion, SphereRegion, FrustumRegion, PrismRegion, Lattice

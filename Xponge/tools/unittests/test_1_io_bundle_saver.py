@@ -5,6 +5,7 @@ from pathlib import Path
 import shutil
 import subprocess
 
+import h5py
 import numpy as np
 import pytest
 
@@ -1001,6 +1002,34 @@ def test_save_sponge_input_bundle_restart_passes_optional_sponge_probe(tmp_path)
         text=True,
     )
     assert result.returncode == 0, (result.stdout, result.stderr)
+
+
+def test_protocol_writes_typed_virtual_atom_arrays_and_cv_references(tmp_path):
+    molecule = _alanine_dipeptide()
+    protocol = Xponge.SpongeProtocol(
+        virtual_atoms=(
+            Xponge.ProtocolVirtualAtom(
+                name="center",
+                type="center",
+                atom_indices=(0, 1),
+                weight=(0.25, 0.75),
+            ),
+        ),
+        collective_variables=(
+            Xponge.ProtocolCollectiveVariable(
+                name="distance_cv",
+                type="distance",
+                atom_refs=("center", 2),
+            ),
+        ),
+    )
+
+    Xponge.save_sponge_input_bundle(molecule, "virtual", tmp_path, protocol=protocol)
+
+    with h5py.File(tmp_path / "virtual_protocol.spgp.h5", "r") as handle:
+        assert handle["/cv/virtual_atom/center/atom_indices"][...].tolist() == [0, 1]
+        assert handle["/cv/virtual_atom/center/weight"][...].tolist() == pytest.approx([0.25, 0.75])
+        assert handle["/cv/distance_cv/atom_refs"].asstr()[...].tolist() == ["center", "2"]
 
 
 def _assert_dataset_lists_equal(original, restored):

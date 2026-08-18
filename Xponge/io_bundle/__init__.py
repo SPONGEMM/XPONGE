@@ -30,6 +30,7 @@ from .protocol import (
     ProtocolSITS,
     ProtocolSoftWall,
     ProtocolSteering,
+    ProtocolVirtualAtom,
     SpongeProtocol,
 )
 from .reverse_converter import BundleToLegacyConverter, convert_bundle_to_legacy
@@ -69,4 +70,5 @@ __all__ = [
     "ProtocolSITS",
     "ProtocolSoftWall",
     "ProtocolSteering",
+    "ProtocolVirtualAtom",
 ]
