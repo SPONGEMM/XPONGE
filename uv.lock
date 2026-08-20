@@ -953,48 +953,6 @@ wheels = [
 ]
 
 [[package]]
-name = "mokda-xponge"
-source = { editable = "." }
-dependencies = [
-    { name = "geometric" },
-    { name = "h5py" },
-    { name = "matplotlib" },
-    { name = "mdanalysis", version = "2.9.0", source = { registry = "https://mirrors.ustc.edu.cn/pypi/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "mdanalysis", version = "2.10.0", source = { registry = "https://mirrors.ustc.edu.cn/pypi/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "mokda-xpongelib" },
-    { name = "numpy" },
-    { name = "pubchempy" },
-    { name = "pyscf", marker = "sys_platform != 'win32'" },
-    { name = "rdkit" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "ipykernel" },
-    { name = "pytest" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "geometric", specifier = ">=1.1" },
-    { name = "h5py", specifier = ">=3.11.0" },
-    { name = "matplotlib", specifier = ">=3.10.8" },
-    { name = "mdanalysis", specifier = ">=2.9.0" },
-    { name = "mokda-xpongelib", specifier = ">=1.2.5.0" },
-    { name = "numpy", specifier = "<2" },
-    { name = "pubchempy", specifier = ">=1.0.5" },
-    { name = "pyscf", marker = "sys_platform != 'win32'", specifier = ">=2.11.0" },
-    { name = "rdkit", specifier = ">=2025.9.3" },
-]
-provides-extras = ["extra"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "ipykernel", specifier = ">=7.1.0" },
-    { name = "pytest", specifier = ">=9.0.2" },
-]
-
-[[package]]
 name = "mokda-xpongelib"
 version = "1.2.5.8"
 source = { registry = "https://mirrors.ustc.edu.cn/pypi/simple" }
@@ -1837,4 +1795,46 @@ source = { registry = "https://mirrors.ustc.edu.cn/pypi/simple" }
 sdist = { url = "https://mirrors.ustc.edu.cn/pypi/packages/5f/3e/3d456efe55d2d5e7938b5f9abd68333dd8dceb14e829f51f9a8deed2217e/wcwidth-0.5.2.tar.gz", hash = "sha256:c022c39a02a0134d1e10810da36d1f984c79648181efcc70a389f4569695f5ae", size = 152817, upload-time = "2026-01-29T19:32:52.22Z" }
 wheels = [
     { url = "https://mirrors.ustc.edu.cn/pypi/packages/6d/72/da5a6f511a8267f962a08637464a70409736ac72f9f75b069e0e96d69b64/wcwidth-0.5.2-py3-none-any.whl", hash = "sha256:46912178a64217749bf3426b21e36e849fbc46e05c949407b3e364d9f7ffcadf", size = 90088, upload-time = "2026-01-29T19:32:50.592Z" },
+]
+
+[[package]]
+name = "xponge"
+source = { editable = "." }
+dependencies = [
+    { name = "geometric" },
+    { name = "h5py" },
+    { name = "matplotlib" },
+    { name = "mdanalysis", version = "2.9.0", source = { registry = "https://mirrors.ustc.edu.cn/pypi/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "mdanalysis", version = "2.10.0", source = { registry = "https://mirrors.ustc.edu.cn/pypi/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "mokda-xpongelib" },
+    { name = "numpy" },
+    { name = "pubchempy" },
+    { name = "pyscf", marker = "sys_platform != 'win32'" },
+    { name = "rdkit" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "ipykernel" },
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "geometric", specifier = ">=1.1" },
+    { name = "h5py", specifier = ">=3.11.0" },
+    { name = "matplotlib", specifier = ">=3.10.8" },
+    { name = "mdanalysis", specifier = ">=2.9.0" },
+    { name = "mokda-xpongelib", specifier = ">=1.2.5.0" },
+    { name = "numpy", specifier = "<2" },
+    { name = "pubchempy", specifier = ">=1.0.5" },
+    { name = "pyscf", marker = "sys_platform != 'win32'", specifier = ">=2.11.0" },
+    { name = "rdkit", specifier = ">=2025.9.3" },
+]
+provides-extras = ["extra"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "ipykernel", specifier = ">=7.1.0" },
+    { name = "pytest", specifier = ">=9.0.2" },
 ]
