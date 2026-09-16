@@ -36,6 +36,14 @@ jobs:
       - name: Check distribution metadata
         run: python -m twine check dist/xponge/* dist/mokda-xponge/*
 
+      - name: Test installed wheel chain identity
+        run: |
+          python -m venv /tmp/xponge-wheel-test
+          /tmp/xponge-wheel-test/bin/python -m pip install dist/xponge/*.whl pytest
+          cp tests/test_mmcif_chain_identity.py /tmp/test_mmcif_chain_identity.py
+          cd /tmp
+          /tmp/xponge-wheel-test/bin/python -m pytest test_mmcif_chain_identity.py -q
+
       - name: Upload Xponge distribution artifacts
         uses: actions/upload-artifact@v4
         with:
