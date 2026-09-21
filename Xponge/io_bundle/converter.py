@@ -17,6 +17,7 @@ from .contracts import (
     CONTRACTS,
     LEGACY_KEY_ALIASES,
     PROTOCOL_RESTART_SIDECAR_KEYS,
+    TOPOLOGY_FILE_CONTRACTS,
     IOContract,
     contracts_by_legacy_key,
 )
@@ -53,6 +54,15 @@ class ConversionError(RuntimeError):
     """Raised when a legacy case cannot be converted."""
 
 
+_NATIVE_TYPED_INPUT_KEYS = (set(TOPOLOGY_FILE_CONTRACTS) - {"qc_type_in_file"}) | {
+    "cv_in_file", "restrain_in_file", "restrain_cv_in_file", "steer_cv_in_file",
+    "constrain_in_file", "restrain_atom_id", "restrain_weight_in_file",
+    "restrain_coordinate_in_file", "restrain_amber_rst7", "SITS_in_file",
+    "SITS_atom_in_file", "SITS_nk_in_file", "soft_walls_in_file",
+    "nose_hoover_chain_restart_input",
+}
+
+
 class LegacyToBundleConverter:
     """Convert a legacy SPONGE case directory into bundled input files."""
 
@@ -77,6 +87,7 @@ class LegacyToBundleConverter:
         self._contract_index = contracts_by_legacy_key()
         self._handled_contract_ids: set[str] = set()
         self._handled_keys: set[str] = set()
+        self._native_typed_keys: set[str] = set()
         self._bundled_mdin_omit_keys: set[str] = set()
         self._bundled_mdin_extra_lines: list[str] = []
         self._bundle_files_touched: set[str] = set()
@@ -273,6 +284,8 @@ class LegacyToBundleConverter:
                         self._track_restart_state_component(key)
                     if self._typed_payload_requires_legacy_sidecar(key):
                         self._stage_legacy_sidecar(contract, key, source_path, dry_run=dry_run)
+                    else:
+                        self._native_typed_keys.add(key)
                     self._add_manifest_entry(
                         contract,
                         "typed_converted",
@@ -349,6 +362,8 @@ class LegacyToBundleConverter:
 
     def _convert_protocol_restart_sidecars(self, *, dry_run: bool) -> None:
         for key in _PROTOCOL_RESTART_SIDECAR_KEYS:
+            if key in self._native_typed_keys:
+                continue
             source_path = self.case.resolve_legacy_input_path(key)
             if source_path is None:
                 continue
@@ -479,12 +494,10 @@ class LegacyToBundleConverter:
         bundle_file = "topology.spgt.h5"
         if not dry_run:
             self._builder.add_datasets(bundle_file, typed_datasets)
-        sidecar_rel = self._stage_dynamic_mdin_sidecar(source_key, source_path, dry_run=dry_run)
         self._source_paths_by_key[source_key] = source_path
         self._handled_keys.add(source_key)
         self._bundled_mdin_omit_keys.add(source_key)
         self._bundle_files_touched.add(bundle_file)
-        self._bundled_mdin_extra_lines.append(f'{source_key} = "{sidecar_rel.as_posix()}"')
         self.manifest.add(
             ManifestEntry(
                 contract_id=contract_id,
@@ -496,11 +509,11 @@ class LegacyToBundleConverter:
                 direction="input",
                 component="topology",
                 payload_kind="file",
-                override_policy="legacy_mdin_sidecar",
+                override_policy="native_typed",
                 comparison_rule="typed",
                 message=(
                     "dynamic custom force payload materialized as typed HDF5 datasets "
-                    "and rebound to a bundle-local legacy mdin sidecar"
+                    "without a legacy text sidecar"
                 ),
             )
         )
@@ -515,6 +528,8 @@ class LegacyToBundleConverter:
 
     def _typed_payload_requires_legacy_sidecar(self, key: str) -> bool:
         canonical_key = LEGACY_KEY_ALIASES.get(key, key)
+        if canonical_key in _NATIVE_TYPED_INPUT_KEYS:
+            return False
         canonical_contracts = self._contract_index.get(canonical_key, ())
         return not any(
             contract.status == "compatibility_import"

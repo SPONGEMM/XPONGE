@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .errors import BundleCapabilityError
 from .state_exporters import STATE_EXPORTERS
@@ -17,6 +17,9 @@ class ExportContext:
     mode: str
     prefix: str
     particle_stream: str = "all"
+    commands: dict[str, str] = field(default_factory=dict)
+    mdin_defaults: dict[str, str] = field(default_factory=dict)
+    native_payloads: dict[str, list] = field(default_factory=dict)
 
 
 EXPORTERS = {

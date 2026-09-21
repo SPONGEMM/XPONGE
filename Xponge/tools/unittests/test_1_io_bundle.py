@@ -784,7 +784,7 @@ def test_legacy_to_bundle_bundled_mdin_sidecars_and_overrides():
             assert entries["run_mdin.input_h5_restart_load"]["status"] == "legacy_input_override_replaced"
             assert entries["run_mdin.input_h5_trajectory_path"]["status"] == "legacy_input_override_replaced"
             assert entries["run_mdin.input_h5_trajectory_particle_stream"]["status"] == "legacy_input_override_replaced"
-            assert entries["restart.protocol_sidecar.cv_in_file"]["status"] == "sidecar_embedded"
+            assert "restart.protocol_sidecar.cv_in_file" not in entries
             assert entries["restart.protocol_sidecar.meta_potential_in_file"]["status"] == "sidecar_embedded"
             assert "stale_topology.spgt.h5" not in bundled_mdin
             assert "stale_protocol.spgp.h5" not in bundled_mdin
@@ -812,8 +812,8 @@ def test_legacy_to_bundle_bundled_mdin_sidecars_and_overrides():
             assert "listed_forces_in_file" not in bundled_mdin
             assert 'custom_pair_in_file = "custom_pair.txt"' not in bundled_mdin
             assert 'custom_bond_in_file = "custom_bond.txt"' not in bundled_mdin
-            assert 'custom_pair_in_file = "legacy_sidecars/custom_pair_in_file/custom_pair.txt"' in bundled_mdin
-            assert 'custom_bond_in_file = "legacy_sidecars/custom_bond_in_file/custom_bond.txt"' in bundled_mdin
+            assert 'custom_pair_in_file = "legacy_sidecars/custom_pair_in_file/custom_pair.txt"' not in bundled_mdin
+            assert 'custom_bond_in_file = "legacy_sidecars/custom_bond_in_file/custom_bond.txt"' not in bundled_mdin
             assert "TERSOFF_in_file" not in bundled_mdin
             assert "[TERSOFF]" not in bundled_mdin
             assert "qc_type_in_file" not in bundled_mdin
@@ -841,42 +841,42 @@ def test_legacy_to_bundle_bundled_mdin_sidecars_and_overrides():
             assert 'output_h5_trajectory_path = "prod.spg.h5md"' in bundled_mdin
 
             bundle_dir = output_dir / "bundle"
-            assert (bundle_dir / "legacy_sidecars" / "cv_in_file" / "cv.txt").exists()
-            assert (bundle_dir / "legacy_sidecars" / "restrain_in_file" / "restrain.txt").exists()
-            assert (bundle_dir / "legacy_sidecars" / "restrain_cv_in_file" / "restrain_cv.txt").exists()
-            assert (bundle_dir / "legacy_sidecars" / "steer_cv_in_file" / "steer_cv.txt").exists()
-            assert (bundle_dir / "legacy_sidecars" / "mass_in_file" / "mass.txt").exists()
+            assert not (bundle_dir / "legacy_sidecars" / "cv_in_file" / "cv.txt").exists()
+            assert not (bundle_dir / "legacy_sidecars" / "restrain_in_file" / "restrain.txt").exists()
+            assert not (bundle_dir / "legacy_sidecars" / "restrain_cv_in_file" / "restrain_cv.txt").exists()
+            assert not (bundle_dir / "legacy_sidecars" / "steer_cv_in_file" / "steer_cv.txt").exists()
+            assert not (bundle_dir / "legacy_sidecars" / "mass_in_file" / "mass.txt").exists()
             assert not (
                 bundle_dir / "legacy_sidecars" / "residue_in_file" / "residue.txt"
             ).exists()
-            assert (bundle_dir / "legacy_sidecars" / "cmap_in_file" / "cmap.txt").exists()
+            assert not (bundle_dir / "legacy_sidecars" / "cmap_in_file" / "cmap.txt").exists()
             assert not (
                 bundle_dir / "legacy_sidecars" / "improper_dihedral_in_file" / "improper.txt"
             ).exists()
-            assert (bundle_dir / "legacy_sidecars" / "LJ_soft_core_in_file" / "lj_soft_core.txt").exists()
-            assert (bundle_dir / "legacy_sidecars" / "EAM_in_file" / "eam.txt").exists()
-            assert (bundle_dir / "legacy_sidecars" / "EAM_atom_type_in_file" / "eam_atom_type.txt").exists()
-            assert (bundle_dir / "legacy_sidecars" / "SW_in_file" / "sw.txt").exists()
-            assert (bundle_dir / "legacy_sidecars" / "EDIP_in_file" / "edip.txt").exists()
-            assert (bundle_dir / "legacy_sidecars" / "pairwise_force_in_file" / "pairwise_force.txt").exists()
-            assert (bundle_dir / "legacy_sidecars" / "custom_pair_in_file" / "custom_pair.txt").exists()
-            assert (bundle_dir / "legacy_sidecars" / "listed_forces_in_file" / "listed_forces.txt").exists()
-            assert (bundle_dir / "legacy_sidecars" / "custom_bond_in_file" / "custom_bond.txt").exists()
-            assert (bundle_dir / "legacy_sidecars" / "TERSOFF_in_file" / "tersoff.txt").exists()
+            assert not (bundle_dir / "legacy_sidecars" / "LJ_soft_core_in_file" / "lj_soft_core.txt").exists()
+            assert not (bundle_dir / "legacy_sidecars" / "EAM_in_file" / "eam.txt").exists()
+            assert not (bundle_dir / "legacy_sidecars" / "EAM_atom_type_in_file" / "eam_atom_type.txt").exists()
+            assert not (bundle_dir / "legacy_sidecars" / "SW_in_file" / "sw.txt").exists()
+            assert not (bundle_dir / "legacy_sidecars" / "EDIP_in_file" / "edip.txt").exists()
+            assert not (bundle_dir / "legacy_sidecars" / "pairwise_force_in_file" / "pairwise_force.txt").exists()
+            assert not (bundle_dir / "legacy_sidecars" / "custom_pair_in_file" / "custom_pair.txt").exists()
+            assert not (bundle_dir / "legacy_sidecars" / "listed_forces_in_file" / "listed_forces.txt").exists()
+            assert not (bundle_dir / "legacy_sidecars" / "custom_bond_in_file" / "custom_bond.txt").exists()
+            assert not (bundle_dir / "legacy_sidecars" / "TERSOFF_in_file" / "tersoff.txt").exists()
             assert (bundle_dir / "legacy_sidecars" / "qc_type_in_file" / "qc_type.txt").exists()
-            assert (bundle_dir / "legacy_sidecars" / "REAXFF_in_file" / "reaxff.txt").exists()
-            assert (bundle_dir / "legacy_sidecars" / "REAXFF_type_in_file" / "reaxff_type.txt").exists()
-            assert (bundle_dir / "legacy_sidecars" / "SITS_nk_in_file" / "sits_nk.txt").exists()
-            assert (bundle_dir / "legacy_sidecars" / "SITS_in_file" / "sits.txt").exists()
+            assert not (bundle_dir / "legacy_sidecars" / "REAXFF_in_file" / "reaxff.txt").exists()
+            assert not (bundle_dir / "legacy_sidecars" / "REAXFF_type_in_file" / "reaxff_type.txt").exists()
+            assert not (bundle_dir / "legacy_sidecars" / "SITS_nk_in_file" / "sits_nk.txt").exists()
+            assert not (bundle_dir / "legacy_sidecars" / "SITS_in_file" / "sits.txt").exists()
             assert (bundle_dir / "legacy_sidecars" / "meta_edge_in_file" / "meta_edge.txt").exists()
             assert (bundle_dir / "legacy_sidecars" / "meta_potential_in_file" / "meta_potential.txt").exists()
             assert (bundle_dir / "legacy_sidecars" / "meta_scatter_in_file" / "meta_scatter.txt").exists()
             assert (bundle_dir / "legacy_sidecars" / "hills_in_file" / "hills.txt").exists()
-            assert (bundle_dir / "legacy_sidecars" / "nose_hoover_chain_restart_input" / "nhc_restart.txt").exists()
-            assert (bundle_dir / "legacy_sidecars" / "SITS_atom_in_file" / "sits_atom.txt").exists()
-            assert (bundle_dir / "legacy_sidecars" / "constrain_in_file" / "constrain.txt").exists()
-            assert (bundle_dir / "legacy_sidecars" / "soft_walls_in_file" / "soft_walls.txt").exists()
-            assert (bundle_dir / "legacy_sidecars" / "restrain_atom_id" / "restrain_atom_id.txt").exists()
+            assert not (bundle_dir / "legacy_sidecars" / "nose_hoover_chain_restart_input" / "nhc_restart.txt").exists()
+            assert not (bundle_dir / "legacy_sidecars" / "SITS_atom_in_file" / "sits_atom.txt").exists()
+            assert not (bundle_dir / "legacy_sidecars" / "constrain_in_file" / "constrain.txt").exists()
+            assert not (bundle_dir / "legacy_sidecars" / "soft_walls_in_file" / "soft_walls.txt").exists()
+            assert not (bundle_dir / "legacy_sidecars" / "restrain_atom_id" / "restrain_atom_id.txt").exists()
             assert not (bundle_dir / "legacy_sidecars" / "crd" / "traj.dat").exists()
             assert not (bundle_dir / "legacy_sidecars" / "box" / "traj_box.dat").exists()
             assert not (bundle_dir / "legacy_sidecars" / "vel" / "traj_vel.dat").exists()
@@ -959,7 +959,7 @@ def test_legacy_to_bundle_bundled_mdin_sidecars_and_overrides():
             assert hard_links[("restart.spgr.h5", "/particles/all/position/time")] == "/particles/all/time"
             assert hard_links[("restart.spgr.h5", "/particles/all/velocity/step")] == "/particles/all/step"
             assert hard_links[("restart.spgr.h5", "/particles/all/box/edges/step")] == "/particles/all/step"
-            assert strings[("restart.spgr.h5", "/parameters/restart/protocol_sidecars/cv_in_file")].startswith("print")
+            assert ("restart.spgr.h5", "/parameters/restart/protocol_sidecars/cv_in_file") not in strings
             assert strings[("restart.spgr.h5", "/parameters/restart/protocol_sidecars/meta_potential_in_file")].startswith(
                 "Meta potential"
             )
@@ -979,37 +979,35 @@ def test_legacy_to_bundle_bundled_mdin_sidecars_and_overrides():
             assert hard_links[("trajectory.spg.h5md", "/particles/all/position/time")] == "/particles/all/time"
             assert hard_links[("trajectory.spg.h5md", "/particles/all/velocity/step")] == "/particles/all/step"
             assert hard_links[("trajectory.spg.h5md", "/particles/all/box/edges/step")] == "/particles/all/step"
-            assert "mass_in_file" in string_arrays[
-                ("topology.spgt.h5", "/parameters/sponge/files/legacy_sidecars/key")
-            ]
+            assert "mass_in_file" not in string_arrays.get(("topology.spgt.h5", "/parameters/sponge/files/legacy_sidecars/key"), ())
             assert "residue_in_file" not in string_arrays[
                 ("topology.spgt.h5", "/parameters/sponge/files/legacy_sidecars/key")
             ]
-            assert "cmap_in_file" in string_arrays[
+            assert "cmap_in_file" not in string_arrays[
                 ("topology.spgt.h5", "/parameters/sponge/files/legacy_sidecars/key")
             ]
             assert "improper_dihedral_in_file" not in string_arrays[
                 ("topology.spgt.h5", "/parameters/sponge/files/legacy_sidecars/key")
             ]
-            assert "LJ_soft_core_in_file" in string_arrays[
+            assert "LJ_soft_core_in_file" not in string_arrays[
                 ("topology.spgt.h5", "/parameters/sponge/files/legacy_sidecars/key")
             ]
-            assert "EAM_in_file" in string_arrays[
+            assert "EAM_in_file" not in string_arrays[
                 ("topology.spgt.h5", "/parameters/sponge/files/legacy_sidecars/key")
             ]
-            assert "EAM_atom_type_in_file" in string_arrays[
+            assert "EAM_atom_type_in_file" not in string_arrays[
                 ("topology.spgt.h5", "/parameters/sponge/files/legacy_sidecars/key")
             ]
-            assert "SW_in_file" in string_arrays[
+            assert "SW_in_file" not in string_arrays[
                 ("topology.spgt.h5", "/parameters/sponge/files/legacy_sidecars/key")
             ]
-            assert "EDIP_in_file" in string_arrays[
+            assert "EDIP_in_file" not in string_arrays[
                 ("topology.spgt.h5", "/parameters/sponge/files/legacy_sidecars/key")
             ]
-            assert "pairwise_force_in_file" in string_arrays[
+            assert "pairwise_force_in_file" not in string_arrays[
                 ("topology.spgt.h5", "/parameters/sponge/files/legacy_sidecars/key")
             ]
-            assert "listed_forces_in_file" in string_arrays[
+            assert "listed_forces_in_file" not in string_arrays[
                 ("topology.spgt.h5", "/parameters/sponge/files/legacy_sidecars/key")
             ]
             assert "custom_pair_in_file" not in string_arrays[
@@ -1018,52 +1016,52 @@ def test_legacy_to_bundle_bundled_mdin_sidecars_and_overrides():
             assert "custom_bond_in_file" not in string_arrays[
                 ("topology.spgt.h5", "/parameters/sponge/files/legacy_sidecars/key")
             ]
-            assert "TERSOFF_in_file" in string_arrays[
+            assert "TERSOFF_in_file" not in string_arrays[
                 ("topology.spgt.h5", "/parameters/sponge/files/legacy_sidecars/key")
             ]
             assert "qc_type_in_file" in string_arrays[
                 ("topology.spgt.h5", "/parameters/sponge/files/legacy_sidecars/key")
             ]
-            assert "REAXFF_in_file" in string_arrays[
+            assert "REAXFF_in_file" not in string_arrays[
                 ("topology.spgt.h5", "/parameters/sponge/files/legacy_sidecars/key")
             ]
-            assert "REAXFF_type_in_file" in string_arrays[
+            assert "REAXFF_type_in_file" not in string_arrays[
                 ("topology.spgt.h5", "/parameters/sponge/files/legacy_sidecars/key")
             ]
-            assert "cv_in_file" in string_arrays[
+            assert "cv_in_file" not in string_arrays[
                 ("protocol.spgp.h5", "/parameters/sponge/files/legacy_sidecars/key")
             ]
-            assert "restrain_in_file" in string_arrays[
+            assert "restrain_in_file" not in string_arrays[
                 ("protocol.spgp.h5", "/parameters/sponge/files/legacy_sidecars/key")
             ]
-            assert "restrain_cv_in_file" in string_arrays[
+            assert "restrain_cv_in_file" not in string_arrays[
                 ("protocol.spgp.h5", "/parameters/sponge/files/legacy_sidecars/key")
             ]
-            assert "steer_cv_in_file" in string_arrays[
+            assert "steer_cv_in_file" not in string_arrays[
                 ("protocol.spgp.h5", "/parameters/sponge/files/legacy_sidecars/key")
             ]
-            assert "constrain_in_file" in string_arrays[
+            assert "constrain_in_file" not in string_arrays[
                 ("protocol.spgp.h5", "/parameters/sponge/files/legacy_sidecars/key")
             ]
-            assert "SITS_atom_in_file" in string_arrays[
+            assert "SITS_atom_in_file" not in string_arrays[
                 ("protocol.spgp.h5", "/parameters/sponge/files/legacy_sidecars/key")
             ]
-            assert "SITS_in_file" in string_arrays[
+            assert "SITS_in_file" not in string_arrays[
                 ("protocol.spgp.h5", "/parameters/sponge/files/legacy_sidecars/key")
             ]
             assert "meta_edge_in_file" in string_arrays[
                 ("protocol.spgp.h5", "/parameters/sponge/files/legacy_sidecars/key")
             ]
-            assert "soft_walls_in_file" in string_arrays[
+            assert "soft_walls_in_file" not in string_arrays[
                 ("protocol.spgp.h5", "/parameters/sponge/files/legacy_sidecars/key")
             ]
-            assert "restrain_atom_id" in string_arrays[
+            assert "restrain_atom_id" not in string_arrays[
                 ("protocol.spgp.h5", "/parameters/sponge/files/legacy_sidecars/key")
             ]
-            assert "SITS_nk_in_file" in string_arrays[
+            assert "SITS_nk_in_file" not in string_arrays[
                 ("restart.spgr.h5", "/parameters/sponge/files/legacy_sidecars/key")
             ]
-            assert "nose_hoover_chain_restart_input" in string_arrays[
+            assert "nose_hoover_chain_restart_input" not in string_arrays[
                 ("restart.spgr.h5", "/parameters/sponge/files/legacy_sidecars/key")
             ]
             assert "meta_potential_in_file" in string_arrays[
@@ -1166,9 +1164,7 @@ def test_legacy_to_bundle_static_default_prefix_generates_required_protocol():
             assert 'input_h5_topology_path = "topology.spgt.h5"' in bundled_mdin
             assert 'input_h5_protocol_path = "protocol.spgp.h5"' in bundled_mdin
             assert 'input_h5_restart_path = "restart.spgr.h5"' in bundled_mdin
-            assert "mass_in_file" in string_arrays[
-                ("topology.spgt.h5", "/parameters/sponge/files/legacy_sidecars/key")
-            ]
+            assert "mass_in_file" not in string_arrays.get(("topology.spgt.h5", "/parameters/sponge/files/legacy_sidecars/key"), ())
             assert strings[("protocol.spgp.h5", "/protocol/topology_compatibility/topology_hash")] == strings[
                 ("topology.spgt.h5", "/topology/topology_hash")
             ]
@@ -1237,10 +1233,10 @@ def test_legacy_to_bundle_dynamic_custom_force_default_prefix():
                 "legacy_custom_bond.txt"
             )
             assert 'default_in_file_prefix = "legacy"' not in bundled_mdin
-            assert 'custom_pair_in_file = "legacy_sidecars/custom_pair_in_file/legacy_custom_pair.txt"' in bundled_mdin
-            assert 'custom_bond_in_file = "legacy_sidecars/custom_bond_in_file/legacy_custom_bond.txt"' in bundled_mdin
-            assert (output_dir / "bundle" / "legacy_sidecars" / "custom_pair_in_file" / "legacy_custom_pair.txt").exists()
-            assert (output_dir / "bundle" / "legacy_sidecars" / "custom_bond_in_file" / "legacy_custom_bond.txt").exists()
+            assert 'custom_pair_in_file = "legacy_sidecars/custom_pair_in_file/legacy_custom_pair.txt"' not in bundled_mdin
+            assert 'custom_bond_in_file = "legacy_sidecars/custom_bond_in_file/legacy_custom_bond.txt"' not in bundled_mdin
+            assert not (output_dir / "bundle" / "legacy_sidecars" / "custom_pair_in_file" / "legacy_custom_pair.txt").exists()
+            assert not (output_dir / "bundle" / "legacy_sidecars" / "custom_bond_in_file" / "legacy_custom_bond.txt").exists()
             assert ("topology.spgt.h5", "/forcefield/custom_force/pairwise/data/custom_pair/parameter/value", (2, 1)) in writes
             assert ("topology.spgt.h5", "/forcefield/custom_force/listed/data/custom_bond/parameter/value", (1, 4)) in writes
     finally:
@@ -1483,7 +1479,7 @@ def test_legacy_to_bundle_writes_typed_topology():
                 np.asarray([[0.1, 0.2, 1.5], [0.3, 0.4, 1.6]], dtype=np.float32),
             )
             assert _h5_string(handle["/parameters/restart/bias/meta/default/hills"][()]) == "0.1 0.2 1.5\n0.3 0.4 1.6\n"
-            assert _h5_string(handle["/parameters/restart/protocol_sidecars/cv_in_file"][()]).startswith("print")
+            assert "/parameters/restart/protocol_sidecars/cv_in_file" not in handle
             assert _h5_string(handle["/parameters/restart/protocol_sidecars/meta_potential_in_file"][()]).startswith(
                 "Meta potential"
             )

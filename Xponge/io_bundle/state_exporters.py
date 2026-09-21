@@ -48,6 +48,8 @@ def _render_sections(sections):
 
 
 def export_config(contract, reader, context) -> list[LegacyPayload]:
+    if not reader.contains(contract.bundle_file, _CONFIG_ROOTS[contract.exporter_id] + "/config"):
+        return []
     return [LegacyPayload(contract.legacy_keys[0], _render_sections(_config_sections(contract, reader)))]
 
 

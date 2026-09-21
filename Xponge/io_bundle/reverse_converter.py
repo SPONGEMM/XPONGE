@@ -23,6 +23,7 @@ from .errors import (
 from .exporters import EXPORTERS, ExportContext, validate_exporter_registry
 from .legacy_case import render_mdin_without_keys
 from .legacy_materializer import LegacyMaterializer, LegacyPayload
+from .native_protocol_exporters import prepare_native_protocol
 from .manifest import ManifestEntry, ReverseConversionManifest
 
 
@@ -60,6 +61,7 @@ class BundleToLegacyConverter:
             mode=self.case.mode,
         )
         self._contracts_by_key = contracts_by_legacy_key()
+        self._mdin_defaults: dict[str, str] = {}
         self._materialized_keys: set[str] = set()
         self._materialized_groups: set[str] = set()
 
@@ -84,7 +86,10 @@ class BundleToLegacyConverter:
                 mode=self.case.mode,
                 prefix=self.prefix,
                 particle_stream=self.case.particle_stream,
+                commands=self.case.commands,
+                mdin_defaults=self._mdin_defaults,
             )
+            context.native_payloads.update(prepare_native_protocol(reader, context))
             contracts = sorted(
                 reversible_contracts(self.case.mode),
                 key=lambda contract: {
@@ -162,7 +167,10 @@ class BundleToLegacyConverter:
         source_path = str(self.case.path_for_bundle_file(contract.bundle_file))
 
         exporter = EXPORTERS.get(contract.exporter_id or "")
-        if typed_present and exporter is not None:
+        if key in context.native_payloads:
+            payloads = context.native_payloads[key]
+            self._materialized_keys.add(key)
+        elif typed_present and exporter is not None:
             try:
                 payloads = exporter(contract, reader, context)
             except (ValueError, TypeError, IndexError) as exc:
@@ -407,7 +415,11 @@ class BundleToLegacyConverter:
             if key.endswith("_in_file") and value.startswith("legacy_sidecars/")
         )
 
-        root_lines = []
+        root_lines = [
+            f"{key} = {json.dumps(value)}"
+            for key, value in sorted(self._mdin_defaults.items())
+            if key not in self.case.commands
+        ]
         section_lines: dict[str, list[str]] = {}
         for key, filename in sorted(bindings.items()):
             known_contracts = self._contracts_by_key.get(key)

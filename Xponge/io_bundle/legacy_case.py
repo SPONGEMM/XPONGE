@@ -128,7 +128,20 @@ def render_mdin_without_keys(text: str, omit_keys: set[str], append_lines: list[
                 section_has_payload = True
 
     flush_section()
-    rendered = output + append_lines
+    # Root assignments must precede TOML tables. Merge appended table fields
+    # into existing tables instead of emitting a second [SITS]/[restrain].
+    root_lines = []
+    tables = {}
+    for source in (output, append_lines):
+        current = root_lines
+        for line in source:
+            match = _SECTION_RE.match(line)
+            if match:
+                name = match.group(1)
+                current = tables.setdefault(name, [line])
+            else:
+                current.append(line)
+    rendered = root_lines + [line for table in tables.values() for line in table]
     return "\n".join(rendered).rstrip() + "\n"
 
 
