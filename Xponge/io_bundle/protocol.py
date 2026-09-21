@@ -37,7 +37,7 @@ _METADYNAMICS_FLAGS = frozenset(
 
 @dataclass(frozen=True)
 class ProtocolCollectiveVariable:
-    """One named scalar collective variable."""
+    """One named scalar CV; RMSD reference_coordinates are inline in protocol H5."""
 
     name: str
     type: str
@@ -380,6 +380,10 @@ def _validate_protocol(
                 f"collective variable {cv.name!r} sigma values must be finite and positive"
             )
         if cv.reference_coordinates:
+            if cv.type != "rmsd":
+                raise BundleValidationError(
+                    f"collective variable {cv.name!r} reference coordinates are only supported for rmsd"
+                )
             _validate_xyz(
                 cv.reference_coordinates,
                 len(cv.atom_indices or cv.atom_refs),
@@ -752,10 +756,9 @@ def _write_cv(builder: BundleBuilder, cv: ProtocolCollectiveVariable) -> None:
     if cv.reference_coordinates:
         _add_array(
             builder,
-            f"/parameters/restart/references/cv/{cv.name}/coordinate",
+            root + "/coordinate",
             cv.reference_coordinates,
             np.float32,
-            bundle_file="restart.spgr.h5",
         )
 
 

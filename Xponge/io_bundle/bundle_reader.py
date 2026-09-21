@@ -70,10 +70,30 @@ class BundleReader:
         handle = self._handles.get(bundle_file)
         return handle is not None and dataset_path in handle
 
+    def list_children(
+        self, bundle_file: str, group_path: str, *, groups_only: bool = False
+    ) -> list[str]:
+        """List typed object names without exposing the underlying HDF5 handles."""
+        import h5py
+
+        if not self.contains(bundle_file, group_path):
+            return []
+        group = self._require_handle(bundle_file)[group_path]
+        if not isinstance(group, h5py.Group):
+            raise BundleValidationError(f"{bundle_file} {group_path} must be a group")
+        return sorted(
+            name for name in group
+            if not groups_only or isinstance(group[name], h5py.Group)
+        )
+
     def read(self, bundle_file: str, dataset_path: str):
         handle = self._require_handle(bundle_file)
         if dataset_path not in handle:
             raise BundleValidationError(f"{bundle_file} is missing {dataset_path}")
+        import h5py
+
+        if not isinstance(handle[dataset_path], h5py.Dataset):
+            raise BundleValidationError(f"{bundle_file} {dataset_path} must be a dataset")
         return np.asarray(handle[dataset_path][...])
 
     def read_scalar(self, bundle_file: str, dataset_path: str):

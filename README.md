@@ -266,9 +266,12 @@ written to `restart.spgr.h5`. Named `ProtocolSoftWall` objects are stored as
 typed columnar definitions and are compiled directly by SPONGE without an
 intermediate configuration file. `ProtocolHardWall` uses `None` for an
 unbounded axis, requires at least one finite bound, and defaults to rejecting
-NPT unless `allow_npt=True` explicitly opts in. Positional and RMSD-style CV
-reference coordinates are written into the structural restart artifact rather
-than the reusable protocol artifact. A positional-restraint reference contains
+NPT unless `allow_npt=True` explicitly opts in. RMSD CV `reference_coordinates`
+are written inline to `/cv/<name>/coordinate` in `protocol.spgp.h5`, with one
+finite XYZ row per selected atom, in `atom_indices` or `atom_refs` order.
+SPONGE also accepts the old restart reference path; if both are present, they
+must agree. Positional reference coordinates remain in the structural restart
+artifact. A positional-restraint reference contains
 one XYZ row for every system atom; `atom_indices` selects which rows are
 restrained.
 
@@ -296,6 +299,15 @@ Existing direct/legacy input cases can be converted in either direction:
 Xponge legacy-to-bundle CASE_DIR -m mdin.spg.toml -o CONVERTED
 Xponge bundle-to-legacy CONVERTED/bundle -o RESTORED --prefix system
 ```
+
+`bundle-to-legacy` also exports native CV definitions and virtual atoms. RMSD
+reference coordinates are included directly as `coordinate = ...` in the
+generated CV file, preserving atom order and avoiding external reference files.
+Both inline protocol references and the old restart reference path are accepted;
+conflicting references or malformed coordinates fail before files are written.
+Disabled native objects are omitted. Legacy-to-bundle conversion retains these
+self-contained CV sections under `/cv/config`, so subsequent exports preserve
+their values.
 
 Reverse conversion treats typed HDF5 datasets as authoritative. Embedded
 legacy sidecars are used only for contracts without a typed representation.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from .cv_exporters import native_cv_sections
 from .errors import BundleExportError
 from .legacy_materializer import LegacyPayload
 from .topology_exporters import _format_float, _format_scalar, _text_vector, _vector
@@ -18,7 +19,7 @@ _CONFIG_ROOTS = {
 }
 
 
-def export_config(contract, reader, context) -> list[LegacyPayload]:
+def _config_sections(contract, reader):
     root = _CONFIG_ROOTS[contract.exporter_id]
     names = _text_vector(reader.read(contract.bundle_file, root + "/config/section/name"))
     offsets = _vector(
@@ -30,13 +31,45 @@ def export_config(contract, reader, context) -> list[LegacyPayload]:
         raise BundleExportError(f"{contract.contract_id} config section offsets are invalid")
     if len(keys) != len(values):
         raise BundleExportError(f"{contract.contract_id} config key/value lengths differ")
+    return [
+        (name, list(zip(keys[offsets[index]:offsets[index + 1]],
+                        values[offsets[index]:offsets[index + 1]])))
+        for index, name in enumerate(names)
+    ]
+
+
+def _render_sections(sections):
     lines = []
-    for section_index, name in enumerate(names):
+    for name, items in sections:
         lines.extend([name, "{"])
-        for item_index in range(offsets[section_index], offsets[section_index + 1]):
-            lines.append(f"    {keys[item_index]} = {values[item_index]}")
+        lines.extend(f"    {key} = {value}" for key, value in items)
         lines.append("}")
-    return [LegacyPayload(contract.legacy_keys[0], "\n".join(lines) + "\n")]
+    return "\n".join(lines) + "\n"
+
+
+def export_config(contract, reader, context) -> list[LegacyPayload]:
+    return [LegacyPayload(contract.legacy_keys[0], _render_sections(_config_sections(contract, reader)))]
+
+
+def export_cv(contract, reader, context) -> list[LegacyPayload]:
+    sections = {}
+    legacy = (
+        _config_sections(contract, reader)
+        if reader.contains(contract.bundle_file, "/cv/config") else []
+    )
+    native = [(name, list(items.items())) for name, items in native_cv_sections(reader)]
+    for name, items in legacy + native:
+        target = sections.setdefault(name, {})
+        for key, value in items:
+            if key in target and target[key].split() != value.split():
+                raise BundleExportError(f"CV section {name!r} field {key!r} conflicts with another CV field")
+            target[key] = value
+    if not sections:
+        return []
+    return [LegacyPayload(
+        contract.legacy_keys[0],
+        _render_sections((name, items.items()) for name, items in sections.items()),
+    )]
 
 
 def export_constraint(contract, reader, context) -> list[LegacyPayload]:
@@ -183,7 +216,7 @@ def export_meta_hills(contract, reader, context) -> list[LegacyPayload]:
 
 
 STATE_EXPORTERS = {
-    "cv_in_file": export_config,
+    "cv_in_file": export_cv,
     "restrain_in_file": export_config,
     "restrain_cv_in_file": export_config,
     "steer_cv_in_file": export_config,

@@ -1042,3 +1042,51 @@ def _assert_dataset_lists_equal(original, restored):
             assert np.allclose(actual, expected, equal_nan=True), path
         else:
             assert np.array_equal(actual, expected), path
+
+
+@pytest.mark.parametrize("use_atom_refs", [False, True])
+def test_rmsd_reference_is_inline_in_protocol(tmp_path, use_atom_refs):
+    reference = ((1.0, 2.0, 3.0), (4.0, 5.0, 6.0))
+    selection = {"atom_refs": (1, 0)} if use_atom_refs else {"atom_indices": (1, 0)}
+    protocol = Xponge.SpongeProtocol(
+        collective_variables=(
+            Xponge.ProtocolCollectiveVariable(
+                name="rmsd_cv", type="rmsd", reference_coordinates=reference,
+                rotate=False, **selection,
+            ),
+        ),
+    )
+    Xponge.save_sponge_input_bundle(
+        _alanine_dipeptide(), "rmsd", tmp_path, protocol=protocol
+    )
+    with h5py.File(tmp_path / "rmsd_protocol.spgp.h5", "r") as handle:
+        coordinate = handle["/cv/rmsd_cv/coordinate"]
+        assert coordinate.shape == (2, 3)
+        assert coordinate.dtype.name == "float32"
+        assert coordinate[...].tolist() == [list(row) for row in reference]
+        assert int(handle["/cv/rmsd_cv/rotate"][()]) == 0
+    with h5py.File(tmp_path / "rmsd_restart.spgr.h5", "r") as handle:
+        assert "/parameters/restart/references/cv/rmsd_cv/coordinate" not in handle
+
+
+@pytest.mark.parametrize("cv_type,reference,error", [
+    ("distance", ((1, 2, 3), (4, 5, 6)), "only supported for rmsd"),
+    ("rmsd", ((1, 2, 3),), "shape"),
+    ("rmsd", ((1, 2), (3, 4)), "shape"),
+    ("rmsd", ((float("nan"), 2, 3), (4, 5, 6)), "finite"),
+    ("rmsd", ((float("inf"), 2, 3), (4, 5, 6)), "finite"),
+])
+def test_invalid_rmsd_reference_does_not_publish_bundle(tmp_path, cv_type, reference, error):
+    protocol = Xponge.SpongeProtocol(
+        collective_variables=(
+            Xponge.ProtocolCollectiveVariable(
+                name="rmsd_cv", type=cv_type, atom_indices=(0, 1),
+                reference_coordinates=reference,
+            ),
+        ),
+    )
+    with pytest.raises(BundleValidationError, match=error):
+        Xponge.save_sponge_input_bundle(
+            _alanine_dipeptide(), "invalid_rmsd", tmp_path, protocol=protocol
+        )
+    assert not list(tmp_path.glob("invalid_rmsd_*"))
