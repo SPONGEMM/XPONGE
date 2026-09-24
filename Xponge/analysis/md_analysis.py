@@ -21,9 +21,11 @@ except ModuleNotFoundError as exc:
         "'MDAnalysis' package needed. Maybe you need 'pip install MDAnalysis'") from exc
 
 from .bundle_mdanalysis import (  # noqa: F401
+    CIFTopologyParser,
     BundleTopologyParser,
     SPONGEH5MDReader,
     SpongeH5MDReader,
+    load_cif_h5md_universe,
     load_bundle_universe,
     register_mdanalysis_formats,
     validate_bundle_pair,
