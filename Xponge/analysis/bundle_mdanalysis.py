@@ -21,6 +21,7 @@ from MDAnalysis.units import get_conversion_factor
 from MDAnalysis.lib.util import openany
 
 from ..helper import guess_element_from_mass
+from ..io_bundle.source_order import validate_source_order_binding, validate_trajectory_source_order
 from ..io_bundle.errors import (
     AmbiguousH5MDLayoutError,
     BundleSchemaError,
@@ -1645,8 +1646,17 @@ def _verify_mokda_mapping_file(mapping_file, cif_mapping):
         raise BundleTopologyError(
             "Mokda mapping file atoms do not match the CIF trajectory mapping"
         )
+    binding = None
+    if "topology_binding" in document:
+        try:
+            binding = validate_source_order_binding(
+                document["topology_binding"], [row["external_id"] for row in sidecar_mapping]
+            )
+        except ValueError as exc:
+            raise BundleTopologyError(f"invalid mapping topology_binding: {exc}") from exc
     return {
         "path": os.fspath(mapping_file),
+        "topology_binding": binding,
         "verified": True,
         "mapping_hash": cif_mapping_hash,
         "atom_count": len(cif_identity_mapping),
@@ -1704,6 +1714,15 @@ def load_cif_h5md_universe(
             f"{trajectory!r} has {trajectory_atom_count} atoms, CIF topology has "
             f"{cif_topology.n_atoms}"
         )
+    try:
+        order_validation = validate_trajectory_source_order(
+            trajectory,
+            cif_topology.cif_metadata["mapping_file_validation"].get("topology_binding"),
+            particle_stream=particle_stream,
+        )
+    except ValueError as exc:
+        raise BundleTrajectoryError(str(exc)) from exc
+    cif_topology.cif_metadata["trajectory_order_validation"] = order_validation
     if cif_topology.cif_metadata["mokda_trajectory_mapping"]:
         mapping_file_verified = cif_topology.cif_metadata["mapping_file_validation"][
             "verified"
@@ -1723,7 +1742,8 @@ def load_cif_h5md_universe(
             "CIF/H5MD compatibility is checked by atom count only; ensure the CIF "
             "atom order matches the trajectory atom order."
         )
-    warnings.warn(warning, RuntimeWarning, stacklevel=2)
+    if not order_validation["verified"]:
+        warnings.warn(warning, RuntimeWarning, stacklevel=2)
     universe = mda.Universe(
         cif_topology,
         trajectory,
