@@ -19,6 +19,7 @@ from .bundle_builder import BundleBuilder, BundleMetadata, BundlePaths
 from .errors import BundlePathError
 from .molecule_adapter import add_molecule_to_bundle
 from .protocol import SpongeProtocol, add_protocol_to_bundle
+from .source_order import bind_bundle_source_order
 
 
 def save_sponge_input_bundle(
@@ -117,6 +118,10 @@ def save_sponge_input_bundle(
         )
         touched = {"topology.spgt.h5", "protocol.spgp.h5", "restart.spgr.h5"}
         builder.finalize(touched, metadata)
+        if captured_source_atom_ids is not None:
+            bind_bundle_source_order(
+                temporary_paths, [captured_source_atom_ids[atom] for atom in mol.atoms]
+            )
         for source, target in (
             (temporary_paths.topology, final_paths.topology),
             (temporary_paths.protocol, final_paths.protocol),
