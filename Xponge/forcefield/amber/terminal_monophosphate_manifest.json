@@ -1,0 +1,342 @@
+{
+  "format_version": 2,
+  "source": "terminal_monophosphate.lib",
+  "source_sha256": "8cafedf0109aaf6d60abec34a96d4f6c4b34ebcfaa63006335f66fbf2b58c9b6",
+  "source_license": "See amber_sources/LICENSE.AmberClassic",
+  "template_count": 8,
+  "templates": [
+    {
+      "template": "A5MP",
+      "source_unit_name": "A5",
+      "atom_count": 35,
+      "bond_count": 37,
+      "total_charge": -1.3081,
+      "expected_integer_charge": null,
+      "head_atom": null,
+      "tail_atom": "O3'",
+      "source_connect_indices": [
+        0,
+        35
+      ],
+      "source_connectivity_flags": [
+        1
+      ],
+      "head_next_atom": null,
+      "head_reference_atom": null,
+      "head_link_conditions": [],
+      "head_rule_source": "none",
+      "tail_next_atom": "C3'",
+      "tail_reference_atom": "H3'",
+      "tail_link_conditions": [
+        {
+          "atoms": [
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": 120.0
+        },
+        {
+          "atoms": [
+            "H3'",
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": -54.0
+        }
+      ],
+      "tail_rule_source": "amber_nucleic_tail"
+    },
+    {
+      "template": "C5MP",
+      "source_unit_name": "C5",
+      "atom_count": 33,
+      "bond_count": 34,
+      "total_charge": -1.3081,
+      "expected_integer_charge": null,
+      "head_atom": null,
+      "tail_atom": "O3'",
+      "source_connect_indices": [
+        0,
+        33
+      ],
+      "source_connectivity_flags": [
+        1
+      ],
+      "head_next_atom": null,
+      "head_reference_atom": null,
+      "head_link_conditions": [],
+      "head_rule_source": "none",
+      "tail_next_atom": "C3'",
+      "tail_reference_atom": "H3'",
+      "tail_link_conditions": [
+        {
+          "atoms": [
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": 120.0
+        },
+        {
+          "atoms": [
+            "H3'",
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": -54.0
+        }
+      ],
+      "tail_rule_source": "amber_nucleic_tail"
+    },
+    {
+      "template": "DA5MP",
+      "source_unit_name": "DA5",
+      "atom_count": 34,
+      "bond_count": 36,
+      "total_charge": -1.3079,
+      "expected_integer_charge": null,
+      "head_atom": null,
+      "tail_atom": "O3'",
+      "source_connect_indices": [
+        0,
+        34
+      ],
+      "source_connectivity_flags": [
+        1
+      ],
+      "head_next_atom": null,
+      "head_reference_atom": null,
+      "head_link_conditions": [],
+      "head_rule_source": "none",
+      "tail_next_atom": "C3'",
+      "tail_reference_atom": "H3'",
+      "tail_link_conditions": [
+        {
+          "atoms": [
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": 120.0
+        },
+        {
+          "atoms": [
+            "H3'",
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": -54.0
+        }
+      ],
+      "tail_rule_source": "amber_nucleic_tail"
+    },
+    {
+      "template": "DC5MP",
+      "source_unit_name": "DC5",
+      "atom_count": 32,
+      "bond_count": 33,
+      "total_charge": -1.3079,
+      "expected_integer_charge": null,
+      "head_atom": null,
+      "tail_atom": "O3'",
+      "source_connect_indices": [
+        0,
+        32
+      ],
+      "source_connectivity_flags": [
+        1
+      ],
+      "head_next_atom": null,
+      "head_reference_atom": null,
+      "head_link_conditions": [],
+      "head_rule_source": "none",
+      "tail_next_atom": "C3'",
+      "tail_reference_atom": "H3'",
+      "tail_link_conditions": [
+        {
+          "atoms": [
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": 120.0
+        },
+        {
+          "atoms": [
+            "H3'",
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": -54.0
+        }
+      ],
+      "tail_rule_source": "amber_nucleic_tail"
+    },
+    {
+      "template": "DG5MP",
+      "source_unit_name": "DG5",
+      "atom_count": 35,
+      "bond_count": 37,
+      "total_charge": -1.3079,
+      "expected_integer_charge": null,
+      "head_atom": null,
+      "tail_atom": "O3'",
+      "source_connect_indices": [
+        0,
+        35
+      ],
+      "source_connectivity_flags": [
+        1
+      ],
+      "head_next_atom": null,
+      "head_reference_atom": null,
+      "head_link_conditions": [],
+      "head_rule_source": "none",
+      "tail_next_atom": "C3'",
+      "tail_reference_atom": "H3'",
+      "tail_link_conditions": [
+        {
+          "atoms": [
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": 120.0
+        },
+        {
+          "atoms": [
+            "H3'",
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": -54.0
+        }
+      ],
+      "tail_rule_source": "amber_nucleic_tail"
+    },
+    {
+      "template": "DT5MP",
+      "source_unit_name": "DT5",
+      "atom_count": 34,
+      "bond_count": 35,
+      "total_charge": -1.3079,
+      "expected_integer_charge": null,
+      "head_atom": null,
+      "tail_atom": "O3'",
+      "source_connect_indices": [
+        0,
+        34
+      ],
+      "source_connectivity_flags": [
+        1
+      ],
+      "head_next_atom": null,
+      "head_reference_atom": null,
+      "head_link_conditions": [],
+      "head_rule_source": "none",
+      "tail_next_atom": "C3'",
+      "tail_reference_atom": "H3'",
+      "tail_link_conditions": [
+        {
+          "atoms": [
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": 120.0
+        },
+        {
+          "atoms": [
+            "H3'",
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": -54.0
+        }
+      ],
+      "tail_rule_source": "amber_nucleic_tail"
+    },
+    {
+      "template": "G5MP",
+      "source_unit_name": "G5",
+      "atom_count": 36,
+      "bond_count": 38,
+      "total_charge": -1.3081,
+      "expected_integer_charge": null,
+      "head_atom": null,
+      "tail_atom": "O3'",
+      "source_connect_indices": [
+        0,
+        36
+      ],
+      "source_connectivity_flags": [
+        1
+      ],
+      "head_next_atom": null,
+      "head_reference_atom": null,
+      "head_link_conditions": [],
+      "head_rule_source": "none",
+      "tail_next_atom": "C3'",
+      "tail_reference_atom": "H3'",
+      "tail_link_conditions": [
+        {
+          "atoms": [
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": 120.0
+        },
+        {
+          "atoms": [
+            "H3'",
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": -54.0
+        }
+      ],
+      "tail_rule_source": "amber_nucleic_tail"
+    },
+    {
+      "template": "U5MP",
+      "source_unit_name": "U5",
+      "atom_count": 32,
+      "bond_count": 33,
+      "total_charge": -1.3081,
+      "expected_integer_charge": null,
+      "head_atom": null,
+      "tail_atom": "O3'",
+      "source_connect_indices": [
+        0,
+        32
+      ],
+      "source_connectivity_flags": [
+        1
+      ],
+      "head_next_atom": null,
+      "head_reference_atom": null,
+      "head_link_conditions": [],
+      "head_rule_source": "none",
+      "tail_next_atom": "C3'",
+      "tail_reference_atom": "H3'",
+      "tail_link_conditions": [
+        {
+          "atoms": [
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": 120.0
+        },
+        {
+          "atoms": [
+            "H3'",
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": -54.0
+        }
+      ],
+      "tail_rule_source": "amber_nucleic_tail"
+    }
+  ],
+  "source_repository": "https://github.com/Amber-MD/AmberClassic",
+  "source_revision": "2fdfc7a64c63514b18340b1833341bbdafbef105",
+  "source_path": "dat/leap/lib/terminal_monophosphate.lib",
+  "protonation": "5prime_monophosphate_with_HOP3",
+  "citations": []
+}

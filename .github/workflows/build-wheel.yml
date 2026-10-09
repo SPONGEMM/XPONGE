@@ -36,6 +36,14 @@ jobs:
       - name: Check distribution metadata
         run: python -m twine check dist/xponge/* dist/mokda-xponge/*
 
+      - name: Test installed wheel chain identity and nucleic templates
+        run: |
+          python -m venv /tmp/xponge-wheel-test
+          /tmp/xponge-wheel-test/bin/python -m pip install dist/xponge/*.whl pytest
+          cp tests/test_mmcif_chain_identity.py tests/test_nucleic_forcefields.py /tmp/
+          cd /tmp
+          /tmp/xponge-wheel-test/bin/python -m pytest test_mmcif_chain_identity.py test_nucleic_forcefields.py -q -k "not reproducible"
+
       - name: Upload Xponge distribution artifacts
         uses: actions/upload-artifact@v4
         with:
