@@ -1,0 +1,672 @@
+{
+  "format_version": 2,
+  "source": "ff-nucleic-OL24.lib",
+  "source_sha256": "5484a198d83e87f00c91b276841d744bee50e7c3583d0ceef649dbbc99329d06",
+  "source_license": "See amber_sources/LICENSE.AmberClassic",
+  "template_count": 16,
+  "templates": [
+    {
+      "template": "DA",
+      "source_unit_name": "DA",
+      "atom_count": 32,
+      "bond_count": 34,
+      "total_charge": -1.0,
+      "expected_integer_charge": -1,
+      "head_atom": "P",
+      "tail_atom": "O3'",
+      "source_connect_indices": [
+        1,
+        32
+      ],
+      "source_connectivity_flags": [
+        1
+      ],
+      "head_next_atom": "OP2",
+      "head_reference_atom": "O5'",
+      "head_link_conditions": [
+        {
+          "atoms": [
+            "OP2",
+            "P"
+          ],
+          "parameter_degrees": 108.0
+        },
+        {
+          "atoms": [
+            "O5'",
+            "OP2",
+            "P"
+          ],
+          "parameter_degrees": 113.0
+        }
+      ],
+      "head_rule_source": "amber_nucleic_head",
+      "tail_next_atom": "C3'",
+      "tail_reference_atom": "H3'",
+      "tail_link_conditions": [
+        {
+          "atoms": [
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": 120.0
+        },
+        {
+          "atoms": [
+            "H3'",
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": -54.0
+        }
+      ],
+      "tail_rule_source": "amber_nucleic_tail"
+    },
+    {
+      "template": "DA3",
+      "source_unit_name": "DA3",
+      "atom_count": 33,
+      "bond_count": 35,
+      "total_charge": -0.6921,
+      "expected_integer_charge": null,
+      "head_atom": "P",
+      "tail_atom": null,
+      "source_connect_indices": [
+        1,
+        0
+      ],
+      "source_connectivity_flags": [
+        1
+      ],
+      "head_next_atom": "OP2",
+      "head_reference_atom": "O5'",
+      "head_link_conditions": [
+        {
+          "atoms": [
+            "OP2",
+            "P"
+          ],
+          "parameter_degrees": 108.0
+        },
+        {
+          "atoms": [
+            "O5'",
+            "OP2",
+            "P"
+          ],
+          "parameter_degrees": 113.0
+        }
+      ],
+      "head_rule_source": "amber_nucleic_head",
+      "tail_next_atom": null,
+      "tail_reference_atom": null,
+      "tail_link_conditions": [],
+      "tail_rule_source": "none"
+    },
+    {
+      "template": "DA5",
+      "source_unit_name": "DA5",
+      "atom_count": 30,
+      "bond_count": 32,
+      "total_charge": -0.3079,
+      "expected_integer_charge": null,
+      "head_atom": null,
+      "tail_atom": "O3'",
+      "source_connect_indices": [
+        0,
+        30
+      ],
+      "source_connectivity_flags": [
+        1
+      ],
+      "head_next_atom": null,
+      "head_reference_atom": null,
+      "head_link_conditions": [],
+      "head_rule_source": "none",
+      "tail_next_atom": "C3'",
+      "tail_reference_atom": "H3'",
+      "tail_link_conditions": [
+        {
+          "atoms": [
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": 120.0
+        },
+        {
+          "atoms": [
+            "H3'",
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": -54.0
+        }
+      ],
+      "tail_rule_source": "amber_nucleic_tail"
+    },
+    {
+      "template": "DAN",
+      "source_unit_name": "DAN",
+      "atom_count": 31,
+      "bond_count": 33,
+      "total_charge": 0.0,
+      "expected_integer_charge": 0,
+      "head_atom": null,
+      "tail_atom": null,
+      "source_connect_indices": [
+        0,
+        0
+      ],
+      "source_connectivity_flags": [
+        1
+      ],
+      "head_next_atom": null,
+      "head_reference_atom": null,
+      "head_link_conditions": [],
+      "head_rule_source": "none",
+      "tail_next_atom": null,
+      "tail_reference_atom": null,
+      "tail_link_conditions": [],
+      "tail_rule_source": "none"
+    },
+    {
+      "template": "DC",
+      "source_unit_name": "DC",
+      "atom_count": 30,
+      "bond_count": 31,
+      "total_charge": -1.0,
+      "expected_integer_charge": -1,
+      "head_atom": "P",
+      "tail_atom": "O3'",
+      "source_connect_indices": [
+        1,
+        30
+      ],
+      "source_connectivity_flags": [
+        1
+      ],
+      "head_next_atom": "OP2",
+      "head_reference_atom": "O5'",
+      "head_link_conditions": [
+        {
+          "atoms": [
+            "OP2",
+            "P"
+          ],
+          "parameter_degrees": 108.0
+        },
+        {
+          "atoms": [
+            "O5'",
+            "OP2",
+            "P"
+          ],
+          "parameter_degrees": 113.0
+        }
+      ],
+      "head_rule_source": "amber_nucleic_head",
+      "tail_next_atom": "C3'",
+      "tail_reference_atom": "H3'",
+      "tail_link_conditions": [
+        {
+          "atoms": [
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": 120.0
+        },
+        {
+          "atoms": [
+            "H3'",
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": -54.0
+        }
+      ],
+      "tail_rule_source": "amber_nucleic_tail"
+    },
+    {
+      "template": "DC3",
+      "source_unit_name": "DC3",
+      "atom_count": 31,
+      "bond_count": 32,
+      "total_charge": -0.6921,
+      "expected_integer_charge": null,
+      "head_atom": "P",
+      "tail_atom": null,
+      "source_connect_indices": [
+        1,
+        0
+      ],
+      "source_connectivity_flags": [
+        1
+      ],
+      "head_next_atom": "OP2",
+      "head_reference_atom": "O5'",
+      "head_link_conditions": [
+        {
+          "atoms": [
+            "OP2",
+            "P"
+          ],
+          "parameter_degrees": 108.0
+        },
+        {
+          "atoms": [
+            "O5'",
+            "OP2",
+            "P"
+          ],
+          "parameter_degrees": 113.0
+        }
+      ],
+      "head_rule_source": "amber_nucleic_head",
+      "tail_next_atom": null,
+      "tail_reference_atom": null,
+      "tail_link_conditions": [],
+      "tail_rule_source": "none"
+    },
+    {
+      "template": "DC5",
+      "source_unit_name": "DC5",
+      "atom_count": 28,
+      "bond_count": 29,
+      "total_charge": -0.3079,
+      "expected_integer_charge": null,
+      "head_atom": null,
+      "tail_atom": "O3'",
+      "source_connect_indices": [
+        0,
+        28
+      ],
+      "source_connectivity_flags": [
+        1
+      ],
+      "head_next_atom": null,
+      "head_reference_atom": null,
+      "head_link_conditions": [],
+      "head_rule_source": "none",
+      "tail_next_atom": "C3'",
+      "tail_reference_atom": "H3'",
+      "tail_link_conditions": [
+        {
+          "atoms": [
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": 120.0
+        },
+        {
+          "atoms": [
+            "H3'",
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": -54.0
+        }
+      ],
+      "tail_rule_source": "amber_nucleic_tail"
+    },
+    {
+      "template": "DCN",
+      "source_unit_name": "DCN",
+      "atom_count": 29,
+      "bond_count": 30,
+      "total_charge": 0.0,
+      "expected_integer_charge": 0,
+      "head_atom": null,
+      "tail_atom": null,
+      "source_connect_indices": [
+        0,
+        0
+      ],
+      "source_connectivity_flags": [
+        1
+      ],
+      "head_next_atom": null,
+      "head_reference_atom": null,
+      "head_link_conditions": [],
+      "head_rule_source": "none",
+      "tail_next_atom": null,
+      "tail_reference_atom": null,
+      "tail_link_conditions": [],
+      "tail_rule_source": "none"
+    },
+    {
+      "template": "DG",
+      "source_unit_name": "DG",
+      "atom_count": 33,
+      "bond_count": 35,
+      "total_charge": -1.0,
+      "expected_integer_charge": -1,
+      "head_atom": "P",
+      "tail_atom": "O3'",
+      "source_connect_indices": [
+        1,
+        33
+      ],
+      "source_connectivity_flags": [
+        1
+      ],
+      "head_next_atom": "OP2",
+      "head_reference_atom": "O5'",
+      "head_link_conditions": [
+        {
+          "atoms": [
+            "OP2",
+            "P"
+          ],
+          "parameter_degrees": 108.0
+        },
+        {
+          "atoms": [
+            "O5'",
+            "OP2",
+            "P"
+          ],
+          "parameter_degrees": 113.0
+        }
+      ],
+      "head_rule_source": "amber_nucleic_head",
+      "tail_next_atom": "C3'",
+      "tail_reference_atom": "H3'",
+      "tail_link_conditions": [
+        {
+          "atoms": [
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": 120.0
+        },
+        {
+          "atoms": [
+            "H3'",
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": -54.0
+        }
+      ],
+      "tail_rule_source": "amber_nucleic_tail"
+    },
+    {
+      "template": "DG3",
+      "source_unit_name": "DG3",
+      "atom_count": 34,
+      "bond_count": 36,
+      "total_charge": -0.6921,
+      "expected_integer_charge": null,
+      "head_atom": "P",
+      "tail_atom": null,
+      "source_connect_indices": [
+        1,
+        0
+      ],
+      "source_connectivity_flags": [
+        1
+      ],
+      "head_next_atom": "OP2",
+      "head_reference_atom": "O5'",
+      "head_link_conditions": [
+        {
+          "atoms": [
+            "OP2",
+            "P"
+          ],
+          "parameter_degrees": 108.0
+        },
+        {
+          "atoms": [
+            "O5'",
+            "OP2",
+            "P"
+          ],
+          "parameter_degrees": 113.0
+        }
+      ],
+      "head_rule_source": "amber_nucleic_head",
+      "tail_next_atom": null,
+      "tail_reference_atom": null,
+      "tail_link_conditions": [],
+      "tail_rule_source": "none"
+    },
+    {
+      "template": "DG5",
+      "source_unit_name": "DG5",
+      "atom_count": 31,
+      "bond_count": 33,
+      "total_charge": -0.3079,
+      "expected_integer_charge": null,
+      "head_atom": null,
+      "tail_atom": "O3'",
+      "source_connect_indices": [
+        0,
+        31
+      ],
+      "source_connectivity_flags": [
+        1
+      ],
+      "head_next_atom": null,
+      "head_reference_atom": null,
+      "head_link_conditions": [],
+      "head_rule_source": "none",
+      "tail_next_atom": "C3'",
+      "tail_reference_atom": "H3'",
+      "tail_link_conditions": [
+        {
+          "atoms": [
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": 120.0
+        },
+        {
+          "atoms": [
+            "H3'",
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": -54.0
+        }
+      ],
+      "tail_rule_source": "amber_nucleic_tail"
+    },
+    {
+      "template": "DGN",
+      "source_unit_name": "DGN",
+      "atom_count": 32,
+      "bond_count": 34,
+      "total_charge": 0.0,
+      "expected_integer_charge": 0,
+      "head_atom": null,
+      "tail_atom": null,
+      "source_connect_indices": [
+        0,
+        0
+      ],
+      "source_connectivity_flags": [
+        1
+      ],
+      "head_next_atom": null,
+      "head_reference_atom": null,
+      "head_link_conditions": [],
+      "head_rule_source": "none",
+      "tail_next_atom": null,
+      "tail_reference_atom": null,
+      "tail_link_conditions": [],
+      "tail_rule_source": "none"
+    },
+    {
+      "template": "DT",
+      "source_unit_name": "DT",
+      "atom_count": 32,
+      "bond_count": 33,
+      "total_charge": -1.0,
+      "expected_integer_charge": -1,
+      "head_atom": "P",
+      "tail_atom": "O3'",
+      "source_connect_indices": [
+        1,
+        32
+      ],
+      "source_connectivity_flags": [
+        1
+      ],
+      "head_next_atom": "OP2",
+      "head_reference_atom": "O5'",
+      "head_link_conditions": [
+        {
+          "atoms": [
+            "OP2",
+            "P"
+          ],
+          "parameter_degrees": 108.0
+        },
+        {
+          "atoms": [
+            "O5'",
+            "OP2",
+            "P"
+          ],
+          "parameter_degrees": 113.0
+        }
+      ],
+      "head_rule_source": "amber_nucleic_head",
+      "tail_next_atom": "C3'",
+      "tail_reference_atom": "H3'",
+      "tail_link_conditions": [
+        {
+          "atoms": [
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": 120.0
+        },
+        {
+          "atoms": [
+            "H3'",
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": -54.0
+        }
+      ],
+      "tail_rule_source": "amber_nucleic_tail"
+    },
+    {
+      "template": "DT3",
+      "source_unit_name": "DT3",
+      "atom_count": 33,
+      "bond_count": 34,
+      "total_charge": -0.6921,
+      "expected_integer_charge": null,
+      "head_atom": "P",
+      "tail_atom": null,
+      "source_connect_indices": [
+        1,
+        0
+      ],
+      "source_connectivity_flags": [
+        1
+      ],
+      "head_next_atom": "OP2",
+      "head_reference_atom": "O5'",
+      "head_link_conditions": [
+        {
+          "atoms": [
+            "OP2",
+            "P"
+          ],
+          "parameter_degrees": 108.0
+        },
+        {
+          "atoms": [
+            "O5'",
+            "OP2",
+            "P"
+          ],
+          "parameter_degrees": 113.0
+        }
+      ],
+      "head_rule_source": "amber_nucleic_head",
+      "tail_next_atom": null,
+      "tail_reference_atom": null,
+      "tail_link_conditions": [],
+      "tail_rule_source": "none"
+    },
+    {
+      "template": "DT5",
+      "source_unit_name": "DT5",
+      "atom_count": 30,
+      "bond_count": 31,
+      "total_charge": -0.3079,
+      "expected_integer_charge": null,
+      "head_atom": null,
+      "tail_atom": "O3'",
+      "source_connect_indices": [
+        0,
+        30
+      ],
+      "source_connectivity_flags": [
+        1
+      ],
+      "head_next_atom": null,
+      "head_reference_atom": null,
+      "head_link_conditions": [],
+      "head_rule_source": "none",
+      "tail_next_atom": "C3'",
+      "tail_reference_atom": "H3'",
+      "tail_link_conditions": [
+        {
+          "atoms": [
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": 120.0
+        },
+        {
+          "atoms": [
+            "H3'",
+            "C3'",
+            "O3'"
+          ],
+          "parameter_degrees": -54.0
+        }
+      ],
+      "tail_rule_source": "amber_nucleic_tail"
+    },
+    {
+      "template": "DTN",
+      "source_unit_name": "DTN",
+      "atom_count": 31,
+      "bond_count": 32,
+      "total_charge": 0.0,
+      "expected_integer_charge": 0,
+      "head_atom": null,
+      "tail_atom": null,
+      "source_connect_indices": [
+        0,
+        0
+      ],
+      "source_connectivity_flags": [
+        1
+      ],
+      "head_next_atom": null,
+      "head_reference_atom": null,
+      "head_link_conditions": [],
+      "head_rule_source": "none",
+      "tail_next_atom": null,
+      "tail_reference_atom": null,
+      "tail_link_conditions": [],
+      "tail_rule_source": "none"
+    }
+  ],
+  "source_repository": "https://github.com/Amber-MD/AmberClassic",
+  "source_revision": "2fdfc7a64c63514b18340b1833341bbdafbef105",
+  "source_path": "dat/leap/lib/ff-nucleic-OL24.lib",
+  "protonation": "standard_DNA_OL24",
+  "citations": [
+    "10.1021/acs.jctc.4c01100"
+  ]
+}

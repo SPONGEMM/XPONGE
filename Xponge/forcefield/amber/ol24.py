@@ -1,5 +1,5 @@
 """
-This **module** set the basic configuration for OL3 (RNA)
+This **module** set the basic configuration for OL24 (DNA)
 """
 from ...helper import source, Xprint
 
@@ -7,10 +7,12 @@ source("....")
 amber = source("...amber")
 
 amber.load_parameters_from_parmdat("parm10.dat")
+amber.load_parameters_from_frcmod("OL24.frcmod")
 
-load_mol2(os.path.join(AMBER_DATA_DIR, "RNA.mol2"), as_template=True)
+load_mol2(os.path.join(AMBER_DATA_DIR, "ol24.mol2"), as_template=True)
 
-for i in "AUCG":
+for i in "ATCG":
+    i = "D" + i
     res = ResidueType.get_type(i)
     res5 = ResidueType.get_type(i + "5")
     res3 = ResidueType.get_type(i + "3")
@@ -38,12 +40,9 @@ for i in "AUCG":
     GlobalSetting.Add_PDB_Residue_Name_Mapping("tail", res.name, res3.name)
 
 from ._terminal_monophosphate import register_terminal_monophosphate
-register_terminal_monophosphate('rna', ('A', 'C', 'G', 'U'))
+register_terminal_monophosphate('dna', ('DA', 'DC', 'DG', 'DT'))
 
-Xprint("""Reference for OL3:
-  Marie Zgarbová, Michal Otyepka, Jiří Sponer, Arnošt Mládek, Pavel Banáš, Thomas E Cheatham 3rd, Petr Jurečka
-    Refinement of the Cornell et al. Nucleic Acids Force Field Based on Reference Quantum Chemical Calculations of 
-      Glycosidic Torsion Profiles.
-    Journal of chemical theory and computation 2011 (7) 2886-2902
-    DOI:10.1021/ct200162x
+Xprint("""Reference for OL24:
+  Refinement of the Sugar Puckering Torsion Potential in the AMBER DNA Force Field.
+  DOI: 10.1021/acs.jctc.4c01100
 """)

@@ -1,0 +1,11 @@
+{
+  "repository": "https://github.com/Amber-MD/AmberClassic",
+  "revision": "2fdfc7a64c63514b18340b1833341bbdafbef105",
+  "files": {
+    "ff-nucleic-OL24.lib": "5484a198d83e87f00c91b276841d744bee50e7c3583d0ceef649dbbc99329d06",
+    "terminal_monophosphate.lib": "8cafedf0109aaf6d60abec34a96d4f6c4b34ebcfaa63006335f66fbf2b58c9b6",
+    "ff-nucleic-OL24.frcmod": "f86ab088e42bd87defaf8557df3da02a3222e8f88efb9ab99a55ed13aead43ff",
+    "leaprc.DNA.OL24": "04bd36e43d638a4831fdd85673b4ac90a635c32b291014ada25b6473fae5da10",
+    "LICENSE": "9e1895fa716bb04dba60760fcf98bae06f79ce393dcdfeb42cbc64b5838843a4"
+  }
+}

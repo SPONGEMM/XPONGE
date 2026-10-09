@@ -194,6 +194,13 @@ def _connection_metadata(template: Template, position: str, anchor: str | None) 
             f"{position}_rule_source": source,
         }
 
+    if anchor == "P" and {"OP2", "O5'"}.issubset(atom_names):
+        return result("OP2", "O5'", ["OP2", "P"], 108.0,
+                      ["O5'", "OP2", "P"], 113.0, "amber_nucleic_head")
+    if anchor == "O3'" and {"C3'", "H3'"}.issubset(atom_names):
+        return result("C3'", "H3'", ["C3'", "O3'"], 120.0,
+                      ["H3'", "C3'", "O3'"], -54.0, "amber_nucleic_tail")
+
     if template.name == "SPM" and position == "head":
         return result("N11", "O12", ["N11", "C11"], 120.0,
                       ["O12", "N11", "C11"], 180.0, "explicit_spm_amide")
@@ -239,7 +246,7 @@ def build_manifest(source: Path, templates: list[Template], source_license: str)
                 "atom_count": len(template.atoms),
                 "bond_count": len(template.bonds),
                 "total_charge": round(charge, 8),
-                "expected_integer_charge": round(charge),
+                "expected_integer_charge": None if any(atom.name == "O3\'" for atom in template.atoms) and abs(charge - round(charge)) >= 1e-6 else round(charge),
                 "head_atom": head_atom,
                 "tail_atom": tail_atom,
                 "source_connect_indices": [head_index, tail_index],

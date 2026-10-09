@@ -508,7 +508,7 @@ because {to_connect} and {atom} is in one residue", "WARNING")
             mol.add_residue_link(atom_, to_connect_)
 
 
-def _pdb_parse_unterminal_residues(unterminal_residues):
+def _pdb_parse_unterminal_residues(unterminal_residues, *, full_chain_id=False):
     """
         parse the optional residue selectors used to suppress head/tail mapping
     """
@@ -530,7 +530,7 @@ def _pdb_parse_unterminal_residues(unterminal_residues):
                 chain_id = chain_id.strip()
                 if not chain_id:
                     raise ValueError(f"invalid unterminal residue selector: {selector}")
-                chain_id = chain_id[0]
+                chain_id = chain_id if full_chain_id else chain_id[0]
             else:
                 chain_id = None
                 res_text = text
@@ -560,7 +560,7 @@ def _pdb_parse_unterminal_residues(unterminal_residues):
                 chain_id = str(chain_id).strip()
                 if not chain_id:
                     raise ValueError(f"invalid unterminal residue selector: {selector}")
-                chain_resseq.add((chain_id[0], int(resseq)))
+                chain_resseq.add((chain_id if full_chain_id else chain_id[0], int(resseq)))
                 continue
             if len(selector) == 3:
                 chain_id, resseq, ins_code = selector
@@ -568,7 +568,7 @@ def _pdb_parse_unterminal_residues(unterminal_residues):
                 if not chain_id:
                     raise ValueError(f"invalid unterminal residue selector: {selector}")
                 ins_code = str(ins_code).strip() or " "
-                chain_resseq_ins.add((chain_id[0], int(resseq), ins_code[0]))
+                chain_resseq_ins.add((chain_id if full_chain_id else chain_id[0], int(resseq), ins_code[0]))
                 continue
         raise ValueError(f"invalid unterminal residue selector: {selector}")
     return all_resseq, chain_resseq, chain_resseq_ins
@@ -586,7 +586,7 @@ def _pdb_match_unterminal_residue(selector_sets, chain_id, resseq, insertion_cod
     return (chain_id, resseq, insertion_code) in chain_resseq_ins
 
 
-def _pdb_parse_terminal_residues(terminal_residues):
+def _pdb_parse_terminal_residues(terminal_residues, *, full_chain_id=False):
     """
         parse residue selectors that explicitly control head/tail terminal mapping
     """
@@ -600,7 +600,7 @@ def _pdb_parse_terminal_residues(terminal_residues):
         if not chain_id:
             chain_id = " "
         insertion_code = str(insertion_code or "").strip() or " "
-        return chain_id[0], int(resseq), insertion_code[0]
+        return (chain_id if full_chain_id else chain_id[0]), int(resseq), insertion_code[0]
 
     def add_selector(chain_id, resseq, insertion_code, terminal_kind):
         selector = normalize_selector(chain_id, resseq, insertion_code)
@@ -699,8 +699,7 @@ def _mmcif_parse_float(value):
 
 
 def _mmcif_chain_id(value):
-    value = _mmcif_clean(value)
-    return value[0] if value else " "
+    return _mmcif_clean(value) or " "
 
 
 def _mmcif_insertion_code(value):
@@ -949,8 +948,8 @@ def load_mmcif(file, judge_histone=True, position_need="A", ignore_hydrogen=Fals
     if selected_model is None and len(model_values) > 1:
         raise ValueError("mmCIF contains multiple models; pass model_id explicitly")
 
-    unterminal_selectors = _pdb_parse_unterminal_residues(unterminal_residues)
-    terminal_selectors = _pdb_parse_terminal_residues(terminal_residues)
+    unterminal_selectors = _pdb_parse_unterminal_residues(unterminal_residues, full_chain_id=True)
+    terminal_selectors = _pdb_parse_terminal_residues(terminal_residues, full_chain_id=True)
     residue_infos = []
     current_key = None
     residue_index_by_key = {}
