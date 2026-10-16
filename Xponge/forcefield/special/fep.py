@@ -159,7 +159,7 @@ def _bond_base_merge_rule(mol_r, mol_a, mol_b, forcetype, rforces, bforces, lamb
         else:
             f_r2 = bond_base.BondType.entity(list(map(lambda x: mol_b2mol_r[x], f_b.atoms)), f_b.type, f_b.name)
             f_r2.k = f_b.k * lambda_
-            f_r.b = f_b.b
+            f_r2.b = f_b.b
             f_r.k *= (1 - lambda_)
             mol_r.Add_Bonded_Force(f_r2)
 
@@ -231,19 +231,19 @@ def _dihedral_merge_rule(mol_r, mol_a, mol_b, forcetype, rforces, bforces, lambd
         elif f_r is None:
             f_r2 = dihedral_base.ProperType.entity(list(map(lambda x: mol_b2mol_r[x], f_b.atoms)), f_b.type, f_b.name)
             f_r2.multiple_numbers = f_b.multiple_numbers
-            for i in range(f_b.multiple_numbers):
-                f_r2.ks.append(f_b.ks[i] * lambda_)
-                f_r2.phi0s.append(f_b.phi0s[i])
-                f_r2.periodicitys.append(f_b.periodicitys[i])
+            f_r2.ks = [f_b.ks[i] * lambda_ for i in range(f_b.multiple_numbers)]
+            f_r2.phi0s = list(f_b.phi0s[:f_b.multiple_numbers])
+            f_r2.periodicitys = list(f_b.periodicitys[:f_b.multiple_numbers])
             mol_r.Add_Bonded_Force(f_r2)
         else:
             sameforce = f_r.multiple_numbers == f_b.multiple_numbers
             if sameforce:
-                check_map = Xdict()
-                for i in range(f_b.multiple_numbers):
-                    check_map[f_b.periodicitys[i]] = f_b.phi0s[i]
                 for i in range(f_r.multiple_numbers):
-                    if abs(check_map.get(f_r.periodicitys[i], float("Inf")) - f_r.phi0s[i]) > 1e-5:
+                    # Coefficients are interpolated by index below. A matching
+                    # set with a different order must use the superposition
+                    # branch, not pair coefficients of different frequencies.
+                    if (f_r.periodicitys[i] != f_b.periodicitys[i] or
+                            abs(f_b.phi0s[i] - f_r.phi0s[i]) > 1e-5):
                         sameforce = False
                         break
             if sameforce:
@@ -255,10 +255,9 @@ def _dihedral_merge_rule(mol_r, mol_a, mol_b, forcetype, rforces, bforces, lambd
                 f_r2 = dihedral_base.ProperType.entity(list(map(lambda x: mol_b2mol_r[x], f_b.atoms)), f_b.type,
                                                        f_b.name)
                 f_r2.multiple_numbers = f_b.multiple_numbers
-                for i in range(f_b.multiple_numbers):
-                    f_r2.ks.append(f_b.ks[i] * lambda_)
-                    f_r2.phi0s.append(f_b.phi0s[i])
-                    f_r2.periodicitys.append(f_b.periodicitys[i])
+                f_r2.ks = [f_b.ks[i] * lambda_ for i in range(f_b.multiple_numbers)]
+                f_r2.phi0s = list(f_b.phi0s[:f_b.multiple_numbers])
+                f_r2.periodicitys = list(f_b.periodicitys[:f_b.multiple_numbers])
                 mol_r.Add_Bonded_Force(f_r2)
 
 
@@ -886,6 +885,16 @@ def merge_force_field(mol_a, mol_b, default_lambda, specific_lambda=None, intra_
     """
     if specific_lambda is None:
         specific_lambda = Xdict()
+    # Building force caches and converting NB14 representations must not mutate
+    # either caller-owned endpoint. This also makes repeated lambda generation
+    # independent of call order.
+    endpoints = []
+    for endpoint in (mol_a, mol_b):
+        duplicate = endpoint.deepcopy()
+        for original_residue, copied_residue in zip(endpoint.residues, duplicate.residues):
+            copied_residue.name = original_residue.name
+        endpoints.append(duplicate)
+    mol_a, mol_b = endpoints
     build.Build_Bonded_Force(mol_a)
     build.Build_Bonded_Force(mol_b)
 
@@ -917,6 +926,10 @@ def merge_force_field(mol_a, mol_b, default_lambda, specific_lambda=None, intra_
         atom.mass = mol_r2mol_a[atom].mass * (1 - mass_lambda) + mol_r2mol_b[atom].mass * mass_lambda
         atom.LJtypeB = mol_r2mol_b[atom].LJtype
 
+    # Deepcopy retains populated force groups only. Include B-only groups so
+    # their native merge rule still runs when A has no term of that kind.
+    for forcename in mol_b.bonded_forces:
+        mol_r.bonded_forces.setdefault(forcename, [])
     for forcename, rforces in mol_r.bonded_forces.items():
         if forcename in FEP_BONDED_FORCE_MERGE_RULE.keys():
             temp_lambda = specific_lambda.get(FEP_BONDED_FORCE_MERGE_RULE[forcename].get("lambda_name"),
@@ -926,7 +939,7 @@ def merge_force_field(mol_a, mol_b, default_lambda, specific_lambda=None, intra_
                                                                          GlobalSetting.BondedForcesMap[forcename],
                                                                          rforces, bforces, temp_lambda, mol_r2mol_a,
                                                                          mol_a2mol_r, mol_r2mol_b, mol_b2mol_r)
-        elif rforces:
+        elif rforces or mol_b.bonded_forces.get(forcename):
             raise NotImplementedError(forcename + " is not supported for FEP to merge force field yet.")
 
     for forcename, parameters in FEP_BONDED_FORCE_MERGE_RULE.items():

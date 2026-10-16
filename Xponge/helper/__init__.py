@@ -2251,6 +2251,10 @@ def generate_new_bonded_force_type(type_name, atoms, properties, is_compulsory, 
 
         def __init__(self, atoms, entity_type, name=None):
             super().__init__(entity_type, name)
+            # Numeric force parameters may contain mutable lists (for example
+            # multi-period proper torsions). Entities own those values, while
+            # type registry identity and the explicit atom graph stay shared.
+            self.contents = copy.deepcopy(self.contents)
             self.atoms = atoms
 
         def deepcopy(self, forcopy):
@@ -2260,7 +2264,7 @@ def generate_new_bonded_force_type(type_name, atoms, properties, is_compulsory, 
             """
             atoms_ = [atom.copied[forcopy] for atom in self.atoms]
             newone = type(self)(atoms_, self.type, self.name)
-            newone.contents = {**self.contents}
+            newone.contents = copy.deepcopy(self.contents)
             return newone
 
     temp = [int(i) for i in atoms.split("-")]
