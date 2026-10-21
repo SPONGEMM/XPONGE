@@ -315,7 +315,7 @@ def _pdb_add_residue(f, molecule, position_need, residue_type_map, ignore_hydrog
                 current_residue_count += 1
                 if current_residue:
                     molecule.Add_Residue(current_residue)
-                    if current_residue_index is not None and current_residue.type.tail and ResidueType.get_type(
+                    if current_residue_index is not None and current_chain_id == chain_id and current_residue.type.tail and ResidueType.get_type(
                             residue_type_map[current_residue_count]).head:
                         links.append(len(molecule.residues))
                 current_residue = Residue(ResidueType.get_type(residue_type_map[current_residue_count]))
@@ -851,6 +851,18 @@ def _mmcif_apply_histidine_mapping(residue_name, atom_names):
     return GlobalSetting.HISMap["HIS"][residue_name]["HIE"]
 
 
+def _merge_implicit_residue_links(molecule, candidates):
+    explicit_pairs = {frozenset((link.atom1, link.atom2)) for link in molecule.residue_links}
+    declared_atoms = {atom for pair in explicit_pairs for atom in pair}
+    for atom1, atom2 in candidates:
+        pair = frozenset((atom1, atom2))
+        if pair in explicit_pairs:
+            continue
+        if atom1 in declared_atoms and atom2 in declared_atoms:
+            continue
+        molecule.add_residue_link(atom1, atom2)
+
+
 def _mmcif_add_connection(molecule, atom1, atom2):
     if atom1 is None or atom2 is None or atom1 is atom2:
         return
@@ -905,7 +917,7 @@ def _mmcif_apply_external_residue_links(molecule, residue_links, atom_by_externa
 def load_mmcif(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
                ignore_unknown_name=False, ignore_seqres=True, read_cell=True,
                unterminal_residues=None, terminal_residues=None, infer_terminals=True,
-               model_id=None, residue_links=None):
+               model_id=None, residue_links=None, ignore_conect=False):
     """
     This **function** is used to load a Mokda chemcore-exported mmCIF file as a Molecule.
 
@@ -921,6 +933,7 @@ def load_mmcif(file, judge_histone=True, position_need="A", ignore_hydrogen=Fals
     :param infer_terminals: whether to infer terminal mapping from chain boundaries and OXT atoms
     :param model_id: required when the mmCIF contains multiple model numbers
     :param residue_links: optional external residue links to merge after CIF internal links
+    :param ignore_conect: ignore file bond declarations and edits; keep templates and external residue_links
     :return: a Molecule instance
     """
     should_close = not isinstance(file, io.IOBase)
@@ -1095,6 +1108,7 @@ def load_mmcif(file, judge_histone=True, position_need="A", ignore_hydrogen=Fals
         molecule.Add_Residue(current_residue)
         residue_objects.append(current_residue)
 
+    implicit_connections = []
     for index in range(1, len(residue_objects)):
         previous_info = residue_infos[index - 1]
         current_info = residue_infos[index]
@@ -1103,14 +1117,15 @@ def load_mmcif(file, judge_histone=True, position_need="A", ignore_hydrogen=Fals
         previous_residue = residue_objects[index - 1]
         current_residue = residue_objects[index]
         if previous_residue.type.tail and current_residue.type.head:
-            _mmcif_add_connection(
-                molecule,
+            implicit_connections.append((
                 previous_residue.name2atom(previous_residue.type.tail),
                 current_residue.name2atom(current_residue.type.head),
-            )
+            ))
 
     chem_comp_bonds = {}
     for row in _mmcif_rows(data, "chem_comp_bond"):
+        if ignore_conect:
+            continue
         comp_id = _mmcif_first(row, ["_chem_comp_bond.comp_id"]).upper()
         atom1 = _mmcif_first(row, ["_chem_comp_bond.atom_id_1"]).upper()
         atom2 = _mmcif_first(row, ["_chem_comp_bond.atom_id_2"]).upper()
@@ -1139,22 +1154,35 @@ def load_mmcif(file, judge_histone=True, position_need="A", ignore_hydrogen=Fals
         return atom_by_auth_key.get(auth_key) or atom_by_label_key.get(label_key)
 
     for row in _mmcif_rows(data, "struct_conn"):
+        connection_type = _mmcif_first(row, ["_struct_conn.conn_type_id"]).lower()
+        if ignore_conect or connection_type not in {
+                "covale", "disulf", "modres", "covale_base", "covale_phosphate", "covale_sugar"}:
+            continue
         atom1 = resolve_struct_conn_atom(row, "ptnr1")
         atom2 = resolve_struct_conn_atom(row, "ptnr2")
         _mmcif_add_connection(molecule, atom1, atom2)
 
     for row in _mmcif_rows(data, "mokda_bond_semantic"):
+        semantic = _mmcif_first(row, ["_mokda_bond_semantic.connection_semantic"]).lower()
+        if ignore_conect or semantic not in {"covalent", "disulfide"}:
+            continue
         atom1 = atom_by_site_id.get(_mmcif_first(row, ["_mokda_bond_semantic.atom_site_id_1"]))
         atom2 = atom_by_site_id.get(_mmcif_first(row, ["_mokda_bond_semantic.atom_site_id_2"]))
         _mmcif_add_connection(molecule, atom1, atom2)
 
+    _mmcif_apply_external_residue_links(molecule, residue_links, atom_by_external_key)
+    _merge_implicit_residue_links(molecule, implicit_connections)
+
     for row in _mmcif_rows(data, "mokda_edit_operation"):
+        if ignore_conect:
+            continue
         operation = _mmcif_first(row, ["_mokda_edit_operation.operation_type"]).lower()
         atom1 = atom_by_site_id.get(_mmcif_first(row, ["_mokda_edit_operation.atom_site_id_1"]))
         atom2 = atom_by_site_id.get(_mmcif_first(row, ["_mokda_edit_operation.atom_site_id_2"]))
         if operation == "delete_bond":
             _mmcif_remove_connection(molecule, atom1, atom2)
-        elif operation in {"add_bond", "create_bond", "update_bond"}:
+        elif operation in {"add_bond", "create_bond", "update_bond"} and _mmcif_first(
+                row, ["_mokda_edit_operation.connection_semantic"]).lower() in {"", "covalent", "disulfide"}:
             _mmcif_add_connection(molecule, atom1, atom2)
 
     _mmcif_apply_external_residue_links(molecule, residue_links, atom_by_external_key)
@@ -1346,10 +1374,14 @@ def load_pdb(file, judge_histone=True, position_need="A", ignore_hydrogen=False,
         _pdb_ssbond_before(chain, residue_type_map, ssbonds)
         atom_map = _pdb_add_residue(file, molecule, position_need,
                                     residue_type_map, ignore_hydrogen, ignore_unknown_name)
+        implicit_connections = [(link.atom1, link.atom2) for link in molecule.residue_links]
+        molecule.residue_links.clear()
+        molecule._residue_links_map.clear()
         _pdb_ssbond_after(chain, ssbonds, molecule)
         _pdb_link_after(chain, links, molecule)
-        _pdb_find_missing_residues(molecule, sequences, chain, residue_type_map)
         _pdb_connects(molecule, connects, atom_map)
+        _merge_implicit_residue_links(molecule, implicit_connections)
+        _pdb_find_missing_residues(molecule, sequences, chain, residue_type_map)
         if cryst1 is not None:
             molecule.box_length = cryst1[0]
             molecule.box_angle = cryst1[1]

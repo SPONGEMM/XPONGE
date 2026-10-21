@@ -112,7 +112,7 @@ def _lj_unit_transfer(self):
 
 
 @Molecule.Set_Save_SPONGE_Input("nb14_extra")
-def write_nb14(self):
+def write_nb14(self, include_regular=False):
     """
     This **function** is used to write SPONGE input file
 
@@ -120,7 +120,14 @@ def write_nb14(self):
     :return: the string to write
     """
     bonds = []
-    for bond in self.bonded_forces.get("nb14_extra", []):
+    terms = list(self.bonded_forces.get("nb14_extra", []))
+    if include_regular:
+        for regular in self.bonded_forces.get("nb14", []):
+            extra = NB14Type.entity(regular.atoms, NB14Type.get_type("UNKNOWNS"))
+            a, b = get_nb14_extra_lj(*regular.atoms)
+            extra.A, extra.B, extra.kee = regular.kLJ * a, regular.kLJ * b, regular.kee
+            terms.append(extra)
+    for bond in terms:
         order = list(range(2))
         if bond.A != 0 or bond.B != 0 or bond.kee != 0:
             if self.atom_index[bond.atoms[order[0]]] > self.atom_index[bond.atoms[order[-1]]]:

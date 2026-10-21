@@ -1331,7 +1331,7 @@ class Residue(Entity):
         :param forcopy: the key to help you find who it is from
         :return: the new instance
         """
-        new_residue = Residue(self.type)
+        new_residue = Residue(self.type, self.name)
         for atom in self.atoms:
             new_residue.Add_Atom(atom)
             new_residue.atoms[-1].contents = dict(atom.contents.items())
@@ -1628,16 +1628,15 @@ in this Molecule
             self.built = False
             self.residues.append(Residue(residue, directly_copy=True))
 
-    def add_bonded_force(self, bonded_force_entity):
+    def add_bonded_force(self, bonded_force_entity, typename=None):
         """
         This **function** is used to add the bonded force to the residue type.
 
         :param bonded_force_entity: the bonded force instance
         :return: None
         """
-        if bonded_force_entity.get_class_name() not in self.bonded_forces.keys():
-            self.bonded_forces[bonded_force_entity.get_class_name()] = []
-        self.bonded_forces[bonded_force_entity.get_class_name()].append(bonded_force_entity)
+        typename = typename or bonded_force_entity.get_class_name()
+        self.bonded_forces.setdefault(typename, []).append(bonded_force_entity)
 
     def add_residue_link(self, atom1, atom2):
         """
@@ -1810,6 +1809,7 @@ If None, the information will be deleted between start and end
         """
         new_molecule = Molecule(self.name)
         new_molecule.ignore_missing_atoms = self.ignore_missing_atoms
+        new_molecule._fep_materialized_topology = getattr(self, "_fep_materialized_topology", False)
         new_molecule.box_length = copy.deepcopy(self.box_length)
         new_molecule.box_origin = copy.deepcopy(self.box_origin)
         new_molecule.box_angle = copy.deepcopy(self.box_angle)
@@ -1826,9 +1826,9 @@ If None, the information will be deleted between start and end
                     map(lambda aton: aton.copied[forcopy], atom.extra_excluded_atoms))
 
         if self.built:
-            for bond_entities in self.bonded_forces.values():
+            for force_name, bond_entities in self.bonded_forces.items():
                 for bond_entity in bond_entities:
-                    new_molecule.Add_Bonded_Force(bond_entity.deepcopy(forcopy))
+                    new_molecule.Add_Bonded_Force(bond_entity.deepcopy(forcopy), force_name)
             new_molecule.built = True
             new_molecule.atoms = [atom for residue in new_molecule.residues for atom in residue.atoms]
             new_molecule.atom_index = {new_molecule.atoms[i]: i for i in range(len(new_molecule.atoms))}
@@ -2170,13 +2170,24 @@ def _add(self, other, deepcopy, link):
     """
     if isinstance(other, AbstractMolecule):
         new_molecule = Molecule.cast(self, deepcopy=deepcopy)
-        new_molecule.built = False
         other_molecule = Molecule.cast(other, deepcopy=True)
+        materialized = (getattr(new_molecule, "_fep_materialized_topology", False) or
+                        getattr(other_molecule, "_fep_materialized_topology", False))
         try:
             res_a = new_molecule.residues[-1]
         except IndexError:
             res_a = None
         res_b = other_molecule.residues[0]
+        if materialized:
+            if link and res_a and res_a.type.tail and res_b.type.head:
+                raise ValueError("Covalently linked assembly requires an explicit combined materialized topology")
+            from ..build import build_bonded_force
+            build_bonded_force(new_molecule)
+            build_bonded_force(other_molecule)
+            for key, forces in other_molecule.bonded_forces.items():
+                new_molecule.bonded_forces.setdefault(key, []).extend(forces)
+        else:
+            new_molecule.built = False
         new_molecule.residues += other_molecule.residues
         new_molecule.residue_links |= other_molecule.residue_links
         #pylint: disable=protected-access
@@ -2186,6 +2197,9 @@ def _add(self, other, deepcopy, link):
             atom2 = res_b.name2atom(res_b.type.head)
             new_molecule.Add_Residue_Link(atom1, atom2)
             _link_residue_process_coordinate(new_molecule, atom1, atom2)
+        if materialized:
+            new_molecule._fep_materialized_topology = True
+            new_molecule.get_atoms()
         return new_molecule
     if other is None:
         return self

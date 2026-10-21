@@ -2,8 +2,10 @@
 This **module** gives the basic functions for fep calculations
 """
 import re
+import copy
+import math
 from ...helper import source, set_global_alternative_names, Xdict, Xopen, Xprint, kabsch
-from ..base import lj_base, exclude_base, bond_base, angle_base, dihedral_base, nb14_extra_base
+from ..base import lj_base, exclude_base, bond_base, angle_base, dihedral_base, nb14_extra_base, soft_bond_base
 
 source("....")
 
@@ -31,7 +33,9 @@ def _find_common_forces(forcetype, aforces, bforces, mol_b2mol_a):
     temp_map2 = Xdict()
     for force in bforces:
         temp_map2[force] = True
-        for fatoms in forcetype.Same_Force(force.atoms):
+        permutations = ([force.atoms, force.atoms[::-1]] if forcetype.get_class_name() == "improper"
+                        else forcetype.Same_Force(force.atoms))
+        for fatoms in permutations:
             temp_map["-".join(list(map(lambda atom: str(mol_b2mol_a[atom]), fatoms)))] = force
     for force in aforces:
         tofind = "-".join(list(map(str, force.atoms)))
@@ -45,7 +49,6 @@ def _find_common_forces(forcetype, aforces, bforces, mol_b2mol_a):
 
 
 FEP_BONDED_FORCE_MERGE_RULE = Xdict()
-TINY = 1e-10 / 18.2223
 
 
 # pylint: disable=unused-argument
@@ -66,60 +69,32 @@ def _nb14_extra_merge_rule(mol_r, mol_a, mol_b, forcetype, rforces, bforces, lam
     :param mol_b2mol_r:
     :return:
     """
-    forcepair = _find_common_forces(forcetype, rforces, bforces, mol_b2mol_r)
-    for f_r, f_b in forcepair:
-        if f_b is None:
-            temp_charge0 = f_r.atoms[0].charge if abs(f_r.atoms[0].charge) > TINY else TINY
-            temp_charge1 = f_r.atoms[1].charge if abs(f_r.atoms[1].charge) > TINY else TINY
-
-            if f_r.nb14_ee_factor is not None:
-                nb14_ee_factor = f_r.nb14_ee_factor
-            else:
-                nb14_ee_factor = f_r.kee * mol_r2mol_a[f_r.atoms[0]].charge * \
-                                 mol_r2mol_a[f_r.atoms[1]].charge
-            f_r.kee = nb14_ee_factor / temp_charge0 / temp_charge1
-
-            f_r.kee *= 1 - lambda_
-            f_r.A *= 1 - lambda_
-            f_r.B *= 1 - lambda_
-        elif f_r is None:
-            f_r = nb14_extra_base.NB14Type.entity(list(map(lambda x: mol_b2mol_r[x], f_b.atoms)), f_b.type, f_b.name)
-
-            temp_charge0 = f_r.atoms[0].charge if abs(f_r.atoms[0].charge) > TINY else TINY
-            temp_charge1 = f_r.atoms[1].charge if abs(f_r.atoms[1].charge) > TINY else TINY
-
-            if f_b.nb14_ee_factor is not None:
-                nb14_ee_factor = f_b.nb14_ee_factor
-            else:
-                nb14_ee_factor = f_b.kee * f_b.atoms[0].charge * \
-                                 f_b.atoms[1].charge
-            f_r.kee = nb14_ee_factor / temp_charge0 / temp_charge1
-
-            f_r.A = f_b.A * lambda_
-            f_r.B = f_b.B * lambda_
-            f_r.kee *= lambda_
-            mol_r.Add_Bonded_Force(f_r)
-        else:
-            temp_charge0 = f_r.atoms[0].charge if abs(f_r.atoms[0].charge) > TINY else TINY
-            temp_charge1 = f_r.atoms[1].charge if abs(f_r.atoms[1].charge) > TINY else TINY
-
-            if f_r.nb14_ee_factor is not None:
-                nb14_ee_factor = f_r.nb14_ee_factor
-            else:
-                nb14_ee_factor = f_r.kee * mol_r2mol_a[f_r.atoms[0]].charge * \
-                                 mol_r2mol_a[f_r.atoms[1]].charge
-            f_r.kee = nb14_ee_factor / temp_charge0 / temp_charge1
-
-            if f_b.nb14_ee_factor is not None:
-                nb14_ee_factor = f_b.nb14_ee_factor
-            else:
-                nb14_ee_factor = f_b.kee * f_b.atoms[0].charge * \
-                                 f_b.atoms[1].charge
-            kee = nb14_ee_factor / temp_charge0 / temp_charge1
-
-            f_r.kee = f_r.kee * (1 - lambda_) + kee * lambda_
-            f_r.A = f_r.A * (1 - lambda_) + f_b.A * lambda_
-            f_r.B = f_r.B * (1 - lambda_) + f_b.B * lambda_
+    coefficients = {}
+    for forces, weight, atom_map in ((mol_a.bonded_forces.get("nb14_extra", []), 1 - lambda_, mol_a2mol_r),
+                                      (bforces, lambda_, mol_b2mol_r)):
+        for force in forces:
+            atoms = tuple(sorted((atom_map[atom] for atom in force.atoms), key=mol_r.atom_index.get))
+            values = coefficients.setdefault(atoms, [0., 0., 0., 0.])
+            ee = force.nb14_ee_factor
+            if ee is None:
+                ee = force.kee * force.atoms[0].charge * force.atoms[1].charge
+            values[0] += weight * force.A
+            values[1] += weight * force.B
+            values[2] += weight * ee
+            values[3] += weight * force.kee
+    result = []
+    for atoms, (a, b, ee, fallback) in coefficients.items():
+        product = atoms[0].charge * atoms[1].charge
+        if product == 0. and ee != 0.:
+            raise ValueError("FEP NB14 Coulomb coefficient cannot be represented at zero charge product")
+        kee = fallback if product == 0. else ee / product
+        if not math.isfinite(kee):
+            raise ValueError("non-finite FEP NB14 charge compensation")
+        force = nb14_extra_base.NB14Type.entity(list(atoms), nb14_extra_base.NB14Type.get_type("UNKNOWNS"))
+        force.A, force.B, force.kee, force.nb14_ee_factor = a, b, kee, ee
+        result.append(force)
+        atoms[0].Extra_Exclude_Atom(atoms[1])
+    mol_r.bonded_forces["nb14_extra"] = result
 
 
 FEP_BONDED_FORCE_MERGE_RULE["nb14_extra"] = {"lambda_name": "dihedral", "merge_function": _nb14_extra_merge_rule}
@@ -145,15 +120,15 @@ def _bond_base_merge_rule(mol_r, mol_a, mol_b, forcetype, rforces, bforces, lamb
     forcepair = _find_common_forces(forcetype, rforces, bforces, mol_b2mol_r)
     for f_r, f_b in forcepair:
         if f_b is None:
-            mol_r.bonded_forces["bond_base"].remove(f_r)
+            mol_r.bonded_forces["bond"].remove(f_r)
             f_r.from_AorB = 0
-            mol_r.Add_Bonded_Force(f_r, "soft_bond_base")
+            mol_r.Add_Bonded_Force(f_r, "bond_soft")
         elif f_r is None:
             f_r = bond_base.BondType.entity(list(map(lambda x: mol_b2mol_r[x], f_b.atoms)), f_b.type, f_b.name)
             f_r.k = f_b.k
             f_r.b = f_b.b
             f_r.from_AorB = 1
-            mol_r.Add_Bonded_Force(f_r, "soft_bond_base")
+            mol_r.Add_Bonded_Force(f_r, "bond_soft")
         elif abs(f_r.b - f_b.b) < 1e-5:
             f_r.k = f_r.k * (1 - lambda_) + f_b.k * lambda_
         else:
@@ -164,7 +139,7 @@ def _bond_base_merge_rule(mol_r, mol_a, mol_b, forcetype, rforces, bforces, lamb
             mol_r.Add_Bonded_Force(f_r2)
 
 
-FEP_BONDED_FORCE_MERGE_RULE["bond"] = {"lambda_name": "bond_base", "merge_function": _bond_base_merge_rule}
+FEP_BONDED_FORCE_MERGE_RULE["bond"] = {"lambda_name": "bond", "merge_function": _bond_base_merge_rule}
 
 
 def _angle_merge_rule(mol_r, mol_a, mol_b, forcetype, rforces, bforces, lambda_, mol_r2mol_a, mol_a2mol_r, mol_r2mol_b,
@@ -311,9 +286,12 @@ def save_hard_core_lj():
 
     :return: None
     """
-    Molecule.Set_Save_SPONGE_Input("LJ")(lj_base.write_zero_lj)
-    Molecule.Del_Save_SPONGE_Input("LJ_soft_core")
-    Molecule.Del_Save_SPONGE_Input("subsys_division")
+    Molecule.Set_Save_SPONGE_Input("LJ")(lj_base.write_lj)
+    from ..base import nb14_base
+    Molecule._save_functions.pop("LJ_soft_core", None)
+    Molecule._save_functions.pop("subsys_division", None)
+    Molecule.Set_Save_SPONGE_Input("nb14")(nb14_base.write_nb14)
+    Molecule.Set_Save_SPONGE_Input("nb14_extra")(nb14_extra_base.write_nb14)
 
 
 def save_soft_core_lj():
@@ -322,7 +300,10 @@ def save_soft_core_lj():
 
     :return: None
     """
-    Molecule.Del_Save_SPONGE_Input("LJ")
+    Molecule._save_functions.pop("LJ", None)
+    Molecule.Set_Save_SPONGE_Input("nb14")(lambda molecule: None)
+    Molecule.Set_Save_SPONGE_Input("nb14_extra")(
+        lambda molecule: nb14_extra_base.write_nb14(molecule, include_regular=True))
 
     def write_subsys_division(self):
         towrite = "%d\n" % len(self.atoms)
@@ -506,9 +487,9 @@ def _get_extra_atoms_and_rbmap(restype_ab, residue_type_a, residue_type_b, resid
     extra_b = []
     rbmap = {value: key for key, value in matchmap.items()}
     for i, atom in enumerate(residue_type_a.atoms):
-        atom.x = residue_a.name2atom(atom.name).x
-        atom.y = residue_a.name2atom(atom.name).y
-        atom.z = residue_a.name2atom(atom.name).z
+        atom.copied[forcopy].x = residue_a.name2atom(atom.name).x
+        atom.copied[forcopy].y = residue_a.name2atom(atom.name).y
+        atom.copied[forcopy].z = residue_a.name2atom(atom.name).z
         if i not in match_a:
             extra_a.append(atom.copied[forcopy])
             extra_a[-1].subsys = 1
@@ -603,75 +584,31 @@ def _set_zero_lj_atom(atom, subsys):
     atom.subsys = subsys
 
 
-def _refresh_residue_type_topology_metadata(restype):
-    """
-    Refresh linked-atom caches and checked_list without rebuilding bonded forces.
-
-    The mixed residue types already carry the endpoint-specific force entities.
-    Only the topology cache used during molecule build needs to be refreshed.
-    """
-    restype.checked_list.clear()
-    for atom in restype.atoms:
-        extra_excluded_atoms = set(atom.extra_excluded_atoms)
-        atom.linked_atoms = Xdict({i + 1: set() for i in range(1, GlobalSetting.farthest_bonded_force)})
-        atom.linked_atoms["extra_excluded_atoms"] = extra_excluded_atoms
-    build._analyze_connectivity(restype)
-    for frc in GlobalSetting.BondedForces:
-        if len(frc.get_all_types()) < 2:
-            continue
-        build._get_frc_all(frc, restype)
-    restype.built = True
-
-
-def _force_is_within_atom_indices(force, atom2index, valid_indices):
-    """Check whether all atoms in a force belong to the given index set."""
-    return all(atom2index(atom) in valid_indices for atom in force.atoms)
-
-
 def _project_bonded_force(force, atom_map):
     """Copy a bonded force entity onto another residue type via an atom map."""
     new_force = force.type.entity([atom_map[atom] for atom in force.atoms], force.type, force.name)
-    new_force.contents = {**force.contents}
+    new_force.contents = copy.deepcopy(force.contents)
     return new_force
 
 
-def _replace_pure_common_force_entities(restype_target, residue_type_source,
-                                        common_target_indices, common_source_indices,
-                                        source_atom_to_target):
-    """
-    Replace pure-common force entities in the target residue with the projected
-    source-state entities while keeping mixed A-only/B-only terms untouched.
-    """
-    for forcename, target_forces in restype_target.bonded_forces.items():
-        source_forces = residue_type_source.bonded_forces.get(forcename, [])
-        pure_target = [force for force in target_forces if _force_is_within_atom_indices(
-            force, restype_target.atom2index, common_target_indices)]
-        pure_source = [force for force in source_forces if _force_is_within_atom_indices(
-            force, residue_type_source.atom2index, common_source_indices)]
-        if not pure_target and not pure_source:
-            continue
-
-        forcepair = _find_common_forces(GlobalSetting.BondedForcesMap[forcename], pure_target, pure_source,
-                                        source_atom_to_target)
-        replacements = {}
-        additions = []
-        for force_target, force_source in forcepair:
-            projected_force = None if force_source is None else _project_bonded_force(force_source, source_atom_to_target)
-            if force_target is None:
-                if projected_force is not None:
-                    additions.append(projected_force)
-            else:
-                replacements[force_target] = projected_force
-
-        new_forces = []
-        for force in target_forces:
-            if force in replacements:
-                if replacements[force] is not None:
-                    new_forces.append(replacements[force])
-            else:
-                new_forces.append(force)
-        new_forces.extend(additions)
-        restype_target.bonded_forces[forcename] = new_forces
+def _project_physical_endpoint(target, sources):
+    """Project selected physical force entities and exclusions onto union atoms."""
+    target.get_atoms()
+    target.bonded_forces = {}
+    for atom in target.atoms:
+        atom.linked_atoms = Xdict({i: set() for i in range(2, GlobalSetting.farthest_bonded_force + 1)})
+        atom.linked_atoms["extra_excluded_atoms"] = set()
+    for source, atom_map in sources:
+        for key, forces in source.bonded_forces.items():
+            for force in forces:
+                if all(atom in atom_map for atom in force.atoms):
+                    target.Add_Bonded_Force(_project_bonded_force(force, atom_map), key)
+        for atom, mapped in atom_map.items():
+            for distance, neighbors in atom.linked_atoms.items():
+                mapped.linked_atoms.setdefault(distance, set()).update(
+                    atom_map[other] for other in neighbors if other in atom_map)
+    target.built = True
+    target._fep_materialized_topology = True
 
 
 def _nhydrogen(rdmol, j):
@@ -696,8 +633,30 @@ the tanimoto coefficient of the max common structure.
     :param imcs: the input file to store the mcs information
     :return: two molecules in the initial and final lambda stat respectively, and the matchmap
     """
+    residue_index = mol.residues.index(residue_a)
+    mol = mol.deepcopy()
+    residue_a = mol.residues[residue_index]
+    replacement_input = residue_b
+    replacement_type = residue_b.type if isinstance(residue_b, Residue) else residue_b
+    replacement_public_name = replacement_type.name
+    replacement_name = _make_unique_fep_restype_name(replacement_public_name, time.time_ns())
+    residue_b = replacement_type.deepcopy(replacement_name)
+    if isinstance(replacement_input, Residue):
+        for atom in replacement_input.atoms:
+            _copy_atom_contents(residue_b.name2atom(atom.name), atom)
     build.Build_Bonded_Force(mol)
-    build.Build_Bonded_Force(residue_b.type)
+    build.Build_Bonded_Force(residue_b)
+    target_atoms = set(residue_a.atoms)
+    for forces in mol.bonded_forces.values():
+        for force in forces:
+            membership = [atom in target_atoms for atom in force.atoms]
+            if any(membership) and not all(membership):
+                raise ValueError("coupled FEP target requires explicit physical B environment topology")
+    for atom in mol.atoms:
+        if any((atom in target_atoms) != (other in target_atoms) for other in atom.extra_excluded_atoms):
+            raise ValueError("coupled FEP exclusions require explicit physical B environment topology")
+    if mol.bonded_forces.get("nb14_extra") or residue_b.bonded_forces.get("nb14_extra"):
+        raise ValueError("dual topology of pre-existing explicit pairs is not supported; convert after dual assembly")
 
     from ...helper.rdkit import assign_to_rdmol
     from rdkit.Chem import rdFMCS as MCS
@@ -773,7 +732,7 @@ the tanimoto coefficient of the max common structure.
                     id_ = int(result.group(1))
                     atoms = tuple(int(i) for i in result.group(2).replace('(', "")
                                                             .replace(')', "")
-                                                            .split(","))
+                                                            .split(",") if i.strip())
                     if id_ == 1:
                         match_a = atoms
                     elif id_ == 2:
@@ -803,8 +762,8 @@ the tanimoto coefficient of the max common structure.
     _correct_residueb_coordinates(residue_a, residue_type_b, matchmap)
 
     forcopy = hash(str(time.time()))
-    canonical_ab_name = residue_type_a.name + "_" + residue_type_b.name
-    canonical_ba_name = residue_type_b.name + "_" + residue_type_a.name
+    canonical_ab_name = residue_type_a.name + "_" + replacement_public_name
+    canonical_ba_name = replacement_public_name + "_" + residue_type_a.name
     nonce = hex(forcopy & 0xffffffffffffffff)[2:]
     restype_ab_name = _make_unique_fep_restype_name(canonical_ab_name, nonce)
     restype_ab, rbmap = _get_residue_ab(residue_type_a, residue_type_b, residue_a, restype_ab_name,
@@ -812,12 +771,10 @@ the tanimoto coefficient of the max common structure.
 
     restype_ba_name = _make_unique_fep_restype_name(canonical_ba_name, nonce)
     restype_ba = restype_ab.deepcopy(restype_ba_name)
-    common_a_indices = set(match_a)
-    common_b_indices = set(match_b)
 
     for i, atomi in enumerate(restype_ab.atoms):
         if i < len(residue_type_a.atoms):
-            _copy_atom_contents(atomi, residue_type_a.atoms[i])
+            _copy_atom_contents(atomi, residue_a.name2atom(residue_type_a.atoms[i].name))
         else:
             _set_zero_lj_atom(restype_ab.atoms[i], 2)
             restype_ba.atoms[i].subsys = 2
@@ -827,13 +784,6 @@ the tanimoto coefficient of the max common structure.
         else:
             _set_zero_lj_atom(restype_ba.atoms[i], 1)
             restype_ab.atoms[i].subsys = 1
-    b_atom_to_restype_ba = {residue_type_b.atoms[b_index]: restype_ba.atoms[a_index]
-                            for a_index, b_index in rbmap.items()}
-    _replace_pure_common_force_entities(restype_ba, residue_type_b, common_a_indices, common_b_indices,
-                                        b_atom_to_restype_ba)
-    _refresh_residue_type_topology_metadata(restype_ab)
-    _refresh_residue_type_topology_metadata(restype_ba)
-
     mol_a = Molecule(mol.name + "A")
     mol_b = Molecule(mol.name + "B")
 
@@ -866,9 +816,20 @@ the tanimoto coefficient of the max common structure.
             new_atom2_b = mol_b.residues[ri].name2atom(new_atom2_b.name)
         mol_a.add_residue_link(new_atom1_a, new_atom2_a)
         mol_b.add_residue_link(new_atom1_b, new_atom2_b)
-    build.Build_Bonded_Force(mol_a)
-    build.Build_Bonded_Force(mol_b)
-
+    a_map = {atom: mol_a.residues[index].name2atom(atom.name)
+             for index, residue in enumerate(mol.residues) for atom in residue.atoms}
+    environment_map = {atom: mol_b.residues[index].name2atom(atom.name)
+                       for index, residue in enumerate(mol.residues) if index != ri for atom in residue.atoms}
+    physical_b = Molecule.cast(residue_type_b, deepcopy=True)
+    build.Build_Bonded_Force(physical_b)
+    b_map = {physical_b.atoms[b_index]: mol_b.residues[ri].atoms[a_index]
+             for a_index, b_index in rbmap.items()}
+    _project_physical_endpoint(mol_a, [(mol, a_map)])
+    _project_physical_endpoint(mol_b, [(mol, environment_map), (physical_b, b_map)])
+    for endpoint in (mol_a, mol_b):
+        endpoint.box_length = copy.deepcopy(mol.box_length)
+        endpoint.box_origin = copy.deepcopy(mol.box_origin)
+        endpoint.box_angle = copy.deepcopy(mol.box_angle)
     return mol_a, mol_b, matchmap
 
 
@@ -930,7 +891,7 @@ def merge_force_field(mol_a, mol_b, default_lambda, specific_lambda=None, intra_
     # their native merge rule still runs when A has no term of that kind.
     for forcename in mol_b.bonded_forces:
         mol_r.bonded_forces.setdefault(forcename, [])
-    for forcename, rforces in mol_r.bonded_forces.items():
+    for forcename, rforces in list(mol_r.bonded_forces.items()):
         if forcename in FEP_BONDED_FORCE_MERGE_RULE.keys():
             temp_lambda = specific_lambda.get(FEP_BONDED_FORCE_MERGE_RULE[forcename].get("lambda_name"),
                                               default_lambda)
@@ -942,9 +903,7 @@ def merge_force_field(mol_a, mol_b, default_lambda, specific_lambda=None, intra_
         elif rforces or mol_b.bonded_forces.get(forcename):
             raise NotImplementedError(forcename + " is not supported for FEP to merge force field yet.")
 
-    for forcename, parameters in FEP_BONDED_FORCE_MERGE_RULE.items():
-        temp_lambda = specific_lambda.get(parameters["lambda_name"], default_lambda)
-
+    mol_r._fep_materialized_topology = True
     return mol_r
 
 

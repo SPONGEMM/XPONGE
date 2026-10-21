@@ -2,6 +2,7 @@
 This **module** is used to build and save
 """
 import os
+import copy
 from itertools import product
 from warnings import warn
 from . import assign
@@ -246,7 +247,7 @@ def _build_residue(cls, checked, ignore_missing_atoms=False):
             finded_type = frc_entity.type
             frc_name = finded_type.get_class_name()
             cls.Add_Bonded_Force(finded_type.entity(finded_atoms, finded_type))
-            cls.bonded_forces[frc_name][-1].contents = frc_entity.contents
+            cls.bonded_forces[frc_name][-1].contents = copy.deepcopy(frc_entity.contents)
         for pair in cls.type.checked_list.get(key, []):
             try:
                 checked[key].add("-".join([repr(cls.name2atom(name)) for name in pair]))
@@ -423,6 +424,27 @@ def _reorder_residues_by_linked_components(mol):
     return True
 
 
+def _reorder_fep_hard_bond_components(mol):
+    """Keep FEP hard-bond components contiguous without using soft bonds."""
+    if not getattr(mol, "_fep_materialized_topology", False):
+        return
+    parent = {atom: atom for atom in mol.atoms}
+    def find(atom):
+        while parent[atom] is not atom:
+            parent[atom] = parent[parent[atom]]
+            atom = parent[atom]
+        return atom
+    for bond in mol.bonded_forces.get("bond", []):
+        if bond.k != 0:
+            parent[find(bond.atoms[1])] = find(bond.atoms[0])
+    first = {}
+    for index, atom in enumerate(mol.atoms):
+        first.setdefault(find(atom), index)
+    for residue in mol.residues:
+        residue.atoms.sort(key=lambda atom: first[find(atom)])
+    mol.get_atoms()
+
+
 def _check_sponge_atom_components_are_contiguous(mol):
     """
     Validate the final atom order against SPONGE's molecule-index contract.
@@ -576,6 +598,7 @@ def _prepare_sponge_input_molecule(cls):
     _synchronize_linked_atom_slots(mol)
     _reorder_residues_by_linked_components(mol)
     build_bonded_force(mol)
+    _reorder_fep_hard_bond_components(mol)
     _check_sponge_atom_components_are_contiguous(mol)
     return mol
 

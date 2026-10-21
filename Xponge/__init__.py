@@ -72,7 +72,7 @@ The atoms in a ``Residue`` or a ``ResidueType`` can be obtained by their names. 
 
 """
 
-__version__ = "1.7.3"
+__version__ = "1.7.4"
 
 import os
 import time
@@ -83,6 +83,7 @@ from itertools import product, permutations
 
 import numpy as np
 
+from .parameter_query import amber_parameter_exists
 from . import assign
 from . import metal_assignment
 from .assign import Assign, get_assignment_from_pdb, get_assignment_from_mol2, get_assignment_from_pubchem, \

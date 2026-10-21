@@ -40,9 +40,9 @@ jobs:
         run: |
           python -m venv /tmp/xponge-wheel-test
           /tmp/xponge-wheel-test/bin/python -m pip install dist/xponge/*.whl pytest
-          cp tests/test_mmcif_chain_identity.py tests/test_nucleic_forcefields.py /tmp/
+          cp tests/test_mmcif_chain_identity.py tests/test_nucleic_forcefields.py tests/test_amber_parameter_lookup.py tests/test_explicit_residue_link_precedence.py tests/test_mmcif_connection_semantics.py tests/test_fep_parameter_isolation.py tests/test_fep_physical_topology_contract.py /tmp/
           cd /tmp
-          /tmp/xponge-wheel-test/bin/python -m pytest test_mmcif_chain_identity.py test_nucleic_forcefields.py -q -k "not reproducible"
+          /tmp/xponge-wheel-test/bin/python -m pytest test_mmcif_chain_identity.py test_nucleic_forcefields.py test_amber_parameter_lookup.py test_explicit_residue_link_precedence.py test_mmcif_connection_semantics.py test_fep_parameter_isolation.py test_fep_physical_topology_contract.py -q -k "not reproducible"
 
       - name: Upload Xponge distribution artifacts
         uses: actions/upload-artifact@v4
