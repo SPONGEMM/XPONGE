@@ -43,20 +43,40 @@ def dual(a, b, mapping, tmp_path):
 
 
 @pytest.mark.parametrize("lam", [0., .25, 1.])
-def test_one_sided_bonds_only_enter_soft_table(tmp_path, lam):
+def test_dual_branch_bonds_retain_ordinary_scaffolds(tmp_path, lam):
     a, b = molecule(2), molecule(2)
     left, right, _ = dual(a, b, {0: 0}, tmp_path)
     mixed = fep.merge_force_field(left, right, lam)
+    expected = sorted((term.k, term.b) for term in a.bonded_forces["bond"] + b.bonded_forces["bond"])
+    assert sorted((term.k, term.b) for term in mixed.bonded_forces["bond"]) == expected
+    assert not mixed.bonded_forces.get("bond_soft")
+    assert {frozenset(atom.name for atom in term.atoms) for term in mixed.bonded_forces["bond"]} == {
+        frozenset(atom.name for atom in term.atoms) for term in left.bonded_forces["bond"]
+    }
+    x.save_sponge_input(mixed, prefix="test", dirname=str(tmp_path))
+    assert len((tmp_path / "test_bond.txt").read_text().splitlines()) == 3
+    assert not (tmp_path / "test_bond_soft.txt").exists()
+    duplicate = mixed.deepcopy()
+    assert sorted((term.k, term.b) for term in duplicate.bonded_forces["bond"]) == expected
+    assert not duplicate.bonded_forces.get("bond_soft")
+
+
+@pytest.mark.parametrize("lam", [0., .25, 1.])
+def test_explicitly_one_sided_bond_only_enters_soft_table(tmp_path, lam):
+    a, b = molecule(2), molecule(2)
+    # Exercise the low-level materialized endpoint API without dual scaffolds.
+    b.bonded_forces["bond"] = []
+    mixed = fep.merge_force_field(a, b, lam)
     assert not mixed.bonded_forces["bond"]
     terms = mixed.bonded_forces["bond_soft"]
-    assert len(terms) == 2
-    assert sorted(t.from_AorB for t in terms) == [0, 1]
-    assert all(t.k == a.bonded_forces["bond"][0].k for t in terms)
+    assert len(terms) == 1
+    assert terms[0].from_AorB == 0
+    assert (terms[0].k, terms[0].b) == (a.bonded_forces["bond"][0].k, a.bonded_forces["bond"][0].b)
     x.save_sponge_input(mixed, prefix="test", dirname=str(tmp_path))
-    assert len((tmp_path / "test_bond_soft.txt").read_text().splitlines()) == 3
+    assert len((tmp_path / "test_bond_soft.txt").read_text().splitlines()) == 2
     duplicate = mixed.deepcopy()
     assert not duplicate.bonded_forces.get("bond")
-    assert len(duplicate.bonded_forces["bond_soft"]) == 2
+    assert len(duplicate.bonded_forces["bond_soft"]) == 1
 
 
 @pytest.mark.parametrize("mapping", [{0: 0, 1: 3, 2: 1, 3: 2}, {0: 2, 1: 0, 2: 3, 3: 1}])

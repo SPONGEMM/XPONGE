@@ -1,4 +1,14 @@
-# Xponge 1.7.5
+# Xponge 1.7.6
+
+Includes the deterministic AMBER improper ordering and retained dummy bonded
+scaffolds described below. Installed-wheel regression checks now distinguish
+ordinary dual-branch scaffolds from explicitly one-sided low-level soft bonds,
+including force parameters, serialization and molecule-copy preservation.
+
+The CDK8 parameter-provenance and cross-backend ordered-improper limitations
+below remain; full-engine/MD equivalence is not claimed.
+
+# Xponge 1.7.5 (unpublished candidate)
 
 ## deterministic AMBER impropers (2026-10-23)
 
