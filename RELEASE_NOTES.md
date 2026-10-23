@@ -1,6 +1,6 @@
-# Xponge 1.7.4
+# Xponge 1.7.5
 
-## Unreleased candidate: deterministic AMBER impropers (2026-10-23)
+## deterministic AMBER impropers (2026-10-23)
 
 AMBER-loaded periodic improper parameters preserve original slots, use stable
 type/residue/local-name ties, and retain distinct periodicities through overrides.
@@ -10,7 +10,7 @@ conventions remain on their existing path. See AMBER_IMPROPER_POLICY.md for the
 explicit policy and intentional differences from ambiguous LEaP cache ordering.
 No frozen inputs/trajectories are migrated; local checks are not full-engine acceptance.
 
-## Unreleased candidate: retained dummy bonded scaffolds (2026-10-23)
+## retained dummy bonded scaffolds (2026-10-23)
 
 Dual construction now retains source bonded entities touching non-MCS atoms
 in both union endpoints, including boundary angles and ordered torsions.
@@ -20,6 +20,8 @@ This corrects the physical-only projection below, not ordinary modeling.
 Validation is incomplete: historical CDK2 ligand-subset tables match at seven
 step2 states, but CDK8 parameter provenance and one cross-backend ordered
 improper discrepancy remain. No full-engine/MD equivalence is claimed.
+
+# Xponge 1.7.4
 
 Fix FEP endpoint parameter ownership, ordered improper terms, soft-bond
 partitioning, and explicit NB14 coefficients. Physical endpoint topology and
