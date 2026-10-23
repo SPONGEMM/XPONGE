@@ -256,25 +256,25 @@ def _improper_merge_rule(mol_r, mol_a, mol_b, forcetype, rforces, bforces, lambd
     :param mol_b2mol_r:
     :return:
     """
-    forcepair = _find_common_forces(forcetype, rforces, bforces, mol_b2mol_r)
-    for f_r, f_b in forcepair:
-        if f_b is None:
-            f_r.k *= 1 - lambda_
-        elif f_r is None:
-            f_r = dihedral_base.ImproperType.entity(list(map(lambda x: mol_b2mol_r[x], f_b.atoms)), f_b.type, f_b.name)
-            f_r.k = f_b.k * lambda_
-            f_r.phi0 = f_b.phi0
-            f_r.periodicity = f_b.periodicity
-            mol_r.Add_Bonded_Force(f_r)
-        elif abs(f_r.phi0 - f_b.phi0) < 1e-5 and f_r.periodicity == f_b.periodicity:
-            f_r.k = f_r.k * (1 - lambda_) + f_b.k * lambda_
-        else:
-            f_r2 = dihedral_base.ImproperType.entity(list(map(lambda x: mol_b2mol_r[x], f_b.atoms)), f_b.type, f_b.name)
-            f_r2.k = f_b.k * lambda_
-            f_r2.phi0 = f_b.phi0
-            f_r2.periodicity = f_b.periodicity
-            f_r.k *= (1 - lambda_)
-            mol_r.Add_Bonded_Force(f_r2)
+    # Preserve each ordered Fourier term. Pairing only by atom tuple loses
+    # multiplicities when several periodicities/phases share the same atoms.
+    # Whole reversal is safe; other equivalent permutations may remain separate
+    # weighted terms. Never reselect a physical endpoint on union atom IDs.
+    result = {}
+    indices = mol_r.atom_index
+    for forces, weight, mapping in ((list(rforces), 1 - lambda_, None),
+                                    (bforces, lambda_, mol_b2mol_r)):
+        for source_force in forces:
+            atoms = list(source_force.atoms) if mapping is None else [mapping[a] for a in source_force.atoms]
+            ids = tuple(indices[a] for a in atoms)
+            key = (min(ids, ids[::-1]), source_force.periodicity, source_force.phi0)
+            if key not in result:
+                force = dihedral_base.ImproperType.entity(atoms, source_force.type, source_force.name)
+                force.periodicity, force.phi0 = source_force.periodicity, source_force.phi0
+                force.k = 0.
+                result[key] = force
+            result[key].k += weight * source_force.k
+    mol_r.bonded_forces["improper"] = [result[key] for key in sorted(result)]
 
 
 FEP_BONDED_FORCE_MERGE_RULE["improper"] = {"lambda_name": "dihedral", "merge_function": _improper_merge_rule}
@@ -591,8 +591,13 @@ def _project_bonded_force(force, atom_map):
     return new_force
 
 
-def _project_physical_endpoint(target, sources):
-    """Project selected physical force entities and exclusions onto union atoms."""
+def _project_physical_endpoint(target, sources, auxiliary_sources=()):
+    """Project physical terms plus unchanged opposite-branch auxiliary terms.
+
+    A dual-topology dummy loses nonbonded interactions, not its bonded scaffold.
+    Copy only source entities touching an exclusive atom; never re-parameterize
+    the union graph (which could invent cross-branch angles or impropers).
+    """
     target.get_atoms()
     target.bonded_forces = {}
     for atom in target.atoms:
@@ -602,6 +607,15 @@ def _project_physical_endpoint(target, sources):
         for key, forces in source.bonded_forces.items():
             for force in forces:
                 if all(atom in atom_map for atom in force.atoms):
+                    target.Add_Bonded_Force(_project_bonded_force(force, atom_map), key)
+        for atom, mapped in atom_map.items():
+            for distance, neighbors in atom.linked_atoms.items():
+                mapped.linked_atoms.setdefault(distance, set()).update(
+                    atom_map[other] for other in neighbors if other in atom_map)
+    for source, atom_map, exclusive in auxiliary_sources:
+        for key, forces in source.bonded_forces.items():
+            for force in forces:
+                if any(atom in exclusive for atom in force.atoms):
                     target.Add_Bonded_Force(_project_bonded_force(force, atom_map), key)
         for atom, mapped in atom_map.items():
             for distance, neighbors in atom.linked_atoms.items():
@@ -824,8 +838,22 @@ the tanimoto coefficient of the max common structure.
     build.Build_Bonded_Force(physical_b)
     b_map = {physical_b.atoms[b_index]: mol_b.residues[ri].atoms[a_index]
              for a_index, b_index in rbmap.items()}
-    _project_physical_endpoint(mol_a, [(mol, a_map)])
-    _project_physical_endpoint(mol_b, [(mol, environment_map), (physical_b, b_map)])
+    a_in_b = {atom: mol_b.residues[index].name2atom(atom.name)
+              for index, residue in enumerate(mol.residues) for atom in residue.atoms}
+    b_in_a = {physical_b.atoms[b_index]: mol_a.residues[ri].atoms[a_index]
+              for a_index, b_index in rbmap.items()}
+    exclusive_a = {residue_a.atoms[i] for i in range(len(residue_a.atoms)) if i not in match_a}
+    exclusive_b = {physical_b.atoms[i] for i in range(len(physical_b.atoms)) if i not in match_b}
+    _project_physical_endpoint(mol_a, [(mol, a_map)], [(physical_b, b_in_a, exclusive_b)])
+    _project_physical_endpoint(mol_b, [(mol, environment_map), (physical_b, b_map)],
+                               [(mol, a_in_b, exclusive_a)])
+    for endpoint in (mol_a, mol_b):
+        a_only = [endpoint.residues[ri].atoms[i] for i in range(len(residue_a.atoms)) if i not in match_a]
+        b_only = [endpoint.residues[ri].atoms[i] for i, j in rbmap.items() if j not in match_b]
+        for atom_a in a_only:
+            for atom_b in b_only:
+                atom_a.extra_excluded_atoms.add(atom_b)
+                atom_b.extra_excluded_atoms.add(atom_a)
     for endpoint in (mol_a, mol_b):
         endpoint.box_length = copy.deepcopy(mol.box_length)
         endpoint.box_origin = copy.deepcopy(mol.box_origin)

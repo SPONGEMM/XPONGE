@@ -2346,6 +2346,9 @@ def generate_new_bonded_force_type(type_name, atoms, properties, is_compulsory, 
             return "-".join([atom.type.name for atom in atoms])
 
         def update(self, **kwargs):
+            callback = getattr(self, "_parameter_update_callback", None)
+            if callback is not None:
+                callback()
             reset = 1
             if "reset" in kwargs.keys():
                 reset = int(kwargs.pop("reset"))

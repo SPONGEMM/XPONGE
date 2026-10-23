@@ -9,6 +9,7 @@ from ... import AtomType, load_parmdat, load_frcmod, Molecule, ResidueType
 
 from ..base import charge_base, mass_base, lj_base, bond_base, angle_base, dihedral_base, nb14_base,\
     virtual_atom_base, exclude_base
+from .improper_ordering import load_parameters as _load_improper_parameters, IMPROPER_ORDERING_POLICY
 
 AMBER_DATA_DIR = os.path.dirname(__file__)
 
@@ -135,7 +136,7 @@ def load_parameters_from_parmdat(filename, prefix=True):
     bond_base.BondType.New_From_String(bonds)
     angle_base.AngleType.New_From_String(angles)
     dihedral_base.ProperType.New_From_String(propers)
-    dihedral_base.ImproperType.New_From_String(impropers)
+    _load_improper_parameters(dihedral_base.ImproperType, impropers)
     lj_base.LJType.New_From_String(ljs)
     nb14_base.NB14Type.New_From_String(nb14s)
 
@@ -194,7 +195,7 @@ def load_parameters_from_frcmod(filename, include_cmap=False, prefix=True):
     bond_base.BondType.New_From_String(bonds)
     angle_base.AngleType.New_From_String(angles)
     dihedral_base.ProperType.New_From_String(propers)
-    dihedral_base.ImproperType.New_From_String(impropers)
+    _load_improper_parameters(dihedral_base.ImproperType, impropers)
     lj_base.LJType.New_From_String(ljs)
     nb14_base.NB14Type.New_From_String(nb14s)
 

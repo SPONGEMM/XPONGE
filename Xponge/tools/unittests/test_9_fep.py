@@ -137,13 +137,16 @@ def test_merge_dual_topology_switches_common_forces_to_b_endpoint():
 
     _, merged_from, merged_to, to_res, _ = _load_self_contained_merge()
 
-    res_from = merged_from.residues[0].type
-    res_to = merged_to.residues[0].type
-    bond_from = _find_force_by_indices(res_from.bonded_forces["bond"], res_from.atom2index, (1, 2),
+    # Materialized molecule terms are authoritative, not the union ResidueType cache.
+    res_from = merged_from
+    res_to = merged_to
+    atom_index_a = {atom: i for i, atom in enumerate(res_from.atoms)}
+    atom_index_b = {atom: i for i, atom in enumerate(res_to.atoms)}
+    bond_from = _find_force_by_indices(res_from.bonded_forces["bond"], atom_index_a, (1, 2),
                                        bond_base.BondType.Same_Force)
-    bond_to = _find_force_by_indices(res_to.bonded_forces["bond"], res_to.atom2index, (1, 2),
+    bond_to = _find_force_by_indices(res_to.bonded_forces["bond"], atom_index_b, (1, 2),
                                      bond_base.BondType.Same_Force)
-    angle_to = _find_force_by_indices(res_to.bonded_forces["angle"], res_to.atom2index, (0, 1, 2),
+    angle_to = _find_force_by_indices(res_to.bonded_forces["angle"], atom_index_b, (0, 1, 2),
                                       angle_base.AngleType.Same_Force)
     expected_bond = _find_force_by_indices(
         to_res.type.bonded_forces["bond"], to_res.type.atom2index,
@@ -177,8 +180,9 @@ def test_b_only_nb14_uses_zero_charge_endpoint():
 
     assert pair_1.A > 0
     assert pair_1.B > 0
-    assert pair_1.kee == pytest.approx(0.0)
-    assert pair_02.kee == pytest.approx(0.0)
+    # At zero charge product, kee itself is not a physical Coulomb coefficient.
+    assert pair_1.kee * pair_1.atoms[0].charge * pair_1.atoms[1].charge == pytest.approx(0.0)
+    assert pair_02.kee * pair_02.atoms[0].charge * pair_02.atoms[1].charge == pytest.approx(0.0)
     assert pair_02.A == pytest.approx(pair_1.A * 0.2)
     assert pair_02.B == pytest.approx(pair_1.B * 0.2)
     assert any(atom.name.endswith("R2") and atom.charge == pytest.approx(0.0) for atom in pair_1.atoms)

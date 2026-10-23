@@ -159,6 +159,15 @@ def _find_the_force(frc, frc_all_final, cls):
     """
     frc_all_types = frc.get_all_types()
     for frc_ones in frc_all_final:
+        matcher = getattr(frc, "_parameter_matcher", None)
+        selected = matcher(frc_ones, cls) if matcher is not None else None
+        if selected is not None:
+            for parameter, atoms, values in selected:
+                force = frc.entity(atoms, parameter)
+                for key, value in values.items():
+                    setattr(force, key, value)
+                cls.Add_Bonded_Force(force)
+            continue
         finded = Xdict()
         # 先直接找
         for frc_one in frc_ones:
