@@ -72,7 +72,7 @@ The atoms in a ``Residue`` or a ``ResidueType`` can be obtained by their names. 
 
 """
 
-__version__ = "1.7.6"
+__version__ = "1.7.7"
 
 import os
 import time
@@ -270,3 +270,5 @@ def _initialize():
 
 
 _initialize()
+
+from .explicit_topology import get_explicit_topology, set_explicit_topology, set_atom_lj

@@ -512,6 +512,8 @@ def build_bonded_force(cls):
     """
     if cls.built:
         return
+    if getattr(cls, "_fep_materialized_topology", False):
+        raise ValueError("Materialized topology invalidated; explicitly reapply parameters after graph edits")
 
     if isinstance(cls, ResidueType):
         _build_residue_type(cls)

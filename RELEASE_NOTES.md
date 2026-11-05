@@ -1,3 +1,20 @@
+# Xponge 1.7.7
+
+Add public `get_explicit_topology`, `set_explicit_topology`, and `set_atom_lj`
+interfaces for external materialized parameters, shared with XpongeCPP 0.2.16.
+FEP dual construction accepts a single-residue Molecule as B so externally
+assigned parameters survive projection. Invalidated materialized topology is
+rejected instead of silently reassigning parameters from templates.
+
+Fix repeated independent force-entity matching: each B entity is consumed at
+most once. This complements earlier fixes for multiple Fourier terms inside
+one dihedral entity and the separate ordered-improper path; it is not a
+reversion of those fixes. Release tests cover repeated terms and endpoint energy.
+
+The `mokda-xponge` compatibility distribution pins `Xponge==1.7.7`.
+See `docs/explicit-topology.md`; no model inference, real FEP or full-engine
+force validation is claimed.
+
 # Xponge 1.7.6
 
 Includes the deterministic AMBER improper ordering and retained dummy bonded

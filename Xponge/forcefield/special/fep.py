@@ -28,23 +28,24 @@ def _find_common_forces(forcetype, aforces, bforces, mol_b2mol_a):
     :param mol_b2mol_a:
     :return:
     """
-    toret = []
-    temp_map = Xdict()
-    temp_map2 = Xdict()
+    # Match entities one-to-one. Multiple terms on the same atom tuple are
+    # additive; never reuse a B entity for several A entities or overwrite it.
+    candidates = {}
+    consumed = set()
     for force in bforces:
-        temp_map2[force] = True
         permutations = ([force.atoms, force.atoms[::-1]] if forcetype.get_class_name() == "improper"
                         else forcetype.Same_Force(force.atoms))
-        for fatoms in permutations:
-            temp_map["-".join(list(map(lambda atom: str(mol_b2mol_a[atom]), fatoms)))] = force
+        keys = {tuple(mol_b2mol_a[atom] for atom in atoms) for atoms in permutations}
+        for key in keys:
+            candidates.setdefault(key, []).append(force)
+    toret = []
     for force in aforces:
-        tofind = "-".join(list(map(str, force.atoms)))
-        bforce = temp_map.get(tofind, None)
-        toret.append([force, bforce])
-        temp_map2[bforce] = False
-    for force in bforces:
-        if temp_map2[force]:
-            toret.append([None, force])
+        match = next((other for other in candidates.get(tuple(force.atoms), ())
+                      if other not in consumed), None)
+        if match is not None:
+            consumed.add(match)
+        toret.append([force, match])
+    toret.extend([None, force] for force in bforces if force not in consumed)
     return toret
 
 
@@ -650,6 +651,15 @@ the tanimoto coefficient of the max common structure.
     residue_index = mol.residues.index(residue_a)
     mol = mol.deepcopy()
     residue_a = mol.residues[residue_index]
+    # A materialized single-residue Molecule carries externally assigned
+    # parameters that cannot be recovered from its ResidueType registry.
+    replacement_molecule = None
+    if isinstance(residue_b, Molecule):
+        if len(residue_b.residues) != 1:
+            raise ValueError("FEP replacement Molecule must contain exactly one residue")
+        replacement_molecule = residue_b.deepcopy()
+        build.Build_Bonded_Force(replacement_molecule)
+        residue_b = replacement_molecule.residues[0]
     replacement_input = residue_b
     replacement_type = residue_b.type if isinstance(residue_b, Residue) else residue_b
     replacement_public_name = replacement_type.name
@@ -669,7 +679,8 @@ the tanimoto coefficient of the max common structure.
     for atom in mol.atoms:
         if any((atom in target_atoms) != (other in target_atoms) for other in atom.extra_excluded_atoms):
             raise ValueError("coupled FEP exclusions require explicit physical B environment topology")
-    if mol.bonded_forces.get("nb14_extra") or residue_b.bonded_forces.get("nb14_extra"):
+    if (mol.bonded_forces.get("nb14_extra") or residue_b.bonded_forces.get("nb14_extra")
+            or (replacement_molecule is not None and replacement_molecule.bonded_forces.get("nb14_extra"))):
         raise ValueError("dual topology of pre-existing explicit pairs is not supported; convert after dual assembly")
 
     from ...helper.rdkit import assign_to_rdmol
@@ -834,7 +845,8 @@ the tanimoto coefficient of the max common structure.
              for index, residue in enumerate(mol.residues) for atom in residue.atoms}
     environment_map = {atom: mol_b.residues[index].name2atom(atom.name)
                        for index, residue in enumerate(mol.residues) if index != ri for atom in residue.atoms}
-    physical_b = Molecule.cast(residue_type_b, deepcopy=True)
+    physical_b = (replacement_molecule if replacement_molecule is not None
+                  else Molecule.cast(residue_type_b, deepcopy=True))
     build.Build_Bonded_Force(physical_b)
     b_map = {physical_b.atoms[b_index]: mol_b.residues[ri].atoms[a_index]
              for a_index, b_index in rbmap.items()}

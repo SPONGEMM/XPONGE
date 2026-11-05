@@ -469,3 +469,8 @@ Here is the list of all packages which may be uesd:
 [8] N. Michaud-Agrawal, et al. *J. Comput. Chem.* (2011) DOI: [10.1002/jcc.21787](https://10.1002/jcc.21787)
 
 [9] MindSpore: An Open AI Framwork. https://www.mindspore.cn/
+
+## Explicit external parameters
+
+See [the explicit topology API](docs/explicit-topology.md) for validated
+materialized parameters, per-atom LJ, and FEP replacement-molecule semantics.
