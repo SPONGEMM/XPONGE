@@ -54,7 +54,7 @@ FEP_BONDED_FORCE_MERGE_RULE = Xdict()
 
 # pylint: disable=unused-argument
 def _nb14_extra_merge_rule(mol_r, mol_a, mol_b, forcetype, rforces, bforces, lambda_, mol_r2mol_a, mol_a2mol_r,
-                           mol_r2mol_b, mol_b2mol_r):
+                           mol_r2mol_b, mol_b2mol_r, lj_weights=None):
     """
 
     :param mol_r:
@@ -71,6 +71,7 @@ def _nb14_extra_merge_rule(mol_r, mol_a, mol_b, forcetype, rforces, bforces, lam
     :return:
     """
     coefficients = {}
+    lj_weights = lj_weights or {}
     for forces, weight, atom_map in ((mol_a.bonded_forces.get("nb14_extra", []), 1 - lambda_, mol_a2mol_r),
                                       (bforces, lambda_, mol_b2mol_r)):
         for force in forces:
@@ -79,8 +80,9 @@ def _nb14_extra_merge_rule(mol_r, mol_a, mol_b, forcetype, rforces, bforces, lam
             ee = force.nb14_ee_factor
             if ee is None:
                 ee = force.kee * force.atoms[0].charge * force.atoms[1].charge
-            values[0] += weight * force.A
-            values[1] += weight * force.B
+            lj_weight = lj_weights.get(force, weight)
+            values[0] += lj_weight * force.A
+            values[1] += lj_weight * force.B
             values[2] += weight * ee
             values[3] += weight * force.kee
     result = []
@@ -873,6 +875,35 @@ the tanimoto coefficient of the max common structure.
     return mol_a, mol_b, matchmap
 
 
+def _native_nb14_lj_weights(endpoint, branch, suffix, specific_lambda):
+    """Convert native pairs and assign independent weights to eligible LJ terms."""
+    explicit = set(endpoint.bonded_forces.get("nb14_extra", ()))
+    nb14_extra_base.nb14_to_nb14_extra(endpoint)
+    junction = specific_lambda.get(f"nb14_junction_lj_{suffix}")
+    internal = specific_lambda.get(f"nb14_internal_lj_{suffix}")
+    if junction is None and internal is None:
+        return {}
+    for value in (junction, internal):
+        if value is not None and (not math.isfinite(value) or not 0 <= value <= 1):
+            raise ValueError("Native 1-4 LJ weights must be finite and in [0, 1]")
+    residues = {atom: residue for residue in endpoint.residues for atom in residue.atoms}
+    weights = {}
+    for force in endpoint.bonded_forces.get("nb14_extra", ()):
+        if force in explicit:
+            continue
+        atom_a, atom_b = force.atoms
+        if residues[atom_a] is not residues[atom_b] or any(
+            atom.LJtype == "ZERO_LJ_ATOM" for atom in force.atoms
+        ):
+            continue
+        groups = (atom_a.subsys or 0, atom_b.subsys or 0)
+        if junction is not None and set(groups) == {0, branch}:
+            weights[force] = junction
+        if internal is not None and groups == (branch, branch):
+            weights[force] = internal
+    return weights
+
+
 def merge_force_field(mol_a, mol_b, default_lambda, specific_lambda=None, intra_fep=False):
     """
     This **function** merges one molecule in two different force fields (two Molecule instances) into one
@@ -899,8 +930,8 @@ def merge_force_field(mol_a, mol_b, default_lambda, specific_lambda=None, intra_
     build.Build_Bonded_Force(mol_a)
     build.Build_Bonded_Force(mol_b)
 
-    nb14_extra_base.nb14_to_nb14_extra(mol_a)
-    nb14_extra_base.nb14_to_nb14_extra(mol_b)
+    lj_weights = _native_nb14_lj_weights(mol_a, 1, "a", specific_lambda)
+    lj_weights.update(_native_nb14_lj_weights(mol_b, 2, "b", specific_lambda))
 
     assert len(mol_a.atoms) == len(mol_b.atoms)
     mol_a2mol_b = Xdict()
@@ -936,6 +967,13 @@ def merge_force_field(mol_a, mol_b, default_lambda, specific_lambda=None, intra_
             temp_lambda = specific_lambda.get(FEP_BONDED_FORCE_MERGE_RULE[forcename].get("lambda_name"),
                                               default_lambda)
             bforces = mol_b.bonded_forces.get(forcename, [])
+            if forcename == "nb14_extra":
+                _nb14_extra_merge_rule(
+                    mol_r, mol_a, mol_b, GlobalSetting.BondedForcesMap[forcename],
+                    rforces, bforces, temp_lambda, mol_r2mol_a, mol_a2mol_r,
+                    mol_r2mol_b, mol_b2mol_r, lj_weights=lj_weights,
+                )
+                continue
             FEP_BONDED_FORCE_MERGE_RULE[forcename].get("merge_function")(mol_r, mol_a, mol_b,
                                                                          GlobalSetting.BondedForcesMap[forcename],
                                                                          rforces, bforces, temp_lambda, mol_r2mol_a,

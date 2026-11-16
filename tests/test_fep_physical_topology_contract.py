@@ -146,3 +146,29 @@ def test_softcore_export_converts_nb14_without_mutating_normal_topology(tmp_path
     x.save_sponge_input(m, prefix="hard", dirname=str(tmp_path))
     assert (tmp_path / "hard_LJ.txt").is_file()
     assert (tmp_path / "hard_nb14.txt").is_file()
+
+
+def test_native_branch_lj_weight_leaves_charge_and_bonded_terms_unchanged(tmp_path):
+    left, right, _ = dual(molecule(6), molecule(6), {0: 0, 1: 1}, tmp_path)
+    baseline = fep.merge_force_field(left, right, .5)
+    changed = fep.merge_force_field(
+        left, right, .5, {"nb14_junction_lj_a": 1., "nb14_internal_lj_a": .75}
+    )
+
+    def terms(state):
+        return {
+            frozenset(atom.name for atom in term.atoms): (term.A, term.B, term.kee)
+            for term in state.bonded_forces["nb14_extra"]
+        }
+
+    before, after = terms(baseline), terms(changed)
+    assert before.keys() == after.keys()
+    for names, ratio in ((("C0", "C3"), 2.), (("C2", "C5"), 1.5)):
+        key = frozenset(names)
+        assert after[key][:2] == pytest.approx([ratio * v for v in before[key][:2]])
+    assert [after[k][2] for k in after] == [before[k][2] for k in after]
+    assert [atom.charge for atom in changed.atoms] == [atom.charge for atom in baseline.atoms]
+    for field in ("bond", "angle", "dihedral"):
+        assert [t.contents for t in changed.bonded_forces[field]] == [
+            t.contents for t in baseline.bonded_forces[field]
+        ]

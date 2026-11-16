@@ -1,3 +1,17 @@
+## 1.7.8a1 · FEP native 1–4 LJ controls preview
+
+`merge_force_field(..., specific_lambda=...)` accepts four optional [0, 1]
+weights for native 1–4 LJ: `nb14_junction_lj_a`, `nb14_junction_lj_b`,
+`nb14_internal_lj_a`, and `nb14_internal_lj_b`. Junction terms connect a
+mapped atom and an atom unique to the specified side. Internal terms have
+two atoms unique to that side. The controls leave 1–4 Coulomb, custom
+explicit pairs, and bonded force interpolation on their existing paths.
+Omitting the controls preserves the existing behavior.
+
+This preview supplies parameter controls for a unified FEP path. Endpoint
+anchoring, public-core pair category transitions, and integrated FEP
+execution are outside this release's validation.
+
 # Xponge 1.7.7
 
 Add public `get_explicit_topology`, `set_explicit_topology`, and `set_atom_lj`
