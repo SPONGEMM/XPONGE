@@ -389,7 +389,8 @@ def _parse_fixed_table(path: Path, *, atom_columns: int, datasets) -> list[Typed
         if len(row) < min_columns:
             raise ValueError(f"{path} row {row_index} has {len(row)} columns, expected at least {min_columns}")
         table.append([float(value) for value in row])
-    array = np.asarray(table, dtype=np.float64)
+    array = (np.asarray(table, dtype=np.float64) if count
+             else np.empty((0, min_columns), dtype=np.float64))
     parsed = []
     for dataset_path, dtype, selector in datasets:
         parsed.append(TypedDataset(dataset_path, array[:, selector].astype(dtype)))

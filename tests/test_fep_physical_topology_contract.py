@@ -42,6 +42,17 @@ def dual(a, b, mapping, tmp_path):
     return fep.merge_dual_topology(a, a.residues[0], b.residues[0], aa, ab, imcs=str(path))
 
 
+def test_core_pair_transition_categories_are_read_from_endpoints(tmp_path):
+    a, b = molecule(5), molecule(5, star=True)
+    left, right, _ = dual(a, b, {i: i for i in range(5)}, tmp_path)
+    assert fep.core_pair_transitions(left, right, 0) == [
+        (0, 3, "native14", "excluded"),
+        (0, 4, "ordinary", "excluded"),
+        (1, 4, "native14", "excluded"),
+    ]
+    assert fep.core_pair_transitions(left, left, 0) == []
+
+
 @pytest.mark.parametrize("lam", [0., .25, 1.])
 def test_dual_branch_bonds_retain_ordinary_scaffolds(tmp_path, lam):
     a, b = molecule(2), molecule(2)

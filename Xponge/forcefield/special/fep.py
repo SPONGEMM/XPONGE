@@ -4,6 +4,7 @@ This **module** gives the basic functions for fep calculations
 import re
 import copy
 import math
+from itertools import combinations
 from ...helper import source, set_global_alternative_names, Xdict, Xopen, Xprint, kabsch
 from ..base import lj_base, exclude_base, bond_base, angle_base, dihedral_base, nb14_extra_base, soft_bond_base
 
@@ -584,7 +585,7 @@ def _set_zero_lj_atom(atom, subsys):
     """Hide one endpoint atom by clearing its non-bonded state."""
     atom.LJtype = "ZERO_LJ_ATOM"
     atom.charge = 0
-    atom.subsys = subsys
+    atom.contents["subsys"] = subsys
 
 
 def _project_bonded_force(force, atom_map):
@@ -623,7 +624,8 @@ def _project_physical_endpoint(target, sources, auxiliary_sources=()):
         for atom, mapped in atom_map.items():
             for distance, neighbors in atom.linked_atoms.items():
                 mapped.linked_atoms.setdefault(distance, set()).update(
-                    atom_map[other] for other in neighbors if other in atom_map)
+                    atom_map[other] for other in neighbors
+                    if other in atom_map and (atom in exclusive or other in exclusive))
     target.built = True
     target._fep_materialized_topology = True
 
@@ -804,13 +806,14 @@ the tanimoto coefficient of the max common structure.
             _copy_atom_contents(atomi, residue_a.name2atom(residue_type_a.atoms[i].name))
         else:
             _set_zero_lj_atom(restype_ab.atoms[i], 2)
-            restype_ba.atoms[i].subsys = 2
 
         if i in rbmap:
             _copy_atom_contents(restype_ba.atoms[i], residue_type_b.atoms[rbmap[i]])
         else:
             _set_zero_lj_atom(restype_ba.atoms[i], 1)
-            restype_ab.atoms[i].subsys = 1
+        subsys = 2 if i >= len(residue_type_a.atoms) else int(i not in rbmap)
+        restype_ab.atoms[i].contents["subsys"] = subsys
+        restype_ba.atoms[i].contents["subsys"] = subsys
     mol_a = Molecule(mol.name + "A")
     mol_b = Molecule(mol.name + "B")
 
@@ -875,6 +878,47 @@ the tanimoto coefficient of the max common structure.
     return mol_a, mol_b, matchmap
 
 
+SUPPORTS_BRANCH_NB14_LJ_WEIGHTS = True
+
+
+def core_pair_transitions(endpoint_a, endpoint_b, residue_index):
+    """List changed nonbonded categories using the physical union endpoint topology."""
+    modes = []
+    core_indices = []
+    for endpoint in (endpoint_a, endpoint_b):
+        if not endpoint.built:
+            endpoint = endpoint.deepcopy()
+            build.Build_Bonded_Force(endpoint)
+        core = tuple(endpoint.atom_index[atom] for atom in endpoint.residues[residue_index].atoms
+                     if not getattr(atom, "subsys", None))
+        core_indices.append(core)
+        excluded = exclude_base.Exclude.current.Get_Excluded_Atoms(endpoint)
+        native, explicit = (
+            {tuple(sorted(endpoint.atom_index[atom] for atom in force.atoms))
+             for force in endpoint.bonded_forces.get(key, ())}
+            for key in ("nb14", "nb14_extra")
+        )
+        state = {}
+        for i, j in combinations(core, 2):
+            pair = i, j
+            first, second = endpoint.atoms[i], endpoint.atoms[j]
+            if pair in native:
+                mode = "native14+explicit" if pair in explicit else "native14"
+            elif pair in explicit:
+                mode = "explicit"
+            elif second in excluded[first] or first in excluded[second]:
+                mode = "excluded"
+            else:
+                mode = "ordinary"
+            state[pair] = mode
+        modes.append(state)
+    if (len(endpoint_a.atoms) != len(endpoint_b.atoms) or core_indices[0] != core_indices[1]
+            or any(endpoint_a.atoms[i].name != endpoint_b.atoms[i].name for i in core_indices[0])):
+        raise ValueError("FEP core pair classification requires aligned dual topology endpoints")
+    return [(i, j, mode_a, modes[1][i, j]) for (i, j), mode_a in modes[0].items()
+            if mode_a != modes[1][i, j]]
+
+
 def _native_nb14_lj_weights(endpoint, branch, suffix, specific_lambda):
     """Convert native pairs and assign independent weights to eligible LJ terms."""
     explicit = set(endpoint.bonded_forces.get("nb14_extra", ()))
@@ -896,7 +940,7 @@ def _native_nb14_lj_weights(endpoint, branch, suffix, specific_lambda):
             atom.LJtype == "ZERO_LJ_ATOM" for atom in force.atoms
         ):
             continue
-        groups = (atom_a.subsys or 0, atom_b.subsys or 0)
+        groups = tuple(getattr(atom, "subsys", None) or 0 for atom in force.atoms)
         if junction is not None and set(groups) == {0, branch}:
             weights[force] = junction
         if internal is not None and groups == (branch, branch):
@@ -956,7 +1000,9 @@ def merge_force_field(mol_a, mol_b, default_lambda, specific_lambda=None, intra_
     for i, atom in enumerate(mol_r.atoms):
         atom.charge = mol_r2mol_a[atom].charge * (1 - charge_lambda) + mol_r2mol_b[atom].charge * charge_lambda
         atom.mass = mol_r2mol_a[atom].mass * (1 - mass_lambda) + mol_r2mol_b[atom].mass * mass_lambda
-        atom.LJtypeB = mol_r2mol_b[atom].LJtype
+        atom.contents["LJtypeB"] = mol_r2mol_b[atom].LJtype
+        for distance, neighbors in mol_r2mol_b[atom].linked_atoms.items():
+            atom.linked_atoms.setdefault(distance, set()).update(mol_b2mol_r[other] for other in neighbors)
 
     # Deepcopy retains populated force groups only. Include B-only groups so
     # their native merge rule still runs when A has no term of that kind.

@@ -1,4 +1,4 @@
-## 1.7.8a1 · FEP native 1–4 LJ controls preview
+## 1.7.8 · FEP endpoint topology and native 1–4 controls
 
 `merge_force_field(..., specific_lambda=...)` accepts four optional [0, 1]
 weights for native 1–4 LJ: `nb14_junction_lj_a`, `nb14_junction_lj_b`,
@@ -8,9 +8,12 @@ two atoms unique to that side. The controls leave 1–4 Coulomb, custom
 explicit pairs, and bonded force interpolation on their existing paths.
 Omitting the controls preserves the existing behavior.
 
-This preview supplies parameter controls for a unified FEP path. Endpoint
-anchoring, public-core pair category transitions, and integrated FEP
-execution are outside this release's validation.
+This release also preserves explicit endpoint exclusions and branch identities,
+and exposes common-core pair-category transitions to the unified FEP exporter.
+The Python provider preserves empty force-table shapes during bundle conversion.
+The two providers expose matching native 1–4 LJ control and pair-transition APIs.
+Mokda owns endpoint bonded-term selection and lambda scheduling; this release
+does not claim formal FEP convergence or production sampling validation.
 
 # Xponge 1.7.7
 
